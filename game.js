@@ -306,6 +306,7 @@ let playerDir   = 'down';
 let playerStep  = 0;   // toggles 0/1 for walk animation
 let lastMoveTs  = 0;
 let keys        = {};
+let kamiBuffer  = [];
 let caughtIds      = new Set();
 let balls          = 5;
 let coins          = 0;
@@ -505,12 +506,14 @@ function buildIce() {
 // ═══════════════════════════════════════════════════
 function bindEvents() {
   // Keyboard
+  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a' };
   document.addEventListener('keydown', e => {
     keys[e.key] = true;
     wakeAudio();
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
       e.preventDefault();
     }
+    if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -558,7 +561,7 @@ function bindEvents() {
   const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   document.querySelectorAll('.dpad-btn').forEach(btn => {
     const k = keyMap[btn.dataset.dir];
-    const press   = e => { e.preventDefault(); keys[k] = true;  wakeAudio(); };
+    const press   = e => { e.preventDefault(); keys[k] = true; kamiInput(btn.dataset.dir); wakeAudio(); };
     const release = e => { e.preventDefault(); keys[k] = false; };
     btn.addEventListener('touchstart',  press,   { passive: false });
     btn.addEventListener('touchend',    release, { passive: false });
@@ -567,6 +570,33 @@ function bindEvents() {
     btn.addEventListener('pointerup',   release);
     btn.addEventListener('pointercancel', release);
   });
+
+  ['btn-b', 'btn-a'].forEach(id => {
+    const name = id.split('-')[1];
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); kamiInput(name); wakeAudio(); });
+    el.addEventListener('touchstart',  e => { e.preventDefault(); kamiInput(name); wakeAudio(); }, { passive: false });
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// KAMI CODE  (↑ ↑ ↓ ↓ ← → ← → B A)
+// ═══════════════════════════════════════════════════
+const KAMI_CODE = ['up','up','down','down','left','right','left','right','b','a'];
+
+function kamiInput(key) {
+  kamiBuffer.push(key);
+  if (kamiBuffer.length > KAMI_CODE.length) kamiBuffer.shift();
+  if (kamiBuffer.join(',') === KAMI_CODE.join(',')) activateKami();
+}
+
+function activateKami() {
+  kamiBuffer = [];
+  POKEMON_DATA.forEach(p => caughtIds.add(p.id));
+  balls += 99;
+  saveGame();
+  updateHud();
+  showMessage('🌟 KAMI MODE ACTIVATED! All Lukeymon caught!');
 }
 
 // ═══════════════════════════════════════════════════
