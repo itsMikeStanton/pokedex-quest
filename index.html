@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.7">
+  <link rel="stylesheet" href="style.css?v=1.8">
 </head>
 <body>
 
@@ -30,9 +30,10 @@
         <div id="world-screen" class="screen">
           <canvas id="game-canvas" width="640" height="448"></canvas>
           <div id="hud">
-            <span id="zone-name"></span>
-            <span id="hud-count">🎒 <span id="caught-count">0</span> / 15</span>
-            <button id="pokedex-btn" class="pixel-btn small blue">📖 PokéDex</button>
+            <span id="hud-balls">🔴<span id="ball-count">5</span></span>
+            <span id="hud-coins">🪙<span id="coin-count">0</span></span>
+            <span id="hud-count">🎒<span id="caught-count">0</span>/15</span>
+            <button id="pokedex-btn" class="pixel-btn small blue">📖</button>
           </div>
           <div id="message-box" class="hidden">
             <span id="message-text"></span>
@@ -53,8 +54,7 @@
 
           <div id="enc-thought-bubble">
             <div id="enc-thought-inner">
-              <span id="enc-thought-emoji"></span>
-              <span id="enc-thought-text"></span>
+              <span id="enc-thought-emoji" style="font-size:32px"></span>
             </div>
             <div class="bubble-tail"></div>
           </div>
@@ -74,6 +74,12 @@
               <span class="action-icon">⚽</span>
               <span class="action-label">Play</span>
             </button>
+          </div>
+
+          <div id="enc-throw-wrap" class="hidden">
+            <p id="enc-happy-msg">❤️ It's happy!  Throw a PokéBall!</p>
+            <button id="enc-throw-btn" class="pixel-btn green">🔴 Throw!</button>
+            <p id="enc-no-balls-msg" class="hidden">No PokéBalls! Find some or visit the 🏪 Shop!</p>
           </div>
 
           <div id="timer-wrap">
@@ -124,6 +130,33 @@
           <button id="complete-restart" class="pixel-btn blue">PLAY AGAIN</button>
         </div>
 
+        <!-- SHOP SCREEN -->
+        <div id="shop-screen" class="screen">
+          <div id="shop-header">🏪 SHOP</div>
+          <div id="shop-stock">
+            <div>🔴 Balls: <span id="shop-ball-count">5</span></div>
+            <div>🪙 Coins: <span id="shop-coin-count">0</span></div>
+          </div>
+          <div id="shop-items">
+            <div class="shop-row">
+              <span>1 PokéBall</span>
+              <span class="shop-price">3 🪙</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="1" data-cost="3">BUY</button>
+            </div>
+            <div class="shop-row">
+              <span>3 PokéBalls</span>
+              <span class="shop-price">7 🪙</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="3" data-cost="7">BUY</button>
+            </div>
+            <div class="shop-row">
+              <span>5 PokéBalls</span>
+              <span class="shop-price">10 🪙</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="5" data-cost="10">BUY</button>
+            </div>
+          </div>
+          <button id="shop-close" class="pixel-btn red">◀ LEAVE</button>
+        </div>
+
       </div><!-- /screen-area -->
     </div><!-- /screen-bezel -->
 
@@ -148,7 +181,7 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v1.71</div>
+  <div id="version">v1.8</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>

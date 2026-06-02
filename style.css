@@ -100,14 +100,23 @@ body {
 
 /* ─── HUD BAR ───────────────────────────────────────── */
 #hud {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 28px;
+  background: rgba(0,0,0,.7);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: #101818;
-  padding: 4px 8px;
-  font-size: 6px;
-  color: #a8d8a8;
-  flex-shrink: 0;
+  justify-content: space-around;
+  padding: 0 4px;
+  gap: 4px;
+  font-size: 7px;
+  color: #fff;
+}
+#hud-balls, #hud-coins, #hud-count {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 /* ─── HUD ZONE NAME ─────────────────────────────────── */
@@ -364,6 +373,61 @@ body {
   border-radius: 4px;
   transition: width linear;
 }
+
+/* ─── ENCOUNTER THROW WRAP ──────────────────────────── */
+#enc-throw-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+#enc-happy-msg {
+  font-size: 7px;
+  color: #f8f060;
+  text-align: center;
+}
+#enc-no-balls-msg {
+  font-size: 6px;
+  color: #ff8080;
+  text-align: center;
+}
+
+/* ─── SHOP SCREEN ───────────────────────────────────── */
+#shop-screen {
+  background: linear-gradient(180deg, #1a0a2a 0%, #2a1040 100%);
+  align-items: center;
+  padding: 16px 14px;
+  gap: 10px;
+}
+#shop-header {
+  font-size: 11px;
+  color: #f8f8f8;
+  text-shadow: 2px 2px 0 #000;
+}
+#shop-stock {
+  display: flex;
+  gap: 16px;
+  font-size: 7px;
+  color: #d0d0ff;
+}
+#shop-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.shop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 6px;
+  color: #e8e8ff;
+}
+.shop-price { color: #f8d060; }
 
 /* ─── RESULT SCREEN ─────────────────────────────────── */
 #result-screen {

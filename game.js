@@ -11,9 +11,9 @@ const TIMER_MS       = 6000;   // 6 seconds to choose
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
 const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
-const SAVE_KEY       = 'lukeymon_v2';
+const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6 };
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS  (4 zones, each 20×14)
@@ -26,7 +26,7 @@ const MAPS = [
     [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
     [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
     [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,2],
     [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
@@ -114,6 +114,25 @@ const BARRIERS = {
   fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!' },
 };
 
+const PICKUPS = [
+  // Zone 0: Meadow
+  { id:0,  zone:0, x:4,  y:5,  type:'ball' },
+  { id:1,  zone:0, x:14, y:5,  type:'coin' },
+  { id:2,  zone:0, x:4,  y:9,  type:'coin' },
+  { id:3,  zone:0, x:14, y:9,  type:'ball' },
+  { id:4,  zone:0, x:10, y:12, type:'coin' },
+  // Zone 1: Beach
+  { id:5,  zone:1, x:4,  y:3,  type:'ball' },
+  { id:6,  zone:1, x:13, y:3,  type:'coin' },
+  { id:7,  zone:1, x:12, y:6,  type:'coin' },
+  // Zone 2: City
+  { id:8,  zone:2, x:8,  y:5,  type:'coin' },
+  { id:9,  zone:2, x:8,  y:9,  type:'ball' },
+  // Zone 3: Highlands
+  { id:10, zone:3, x:4,  y:9,  type:'ball' },
+  { id:11, zone:3, x:13, y:9,  type:'coin' },
+];
+
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
   H: '#d83028',  // hat
@@ -185,7 +204,11 @@ let playerDir   = 'down';
 let playerStep  = 0;   // toggles 0/1 for walk animation
 let lastMoveTs  = 0;
 let keys        = {};
-let caughtIds   = new Set();
+let caughtIds      = new Set();
+let balls          = 5;
+let coins          = 0;
+let collectedItems = new Set();
+let encHappy       = false;  // true after player does correct action in encounter
 let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
@@ -228,6 +251,7 @@ function buildTileCache() {
   buildWater();
   buildSand();
   buildCity();
+  buildShop();
 }
 
 function makeTile() {
@@ -319,6 +343,26 @@ function buildCity() {
   tileCache[T.CITY] = c;
 }
 
+function buildShop() {
+  const [c, x] = makeTile();
+  x.fillStyle = '#e8d0a8';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // Awning
+  x.fillStyle = '#d02060';
+  x.fillRect(0, 0, TILE_SIZE, 11);
+  x.fillStyle = '#f06090';
+  for (let i = 0; i < TILE_SIZE; i += 6) x.fillRect(i, 0, 3, 11);
+  // Counter
+  x.fillStyle = '#b07830';
+  x.fillRect(4, 19, 24, 7);
+  x.fillStyle = '#d0a050';
+  x.fillRect(4, 17, 24, 4);
+  // Sign
+  x.font = '13px serif';
+  x.fillText('🏪', 7, 14);
+  tileCache[T.SHOP] = c;
+}
+
 // ═══════════════════════════════════════════════════
 // EVENT BINDING
 // ═══════════════════════════════════════════════════
@@ -357,6 +401,21 @@ function bindEvents() {
 
   // Complete restart
   document.getElementById('complete-restart').addEventListener('click', startNewGame);
+
+  // Throw ball
+  document.getElementById('enc-throw-btn').addEventListener('click', () => {
+    wakeAudio();
+    throwBall();
+  });
+
+  // Shop
+  document.getElementById('shop-close').addEventListener('click', closeShop);
+  document.querySelectorAll('.shop-buy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wakeAudio();
+      buyBalls(parseInt(btn.dataset.qty), parseInt(btn.dataset.cost));
+    });
+  });
 
   // D-pad — use both touch and pointer events for maximum mobile compatibility
   const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
@@ -525,6 +584,33 @@ function move(dx, dy, ts) {
 
   beep(220, 0.04, 0.04, 'square');
 
+  // Collect any pickup at this tile
+  const pickup = PICKUPS.find(p =>
+    p.zone === currentZone && p.x === playerX && p.y === playerY && !collectedItems.has(p.id)
+  );
+  if (pickup) {
+    collectedItems.add(pickup.id);
+    if (pickup.type === 'ball') {
+      balls++;
+      showMessage(`🔴 Found a PokéBall!  (${balls} total)`);
+      beep(660, 0.1, 0.08);
+      setTimeout(() => beep(880, 0.1, 0.1), 90);
+    } else {
+      coins++;
+      showMessage(`🪙 Found a coin!  (${coins} total)`);
+      beep(880, 0.08, 0.08);
+      setTimeout(() => beep(1100, 0.08, 0.08), 90);
+    }
+    updateHud();
+    saveGame();
+  }
+
+  // Open shop when stepping onto shop tile
+  if (MAPS[currentZone][playerY][playerX] === T.SHOP) {
+    setTimeout(() => openShop(), 80);
+    return;
+  }
+
   // 6. Encounter check (grass tiles only, filtered by zone)
   if (tile === T.GRASS && Math.random() < ENCOUNTER_RATE) {
     const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id));
@@ -575,8 +661,56 @@ function drawWorld(ts) {
     }
   }
   drawBarriers(ts);
+  drawPickups();
   const pos = getRenderPos(ts);
   drawPlayer(pos.x, pos.y);
+}
+
+// ─── Pickup graphics ─────────────────────────────────
+function drawPickups() {
+  for (const p of PICKUPS) {
+    if (p.zone !== currentZone || collectedItems.has(p.id)) continue;
+    const px = p.x * TILE_SIZE;
+    const py = p.y * TILE_SIZE;
+    if (p.type === 'ball') {
+      // Top red half
+      ctx.fillStyle = '#e02828';
+      ctx.beginPath();
+      ctx.arc(px + 16, py + 20, 8, Math.PI, 0, true);
+      ctx.fill();
+      // Bottom white half
+      ctx.fillStyle = '#f8f8f8';
+      ctx.beginPath();
+      ctx.arc(px + 16, py + 20, 8, 0, Math.PI);
+      ctx.fill();
+      // Divider line
+      ctx.fillStyle = '#202020';
+      ctx.fillRect(px + 8, py + 18, 16, 2);
+      // Center button (white then dark)
+      ctx.fillStyle = '#f8f8f8';
+      ctx.beginPath();
+      ctx.arc(px + 16, py + 19, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#202020';
+      ctx.beginPath();
+      ctx.arc(px + 16, py + 19, 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Gold coin
+      ctx.fillStyle = '#e0a000';
+      ctx.beginPath();
+      ctx.arc(px + 16, py + 20, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f8d020';
+      ctx.beginPath();
+      ctx.arc(px + 14, py + 18, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#c07800';
+      ctx.beginPath();
+      ctx.arc(px + 18, py + 22, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 // ─── Barrier graphics ────────────────────────────────
@@ -699,6 +833,7 @@ function drawPlayer(px, py) {
 // ENCOUNTER
 // ═══════════════════════════════════════════════════
 function beginEncounter(poke) {
+  encHappy = false;
   currentPoke = poke;
   gameState   = 'encounter';
 
@@ -707,16 +842,15 @@ function beginEncounter(poke) {
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
   setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 80);
   document.getElementById('enc-thought-emoji').textContent   = poke.actionEmoji;
-  document.getElementById('enc-thought-text').textContent    =
-    poke.action === 'feed' ? 'I want food!' :
-    poke.action === 'pet'  ? 'Pet me please!' :
-                             'Play with me!';
 
   // Enable/reset buttons
   document.querySelectorAll('.action-btn').forEach(b => {
     b.disabled = false;
     b.classList.remove('correct', 'wrong');
   });
+  document.getElementById('enc-throw-wrap').classList.add('hidden');
+  document.getElementById('enc-no-balls-msg').classList.add('hidden');
+  document.getElementById('enc-buttons').classList.remove('hidden');
 
   showScreen('encounter');
   playEncounterJingle();
@@ -744,16 +878,42 @@ function resolveAction(action, btnEl) {
   document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
 
   if (action === currentPoke.action) {
+    encHappy = true;
     btnEl.classList.add('correct');
-    setTimeout(() => caught(), 500);
+    beep(523, 0.12, 0.1);
+    setTimeout(() => beep(659, 0.12, 0.15), 120);
+    // Hide action buttons, show throw UI
+    setTimeout(() => {
+      document.getElementById('enc-buttons').classList.add('hidden');
+      document.getElementById('enc-throw-wrap').classList.remove('hidden');
+      if (balls <= 0) {
+        document.getElementById('enc-no-balls-msg').classList.remove('hidden');
+        document.getElementById('enc-throw-btn').disabled = true;
+        setTimeout(() => fled(), 4000);
+      } else {
+        document.getElementById('enc-throw-btn').disabled = false;
+        document.getElementById('enc-no-balls-msg').classList.add('hidden');
+      }
+    }, 400);
   } else {
     btnEl.classList.add('wrong');
-    // Highlight the correct button
     document.querySelectorAll('.action-btn').forEach(b => {
       if (b.dataset.action === currentPoke.action) b.classList.add('correct');
     });
     setTimeout(() => fled(), 700);
   }
+}
+
+function throwBall() {
+  if (balls <= 0) return;
+  balls--;
+  updateHud();
+  saveGame();
+  // Throw animation sound
+  beep(440, 0.15, 0.08);
+  setTimeout(() => beep(330, 0.12, 0.08), 100);
+  setTimeout(() => beep(550, 0.18, 0.2),  200);
+  setTimeout(() => caught(), 400);
 }
 
 function caught() {
@@ -796,6 +956,40 @@ function fled() {
 
 function returnToWorld() {
   showScreen('world');
+}
+
+// ═══════════════════════════════════════════════════
+// SHOP
+// ═══════════════════════════════════════════════════
+function openShop() {
+  gameState = 'shop';
+  document.getElementById('shop-coin-count').textContent = coins;
+  document.getElementById('shop-ball-count').textContent = balls;
+  refreshShopButtons();
+  showScreen('shop');
+}
+
+function closeShop() {
+  showScreen('world');
+}
+
+function refreshShopButtons() {
+  document.querySelectorAll('.shop-buy-btn').forEach(btn => {
+    btn.disabled = coins < parseInt(btn.dataset.cost);
+  });
+}
+
+function buyBalls(qty, cost) {
+  if (coins < cost) return;
+  coins -= cost;
+  balls += qty;
+  updateHud();
+  saveGame();
+  document.getElementById('shop-coin-count').textContent = coins;
+  document.getElementById('shop-ball-count').textContent = balls;
+  refreshShopButtons();
+  beep(660, 0.1, 0.08);
+  setTimeout(() => beep(880, 0.12, 0.15), 100);
 }
 
 // ═══════════════════════════════════════════════════
@@ -899,6 +1093,8 @@ function showMessage(text) {
 
 function updateHud() {
   document.getElementById('caught-count').textContent = caughtIds.size;
+  document.getElementById('ball-count').textContent   = balls;
+  document.getElementById('coin-count').textContent   = coins;
   const zoneEl = document.getElementById('zone-name');
   if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
 }
@@ -908,6 +1104,9 @@ function updateHud() {
 // ═══════════════════════════════════════════════════
 function startNewGame() {
   caughtIds.clear();
+  collectedItems.clear();
+  balls = 5;
+  coins = 0;
   currentZone = 0;
   playerX = 10; playerY = 7; playerDir = 'down';
   fromPx.x = 10 * TILE_SIZE;
@@ -931,10 +1130,13 @@ function enterWorld() {
 function saveGame() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      caught: [...caughtIds],
-      zone:   currentZone,
-      x:      playerX,
-      y:      playerY,
+      caught:    [...caughtIds],
+      zone:      currentZone,
+      x:         playerX,
+      y:         playerY,
+      balls,
+      coins,
+      collected: [...collectedItems],
     }));
   } catch (_) {}
 }
@@ -948,10 +1150,13 @@ function loadSave() {
         // Legacy v1 format: just an array of caught ids
         caughtIds = new Set(data);
       } else {
-        caughtIds   = new Set(data.caught || []);
-        currentZone = data.zone  ?? 0;
-        playerX     = data.x    ?? 10;
-        playerY     = data.y    ?? 7;
+        caughtIds      = new Set(data.caught || []);
+        currentZone    = data.zone  ?? 0;
+        playerX        = data.x    ?? 10;
+        playerY        = data.y    ?? 7;
+        balls          = data.balls     ?? 5;
+        coins          = data.coins     ?? 0;
+        collectedItems = new Set(data.collected || []);
       }
       fromPx.x   = playerX * TILE_SIZE;
       fromPx.y   = playerY * TILE_SIZE;
