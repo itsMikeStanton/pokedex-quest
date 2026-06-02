@@ -95,10 +95,10 @@ const ZONE_SPECS = [
     features: [ { tile: T.TREE, blobs: 7, min: 3, max: 7 },
                 { tile: T.WATER, blobs: 2, min: 6, max: 12 } ],
     grass: { blobs: 7, min: 4, max: 9 } },
-  // 1 Beach — sand with tide pools and palm clumps.
-  { base: T.SAND, minGrass: 46,
-    features: [ { tile: T.WATER, blobs: 4, min: 8, max: 16 },
-                { tile: T.TREE, blobs: 5, min: 2, max: 5 } ],
+  // 1 Beach — sand around one big connected lake, with palm clumps.
+  { base: T.SAND, minGrass: 46, oneBody: T.WATER,
+    features: [ { tile: T.WATER, cluster: true, spread: 3, blobs: 7, min: 14, max: 24 },
+                { tile: T.TREE, blobs: 6, min: 3, max: 6 } ],
     grass: { blobs: 14, min: 4, max: 9 } },
   // 2 City — paved ground with scattered building/planter blocks.
   { base: T.CITY, minGrass: 14,
@@ -146,26 +146,51 @@ function zoneAnchors(zoneId, cols, rows) {
   return { cells, inward };
 }
 
-// Grow an irregular cluster of `tile` over `base` cells via a random frontier.
-function growBlob(grid, tile, cols, rows, size, rng, prot, base) {
-  let sx, sy, tries = 0;
-  do {
-    sx = 1 + Math.floor(rng() * (cols - 2));
-    sy = 1 + Math.floor(rng() * (rows - 2));
-  } while ((grid[sy][sx] !== base || prot.has(sy * cols + sx)) && ++tries < 50);
-  if (grid[sy][sx] !== base || prot.has(sy * cols + sx)) return;
+// Paint a rounded, slightly irregular cluster of `tile` over `base` cells,
+// centred on (cx,cy). `size` is the approximate area (cells), so blobs read
+// as compact groupings rather than thin tendrils.
+function paintBlob(grid, tile, cols, rows, cx, cy, size, rng, prot, base) {
+  const radius = Math.max(1, Math.sqrt(size / Math.PI));
+  const reach  = Math.ceil(radius + 1.5);
+  for (let dy = -reach; dy <= reach; dy++)
+    for (let dx = -reach; dx <= reach; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue;
+      if (prot.has(y * cols + x) || grid[y][x] !== base) continue;
+      // Per-cell wobble on the edge keeps the outline organic, not a disc.
+      if (Math.hypot(dx, dy) <= radius * (0.72 + rng() * 0.5)) grid[y][x] = tile;
+    }
+}
 
-  const frontier = [[sx, sy]];
-  let placed = 0;
-  while (frontier.length && placed < size) {
-    const [x, y] = frontier.splice(Math.floor(rng() * frontier.length), 1)[0];
-    if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue;
-    if (prot.has(y * cols + x) || grid[y][x] !== base) continue;
-    grid[y][x] = tile;
-    placed++;
-    [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].forEach(n => {
-      if (rng() < 0.55) frontier.push(n);
-    });
+// Find a random interior cell still on the base terrain (and not protected).
+function pickCenter(grid, cols, rows, rng, prot, base) {
+  for (let t = 0; t < 60; t++) {
+    const x = 1 + Math.floor(rng() * (cols - 2));
+    const y = 1 + Math.floor(rng() * (rows - 2));
+    if (grid[y][x] === base && !prot.has(y * cols + x)) return [x, y];
+  }
+  return null;
+}
+
+// Scatter a feature as several rounded clusters. When `cluster` is set the
+// clusters share a jittered centre so they overlap into one larger body
+// (used for the Beach lake).
+function scatterFeature(grid, f, cols, rows, rng, prot, base) {
+  const sz = () => f.min + Math.floor(rng() * (f.max - f.min + 1));
+  if (f.cluster) {
+    const c = pickCenter(grid, cols, rows, rng, prot, base);
+    if (!c) return;
+    const spread = f.spread ?? 2;
+    for (let b = 0; b < f.blobs; b++) {
+      const x = Math.max(1, Math.min(cols - 2, c[0] + Math.round((rng() - 0.5) * 2 * spread)));
+      const y = Math.max(1, Math.min(rows - 2, c[1] + Math.round((rng() - 0.5) * 2 * spread)));
+      paintBlob(grid, f.tile, cols, rows, x, y, sz(), rng, prot, base);
+    }
+  } else {
+    for (let b = 0; b < f.blobs; b++) {
+      const c = pickCenter(grid, cols, rows, rng, prot, base);
+      if (c) paintBlob(grid, f.tile, cols, rows, c[0], c[1], sz(), rng, prot, base);
+    }
   }
 }
 
@@ -184,13 +209,8 @@ function generateZoneLayout(zoneId, seed) {
   const { cells, inward } = zoneAnchors(zoneId, cols, rows);
   [...cells, ...inward].forEach(([x, y]) => { grid[y][x] = base; prot.add(y * cols + x); });
 
-  for (const f of spec.features)
-    for (let b = 0; b < f.blobs; b++)
-      growBlob(grid, f.tile, cols, rows, f.min + Math.floor(rng() * (f.max - f.min + 1)), rng, prot, base);
-
-  for (let b = 0; b < spec.grass.blobs; b++)
-    growBlob(grid, T.GRASS, cols, rows,
-             spec.grass.min + Math.floor(rng() * (spec.grass.max - spec.grass.min + 1)), rng, prot, base);
+  for (const f of spec.features) scatterFeature(grid, f, cols, rows, rng, prot, base);
+  scatterFeature(grid, { tile: T.GRASS, ...spec.grass }, cols, rows, rng, prot, base);
 
   if (spec.shop) grid[5][10] = T.SHOP;
   return grid;
@@ -212,8 +232,33 @@ function floodWalkable(grid, cols, rows, sx, sy) {
   return seen;
 }
 
+// Count the connected components made of `tile` (4-connectivity).
+function tileComponents(grid, cols, rows, tile) {
+  const seen = new Set();
+  let comps = 0;
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < cols; x++) {
+      if (grid[y][x] !== tile || seen.has(y * cols + x)) continue;
+      comps++;
+      const stack = [[x, y]];
+      seen.add(y * cols + x);
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        for (const [na, nb] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) {
+          if (na < 0 || na >= cols || nb < 0 || nb >= rows) continue;
+          const id = nb * cols + na;
+          if (seen.has(id) || grid[nb][na] !== tile) continue;
+          seen.add(id);
+          stack.push([na, nb]);
+        }
+      }
+    }
+  return comps;
+}
+
 function zoneIsValid(grid, zoneId) {
   const { cols, rows } = ZONE_INFO[zoneId];
+  const spec = ZONE_SPECS[zoneId];
   const { cells } = zoneAnchors(zoneId, cols, rows);
   const seen = floodWalkable(grid, cols, rows, cells[0][0], cells[0][1]);
   for (const [x, y] of cells) if (!seen.has(y * cols + x)) return false;
@@ -224,7 +269,10 @@ function zoneIsValid(grid, zoneId) {
         if (!seen.has(y * cols + x)) return false;
         grass++;
       }
-  return grass >= ZONE_SPECS[zoneId].minGrass;
+  if (grass < spec.minGrass) return false;
+  // A zone may require a feature to form a single body (e.g. the Beach lake).
+  if (spec.oneBody != null && tileComponents(grid, cols, rows, spec.oneBody) > 1) return false;
+  return true;
 }
 
 function buildAllZones() {
