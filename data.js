@@ -7,6 +7,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Grass',
     description: 'A strange seed was planted on its back at birth. The seed slowly grows larger as this Pokémon grows older.',
+    zones: [0],
   },
   {
     id: 4, name: 'Charmander', sprite: 'sprites/004.png', emoji: '🔥',
@@ -14,6 +15,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Fire',
     description: 'Obviously prefers hot places. When it rains, steam is said to spout from the tip of its tail!',
+    zones: [0],
   },
   {
     id: 7, name: 'Squirtle', sprite: 'sprites/007.png', emoji: '💧',
@@ -21,6 +23,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'After birth, its back swells and hardens into a shell. It powerfully sprays foam from its mouth.',
+    zones: [1],
   },
   {
     id: 10, name: 'Caterpie', sprite: 'sprites/010.png', emoji: '🐛',
@@ -28,6 +31,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Bug',
     description: 'Its short feet are tipped with suction pads that let it tirelessly climb slopes and walls.',
+    zones: [0],
   },
   {
     id: 16, name: 'Pidgey', sprite: 'sprites/016.png', emoji: '🐦',
@@ -35,6 +39,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Flying',
     description: 'A common sight in forests and woods. It flaps its wings to kick up blinding sand.',
+    zones: [0],
   },
   {
     id: 19, name: 'Rattata', sprite: 'sprites/019.png', emoji: '🐭',
@@ -42,6 +47,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Will chew on anything with its very sharp fangs. You can hear it gnawing through the night.',
+    zones: [0],
   },
   {
     id: 25, name: 'Pikachu', sprite: 'sprites/025.png', emoji: '⚡',
@@ -49,6 +55,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'When several of these Pokémon gather, their electricity can build up and cause lightning storms!',
+    zones: [2],
   },
   {
     id: 35, name: 'Clefairy', sprite: 'sprites/035.png', emoji: '🌙',
@@ -56,6 +63,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Fairy',
     description: 'Its magical and cute appeal has many admirers. It is rare and found only in certain places.',
+    zones: [3],
   },
   {
     id: 39, name: 'Jigglypuff', sprite: 'sprites/039.png', emoji: '🎵',
@@ -63,6 +71,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'When its huge eyes light up, it sings a mysteriously soothing melody that lulls its enemies to sleep.',
+    zones: [2],
   },
   {
     id: 52, name: 'Meowth', sprite: 'sprites/052.png', emoji: '🐱',
@@ -70,6 +79,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Adores round and shiny things. It wanders the streets at night to look for dropped coins.',
+    zones: [2],
   },
   {
     id: 54, name: 'Psyduck', sprite: 'sprites/054.png', emoji: '🐤',
@@ -77,6 +87,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'While lulling its enemies with its vacant look, this clever Pokémon uses its psychic powers.',
+    zones: [1],
   },
   {
     id: 94, name: 'Gengar', sprite: 'sprites/094.png', emoji: '👻',
@@ -84,6 +95,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Ghost',
     description: 'Under a full moon, this Pokémon likes to mimic the shadows of people and laugh at their fright!',
+    zones: [3],
   },
   {
     id: 129, name: 'Magikarp', sprite: 'sprites/129.png', emoji: '🐟',
@@ -91,6 +103,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'In the distant past, it was somewhat stronger. Today it is the weakest — but it never gives up!',
+    zones: [1],
   },
   {
     id: 133, name: 'Eevee', sprite: 'sprites/133.png', emoji: '🦊',
@@ -98,6 +111,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'Its genetic code is special. It may evolve into many different Pokémon when exposed to special Stones.',
+    zones: [3],
   },
   {
     id: 143, name: 'Snorlax', sprite: 'sprites/143.png', emoji: '😴',
@@ -105,5 +119,6 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Very lazy. Just eats and sleeps. As its huge body gets bigger, it becomes steadily more sleepy.',
+    zones: [2],
   },
 ];
