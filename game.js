@@ -778,6 +778,10 @@ function bindEvents() {
   // World map
   document.getElementById('map-back').addEventListener('click', closeMap);
 
+  // Badge case
+  document.getElementById('map-badges').addEventListener('click', openBadgeCase);
+  document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
+
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1857,6 +1861,41 @@ function renderMap() {
     b.textContent = have ? c.emoji : '❔';
     b.title = have ? c.name : '???';
     tray.appendChild(b);
+  });
+}
+
+// ─── Badge Case ──────────────────────────────────────
+function openBadgeCase() {
+  renderBadgeCase();
+  showScreen('badges');
+}
+function closeBadgeCase() {
+  renderMap();
+  showScreen('map');
+}
+function renderBadgeCase() {
+  document.getElementById('badges-count').textContent = collected.size;
+  const grid = document.getElementById('badges-grid');
+  grid.innerHTML = '';
+  COLLECTIBLES.forEach(c => {
+    const have = collected.has(c.id);
+    const card = document.createElement('div');
+    card.className = 'badge-card' + (have ? ' have' : '');
+
+    const icon = document.createElement('div');
+    icon.className = 'badge-card-icon';
+    icon.textContent = have ? c.emoji : '🔒';
+
+    const name = document.createElement('div');
+    name.className = 'badge-card-name';
+    name.textContent = have ? c.name : '???';
+
+    const loc = document.createElement('div');
+    loc.className = 'badge-card-loc';
+    loc.textContent = (have ? 'Found in ' : '📍 ') + ZONE_INFO[c.zone].name;
+
+    card.append(icon, name, loc);
+    grid.appendChild(card);
   });
 }
 

@@ -148,15 +148,26 @@
             <svg id="map-lines" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden="true"></svg>
             <div id="map-zones"></div>
           </div>
-          <div id="map-badges">
+          <button id="map-badges" type="button">
             <span id="map-badges-label">BADGES <span id="badge-count">0</span>/4</span>
             <span id="map-badges-row"></span>
-          </div>
+            <span id="map-badges-view">view ▸</span>
+          </button>
           <div id="map-legend">
             <span><span class="legend-swatch open"></span>Open</span>
             <span><span class="legend-swatch locked"></span>Locked</span>
             <span>📍 You</span>
           </div>
+        </div>
+
+        <!-- BADGE CASE SCREEN -->
+        <div id="badges-screen" class="screen">
+          <div id="badges-topbar">
+            <button id="badges-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="badges-title">BADGE CASE</span>
+            <span id="badges-counter"><span id="badges-count">0</span>/4</span>
+          </div>
+          <div id="badges-grid"></div>
         </div>
 
         <!-- COMPLETE SCREEN -->
@@ -220,7 +231,7 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.2.0</div>
+  <div id="version">v2.2.1</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>
