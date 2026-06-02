@@ -754,6 +754,24 @@ body {
 .map-zone-tag.you { color: #1a1a00; background: #f8d030; }
 .map-zone-tag.req { color: #e0a0a0; background: #2a1414; border: 1px solid #5a3a3a; }
 
+#map-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-top: 2px solid #204060;
+  flex-shrink: 0;
+}
+#map-badges-label { font-size: 6px; color: #e0c040; }
+#map-badges-row { display: flex; gap: 6px; }
+.map-badge {
+  font-size: 15px;
+  line-height: 1;
+  filter: grayscale(0);
+}
+.map-badge:not(.have) { font-size: 12px; opacity: .5; filter: grayscale(1); }
+
 #map-legend {
   display: flex;
   justify-content: center;

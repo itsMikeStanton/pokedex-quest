@@ -315,6 +315,72 @@ function nearestWalkable(zone, x, y) {
 
 const MAPS = buildAllZones();
 
+// ═══════════════════════════════════════════════════
+// COLLECTIBLES (badges) & NPCs
+// ═══════════════════════════════════════════════════
+// Fixed treasures hidden in the faraway lands — one badge per outer zone,
+// just waiting to be found. Positions below are a preferred spot; they snap
+// to the nearest walkable tile of the (procedural) zone at load.
+const COLLECTIBLES = [
+  { id: 'badge_volcano', zone: 4, x: 10, y: 14, emoji: '🎖️', name: 'Ember Badge' },
+  { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', name: 'Thicket Badge' },
+  { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', name: 'Glacier Badge' },
+  { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', name: 'Dune Badge' },
+];
+
+// Friendly characters you can walk up to and talk with. They stand on a tile
+// (snapped to an open walkable spot) and block it — bump into them to chat.
+const NPCS = [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', lines: [
+    'Welcome to the Lukeymon lands, friend!',
+    'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
+    'Some paths are blocked. Catch the right type, then WALK INTO the barrier to clear it!',
+  ] },
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', lines: [
+    'Keeping the city safe, trainer.',
+    'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
+  ] },
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', lines: [
+    'Waves are perfect today, dude!',
+    'Water Lukeymon really love a gentle pet. 🤚',
+  ] },
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', lines: [
+    '...you wandered this deep into the forest? Impressive.',
+    'Collect every badge AND every Lukeymon, and you will be a true master.',
+  ] },
+];
+
+// Snap each entity to a reachable tile. Collectibles just need a walkable tile;
+// NPCs prefer an "open" tile (3+ walkable neighbours) so they don't wall a path.
+function isOpenTile(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  const m = MAPS[zone];
+  if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1 || isObstacleTile(m[y][x])) return false;
+  let n = 0;
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+    if (isWalkableTile(m[y + dy][x + dx])) n++;
+  return n >= 3;
+}
+function nearestOpenTile(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  if (isOpenTile(zone, x, y)) return [x, y];
+  for (let rad = 1; rad < Math.max(cols, rows); rad++)
+    for (let dy = -rad; dy <= rad; dy++)
+      for (let dx = -rad; dx <= rad; dx++)
+        if (isOpenTile(zone, x + dx, y + dy)) return [x + dx, y + dy];
+  return nearestWalkable(zone, x, y);
+}
+NPCS.forEach(n => { [n.x, n.y] = nearestOpenTile(n.zone, n.x, n.y); });
+COLLECTIBLES.forEach(c => { [c.x, c.y] = nearestWalkable(c.zone, c.x, c.y); });
+
+function npcAt(zone, x, y) {
+  return NPCS.find(n => n.zone === zone && n.x === x && n.y === y) || null;
+}
+function collectibleAt(zone, x, y) {
+  return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
+}
+
+
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
   H: '#d83028',  // hat
@@ -401,6 +467,7 @@ let canvas, ctx;
 let audioCtx    = null;
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
+let collected = new Set();         // ids of badges/collectibles found
 
 // ── Animation state ─────────────────────────────────
 let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
@@ -941,6 +1008,15 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3b. Talk to an NPC standing on the destination tile (they block it).
+  const npc = npcAt(currentZone, nx, ny);
+  if (npc) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    talkNPC(npc);
+    return;
+  }
+
   // 4. Check tile impassable
   const tile = MAPS[currentZone][ny][nx];
   if (isObstacleTile(tile)) {
@@ -974,6 +1050,19 @@ function move(dx, dy, ts) {
     const poke = wildPoke.poke;
     clearWild();
     setTimeout(() => beginEncounter(poke), 80);
+    return;
+  }
+
+  // Found a fixed collectible (badge) sitting on this tile?
+  const item = collectibleAt(currentZone, playerX, playerY);
+  if (item && !collected.has(item.id)) {
+    collected.add(item.id);
+    saveGame();
+    updateHud();
+    showMessage(`${item.emoji} You found the ${item.name}! (${collected.size}/${COLLECTIBLES.length})`);
+    beep(660, 0.12, 0.1);
+    setTimeout(() => beep(880, 0.12, 0.12), 110);
+    setTimeout(() => beep(1100, 0.16, 0.18), 230);
     return;
   }
 
@@ -1082,6 +1171,36 @@ function spawnWild() {
   }, WILD_TIMEOUT);
 }
 
+function talkNPC(npc) {
+  npc._i = (npc._i == null) ? 0 : (npc._i + 1) % npc.lines.length;
+  showMessage(`<b>${npc.emoji} ${npc.name}:</b> ${npc.lines[npc._i]}`);
+  beep(440, 0.05, 0.06, 'sine');
+  setTimeout(() => beep(550, 0.05, 0.07, 'sine'), 80);
+}
+
+// Draw fixed collectibles (bobbing) and NPCs for the current zone.
+function drawEntities(ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  ctx.textAlign = 'center';
+  for (const c of COLLECTIBLES) {
+    if (c.zone !== currentZone || collected.has(c.id)) continue;
+    const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
+    const py = c.y * TILE_SIZE - camY;
+    // sparkle glow
+    ctx.font = '12px serif';
+    ctx.fillText('✨', px, py - 10 + bob);
+    ctx.font = '20px serif';
+    ctx.fillText(c.emoji, px, py + 18 + bob);
+  }
+  for (const n of NPCS) {
+    if (n.zone !== currentZone) continue;
+    const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
+    const py = n.y * TILE_SIZE - camY;
+    ctx.font = '22px serif';
+    ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+  }
+}
+
 function drawWild(ts) {
   if (!wildPoke || wildPoke.zone !== currentZone) return;
 
@@ -1152,6 +1271,7 @@ function drawWorld(ts) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawBarriers(ts);
+  drawEntities(ts);
   drawWild(ts);
   drawPlayer(renderPos.x - camX, renderPos.y - camY);
 }
@@ -1725,6 +1845,19 @@ function renderMap() {
     }
     zones.appendChild(tile);
   });
+
+  // Badge tray.
+  document.getElementById('badge-count').textContent = collected.size;
+  const tray = document.getElementById('map-badges-row');
+  tray.innerHTML = '';
+  COLLECTIBLES.forEach(c => {
+    const b = document.createElement('span');
+    const have = collected.has(c.id);
+    b.className = 'map-badge' + (have ? ' have' : '');
+    b.textContent = have ? c.emoji : '❔';
+    b.title = have ? c.name : '???';
+    tray.appendChild(b);
+  });
 }
 
 // ═══════════════════════════════════════════════════
@@ -1775,6 +1908,7 @@ function updateHud() {
 function startNewGame() {
   caughtIds.clear();
   unlockedBarriers.clear();
+  collected.clear();
   balls = 5;
   coins = 0;
   clearWild();
@@ -1805,6 +1939,7 @@ function saveGame() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       caught:    [...caughtIds],
       barriers:  [...unlockedBarriers],
+      collected: [...collected],
       zone:      currentZone,
       x:         playerX,
       y:         playerY,
@@ -1825,6 +1960,7 @@ function loadSave() {
       } else {
         caughtIds        = new Set(data.caught || []);
         unlockedBarriers = new Set(data.barriers || []);
+        collected        = new Set(data.collected || []);
         currentZone    = data.zone  ?? 0;
         playerX        = data.x    ?? 10;
         playerY        = data.y    ?? 7;
