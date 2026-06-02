@@ -2242,6 +2242,8 @@ function renderBadgeCase() {
 // COMPLETE SCREEN
 // ═══════════════════════════════════════════════════
 function showComplete() {
+  document.getElementById('complete-sub').textContent =
+    `All ${POKEMON_DATA.length} Lukeymon caught!`;
   const rowEl = document.getElementById('complete-row');
   rowEl.innerHTML = '';
   POKEMON_DATA.forEach(p => {
