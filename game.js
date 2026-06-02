@@ -76,6 +76,16 @@ const ZONE_MAP = {
   7: { col: 2, row: 4, icon: '🏜️' }, // Desert
 };
 
+// Most connections are straight lines between adjacent tiles. Meadow↔Dark
+// Forest is the exception: the two zones sit on the same row with Highlands
+// between them (the world graph is non-planar), so a straight line would run
+// through Highlands and read as a fake connection. Route it over the top
+// instead — waypoints are in the 400×400 SVG viewBox, clear of every node and
+// connector. Keyed by "minId-maxId".
+const EDGE_ROUTES = {
+  '0-5': [[250, 18], [50, 18]],
+};
+
 const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
 
 // ═══════════════════════════════════════════════════
@@ -1631,9 +1641,21 @@ function renderMap() {
     const barrier = gate ? gate.barrier : null;
     const passable = isBarrierUnlocked(barrier);
     const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
-    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${passable ? 'link-open' : 'link-locked'}" />`;
+
+    // Build the path: straight by default, or via waypoints for routed edges.
+    let wp = EDGE_ROUTES[key];
+    if (wp && Math.hypot(wp[wp.length - 1][0] - x1, wp[wp.length - 1][1] - y1)
+           < Math.hypot(wp[0][0] - x1, wp[0][1] - y1)) {
+      wp = wp.slice().reverse(); // orient waypoints to start nearest (x1,y1)
+    }
+    const pts = [[x1, y1], ...(wp || []), [x2, y2]];
+    svg += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" class="${passable ? 'link-open' : 'link-locked'}" />`;
+
     if (!passable && barrier) {
-      svg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 5}" class="link-sign">${BARRIERS[barrier].sign}</text>`;
+      // Label at the path midpoint (the apex of the arc for routed edges).
+      const lx = wp ? wp.reduce((s, p) => s + p[0], 0) / wp.length : (x1 + x2) / 2;
+      const ly = wp ? wp.reduce((s, p) => s + p[1], 0) / wp.length : (y1 + y2) / 2;
+      svg += `<text x="${lx}" y="${ly + 5}" class="link-sign">${BARRIERS[barrier].sign}</text>`;
     }
   });
   document.getElementById('map-lines').innerHTML = svg;
