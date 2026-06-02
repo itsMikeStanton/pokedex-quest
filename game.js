@@ -36,7 +36,7 @@ const MAPS = [
     [2,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0,2],
     [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
   ],
-  // Zone 1: Beach
+  // Zone 1: Beach (20×35 — scrolls vertically)
   [
     [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
     [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
@@ -48,9 +48,30 @@ const MAPS = [
     [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,4],
     [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
     [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,2],
-    [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
-    [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,2,2,4,4,4,4,4,4,2,2,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,3,3,3,3,4,4,4,1,1,4,4,2],
+    [2,4,1,1,4,4,4,3,3,3,3,3,3,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,3,3,3,3,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,2,4,4,4,4,4,4,4,4,2,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,3,3,3,3,3,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,2,4,3,3,3,3,3,4,2,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
     [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
   ],
   // Zone 2: City
@@ -87,7 +108,7 @@ const MAPS = [
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
   ],
-  // Zone 4: Volcano
+  // Zone 4: Volcano (20×28 — scrolls vertically, entry at south)
   [
     [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
@@ -102,24 +123,38 @@ const MAPS = [
     [2,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,2],
     [2,0,1,1,0,0,0,0,7,7,7,7,0,0,0,1,1,0,0,2],
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,2,2,0,0,0,0,0,2,2,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,7,7,7,0,0,0,0,7,7,7,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,2,2,2,0,0,2,2,2,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,7,7,7,7,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
   ],
-  // Zone 5: Dark Forest
+  // Zone 5: Dark Forest (40×14 — scrolls horizontally, entry at east edge)
   [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,0,1,1,1,0,0,2,0,0,0,0,2,0,1,1,1,0,0,2],
-    [2,0,1,1,1,0,2,2,0,2,2,0,2,2,1,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
-    [2,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [2,0,2,0,0,0,1,1,0,0,0,1,1,0,0,2,0,0,0,0],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
-    [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,0,0,2],
-    [2,0,1,1,0,0,1,1,0,0,0,1,1,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,2,2,2,0,2,0,1,1,0,0,2,0,1,1,0,0,0,2,2,0,1,1,0,0,2,0,0,0,2,0,1,1,0,0,2,0,0,2],
+    [2,0,2,0,2,0,2,0,1,1,0,2,2,0,1,1,0,0,0,2,2,0,1,1,0,2,2,0,0,0,2,0,1,1,0,2,2,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,1,1,2,0,2,1,1,0,0,2,1,1,2,0,2,2,0,2,2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
+    [2,0,1,1,0,0,2,1,1,0,0,0,1,1,0,0,2,0,0,2,2,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [2,0,2,2,1,1,0,2,0,0,0,2,0,1,1,2,0,0,0,2,2,0,2,0,0,0,1,1,0,0,0,1,1,0,0,2,0,0,0,0],
+    [2,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,2,2,2,0,0,2,1,1,0,2,2,2,0,0,2,2,0,2,2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
+    [2,0,1,1,0,0,2,0,2,2,2,0,1,1,0,1,1,0,0,2,2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,0,0,2],
+    [2,0,1,1,2,0,1,1,0,0,0,1,2,0,0,1,1,0,0,2,2,0,1,1,0,0,1,1,0,0,0,1,1,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
   ],
   // Zone 6: Ice Cave
   [
@@ -138,22 +173,22 @@ const MAPS = [
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
   ],
-  // Zone 7: Desert
+  // Zone 7: Desert (40×14 — scrolls horizontally)
   [
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,4,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,4,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
   ],
 ];
 
@@ -161,14 +196,14 @@ const MAPS = [
 // ZONE / EXIT / BARRIER DATA
 // ═══════════════════════════════════════════════════
 const ZONE_INFO = [
-  { id: 0, name: 'Meadow'      },
-  { id: 1, name: 'Beach'       },
-  { id: 2, name: 'City'        },
-  { id: 3, name: 'Highlands'   },
-  { id: 4, name: 'Volcano'     },
-  { id: 5, name: 'Dark Forest' },
-  { id: 6, name: 'Ice Cave'    },
-  { id: 7, name: 'Desert'      },
+  { id: 0, name: 'Meadow',      cols: 20, rows: 14 },
+  { id: 1, name: 'Beach',       cols: 20, rows: 35 },
+  { id: 2, name: 'City',        cols: 20, rows: 14 },
+  { id: 3, name: 'Highlands',   cols: 20, rows: 14 },
+  { id: 4, name: 'Volcano',     cols: 20, rows: 28 },
+  { id: 5, name: 'Dark Forest', cols: 40, rows: 14 },
+  { id: 6, name: 'Ice Cave',    cols: 20, rows: 14 },
+  { id: 7, name: 'Desert',      cols: 40, rows: 14 },
 ];
 
 const EXITS = [
@@ -178,9 +213,9 @@ const EXITS = [
   { from: 2, dir: 'east',  pos: [5,6,7],   to: 1, entryX:  1, entryY:  6, barrier: null    },
   { from: 2, dir: 'north', pos: [9,10,11], to: 3, entryX: 10, entryY: 12, barrier: 'fence' },
   { from: 3, dir: 'south', pos: [9,10,11], to: 2, entryX: 10, entryY:  1, barrier: null    },
-  { from: 3, dir: 'north', pos: [9,10,11], to: 4, entryX: 10, entryY: 12, barrier: 'lava'  },
+  { from: 3, dir: 'north', pos: [9,10,11], to: 4, entryX: 10, entryY: 26, barrier: 'lava'  },
   { from: 4, dir: 'south', pos: [9,10,11], to: 3, entryX: 10, entryY:  1, barrier: null    },
-  { from: 0, dir: 'west',  pos: [5,6,7],   to: 5, entryX: 18, entryY:  6, barrier: 'vine'  },
+  { from: 0, dir: 'west',  pos: [5,6,7],   to: 5, entryX: 38, entryY:  6, barrier: 'vine'  },
   { from: 5, dir: 'east',  pos: [5,6,7],   to: 0, entryX:  1, entryY:  6, barrier: null    },
   { from: 1, dir: 'east',  pos: [5,6,7],   to: 6, entryX:  1, entryY:  6, barrier: 'frost' },
   { from: 6, dir: 'west',  pos: [5,6,7],   to: 1, entryX: 18, entryY:  6, barrier: null    },
@@ -290,6 +325,7 @@ let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let moveAnimTs  = -9999;
 let bumpVec     = null;
 let bumpAnimTs  = -9999;
+let camX = 0, camY = 0;
 
 // Pre-cached tile canvases for performance
 const tileCache = {};
@@ -601,10 +637,11 @@ function getExitBarrierAt(nx, ny) {
     if (!exit.barrier) continue;
     if (isBarrierUnlocked(exit.barrier)) continue;
     let match = false;
-    if (exit.dir === 'south' && ny === MAP_ROWS - 1 && exit.pos.includes(nx)) match = true;
-    if (exit.dir === 'north' && ny === 0            && exit.pos.includes(nx)) match = true;
-    if (exit.dir === 'west'  && nx === 0            && exit.pos.includes(ny)) match = true;
-    if (exit.dir === 'east'  && nx === MAP_COLS - 1 && exit.pos.includes(ny)) match = true;
+    const { cols: ec, rows: er } = ZONE_INFO[currentZone];
+    if (exit.dir === 'south' && ny === er - 1 && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'north' && ny === 0      && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'west'  && nx === 0      && exit.pos.includes(ny)) match = true;
+    if (exit.dir === 'east'  && nx === ec - 1 && exit.pos.includes(ny)) match = true;
     if (match) return exit.barrier;
   }
   return null;
@@ -614,10 +651,11 @@ function getExitBarrierAt(nx, ny) {
 function findActiveExit(x, y, dx, dy) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
   for (const exit of zoneExits) {
-    if (exit.dir === 'south' && dy > 0  && y === MAP_ROWS - 1 && exit.pos.includes(x)) return exit;
-    if (exit.dir === 'north' && dy < 0  && y === 0            && exit.pos.includes(x)) return exit;
-    if (exit.dir === 'west'  && dx < 0  && x === 0            && exit.pos.includes(y)) return exit;
-    if (exit.dir === 'east'  && dx > 0  && x === MAP_COLS - 1 && exit.pos.includes(y)) return exit;
+    const { cols: fc, rows: fr } = ZONE_INFO[currentZone];
+    if (exit.dir === 'south' && dy > 0 && y === fr - 1 && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'north' && dy < 0 && y === 0      && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'west'  && dx < 0 && x === 0      && exit.pos.includes(y)) return exit;
+    if (exit.dir === 'east'  && dx > 0 && x === fc - 1 && exit.pos.includes(y)) return exit;
   }
   return null;
 }
@@ -633,7 +671,8 @@ function move(dx, dy, ts) {
   const ny = playerY + dy;
 
   // 2. Off-map: check for zone exit
-  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS) {
+  const { cols: mc, rows: mr } = ZONE_INFO[currentZone];
+  if (nx < 0 || nx >= mc || ny < 0 || ny >= mr) {
     const exit = findActiveExit(playerX, playerY, dx, dy);
     if (exit) {
       if (isBarrierUnlocked(exit.barrier)) {
@@ -775,8 +814,9 @@ function spawnWild() {
   // Find all grass tiles in this zone (excluding edges)
   const map = MAPS[currentZone];
   const candidates = [];
-  for (let r = 1; r < MAP_ROWS - 1; r++) {
-    for (let c = 1; c < MAP_COLS - 1; c++) {
+  const { cols: sc, rows: sr } = ZONE_INFO[currentZone];
+  for (let r = 1; r < sr - 1; r++) {
+    for (let c = 1; c < sc - 1; c++) {
       if (map[r][c] === T.GRASS) candidates.push({ x: c, y: r });
     }
   }
@@ -810,8 +850,8 @@ function drawWild(ts) {
   const remaining = wildPoke.expireAt - Date.now();
   if (remaining <= 0) return;
 
-  const px = wildPoke.x * TILE_SIZE;
-  const py = wildPoke.y * TILE_SIZE;
+  const px = wildPoke.x * TILE_SIZE - camX;
+  const py = wildPoke.y * TILE_SIZE - camY;
 
   // Wiggle the grass tile
   const angle = Math.sin(ts * 0.012) * 0.18;
@@ -834,11 +874,29 @@ function drawWild(ts) {
 // ═══════════════════════════════════════════════════
 // WORLD RENDERING
 // ═══════════════════════════════════════════════════
+function updateCamera(renderPos) {
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const mapW = cols * TILE_SIZE;
+  const mapH = rows * TILE_SIZE;
+  const cx = renderPos.x + TILE_SIZE / 2 - canvas.width / 2;
+  const cy = renderPos.y + TILE_SIZE / 2 - canvas.height / 2;
+  camX = Math.max(0, Math.min(cx, mapW - canvas.width));
+  camY = Math.max(0, Math.min(cy, mapH - canvas.height));
+}
+
 function drawWorld(ts) {
+  const renderPos = getRenderPos(ts);
+  updateCamera(renderPos);
+
   const map = MAPS[currentZone];
-  for (let r = 0; r < MAP_ROWS; r++) {
-    for (let c = 0; c < MAP_COLS; c++) {
-      ctx.drawImage(tileCache[map[r][c]], c * TILE_SIZE, r * TILE_SIZE);
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const startC = Math.max(0, Math.floor(camX / TILE_SIZE));
+  const endC   = Math.min(cols, startC + 22);
+  const startR = Math.max(0, Math.floor(camY / TILE_SIZE));
+  const endR   = Math.min(rows, startR + 16);
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      ctx.drawImage(tileCache[map[r][c]], c * TILE_SIZE - camX, r * TILE_SIZE - camY);
     }
   }
   const zoneTints = {
@@ -849,12 +907,11 @@ function drawWorld(ts) {
   };
   if (zoneTints[currentZone]) {
     ctx.fillStyle = zoneTints[currentZone];
-    ctx.fillRect(0, 0, MAP_COLS * TILE_SIZE, MAP_ROWS * TILE_SIZE);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawBarriers(ts);
   drawWild(ts);
-  const pos = getRenderPos(ts);
-  drawPlayer(pos.x, pos.y);
+  drawPlayer(renderPos.x - camX, renderPos.y - camY);
 }
 
 // ─── Barrier graphics ────────────────────────────────
@@ -864,20 +921,21 @@ function drawBarriers(ts) {
     if (!exit.barrier || isBarrierUnlocked(exit.barrier)) continue;
     const signEmoji = BARRIERS[exit.barrier].sign;
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+    const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
     for (const p of exit.pos) {
       let bx, by;
-      if      (exit.dir === 'south') { bx = p * TILE_SIZE; by = (MAP_ROWS - 1) * TILE_SIZE; }
-      else if (exit.dir === 'north') { bx = p * TILE_SIZE; by = 0; }
-      else if (exit.dir === 'west')  { bx = 0; by = p * TILE_SIZE; }
-      else if (exit.dir === 'east')  { bx = (MAP_COLS - 1) * TILE_SIZE; by = p * TILE_SIZE; }
+      if      (exit.dir === 'south') { bx = p * TILE_SIZE - camX; by = (zr - 1) * TILE_SIZE - camY; }
+      else if (exit.dir === 'north') { bx = p * TILE_SIZE - camX; by = 0 - camY; }
+      else if (exit.dir === 'west')  { bx = 0 - camX; by = p * TILE_SIZE - camY; }
+      else if (exit.dir === 'east')  { bx = (zc - 1) * TILE_SIZE - camX; by = p * TILE_SIZE - camY; }
       drawBarrierTile(ctx, exit.barrier, bx, by, ts);
     }
     // Draw a floating emoji sign above / beside the middle barrier tile
     let sx, sy;
-    if      (exit.dir === 'south') { sx = midP * TILE_SIZE + 4; sy = (MAP_ROWS - 2) * TILE_SIZE + 4; }
-    else if (exit.dir === 'north') { sx = midP * TILE_SIZE + 4; sy = TILE_SIZE + 4; }
-    else if (exit.dir === 'west')  { sx = TILE_SIZE + 4;                sy = midP * TILE_SIZE + 4; }
-    else                           { sx = (MAP_COLS - 2) * TILE_SIZE + 4; sy = midP * TILE_SIZE + 4; }
+    if      (exit.dir === 'south') { sx = midP * TILE_SIZE + 4 - camX; sy = (zr - 2) * TILE_SIZE + 4 - camY; }
+    else if (exit.dir === 'north') { sx = midP * TILE_SIZE + 4 - camX; sy = TILE_SIZE + 4 - camY; }
+    else if (exit.dir === 'west')  { sx = TILE_SIZE + 4 - camX;        sy = midP * TILE_SIZE + 4 - camY; }
+    else                           { sx = (zc - 2) * TILE_SIZE + 4 - camX; sy = midP * TILE_SIZE + 4 - camY; }
     const bob = Math.sin(ts * 0.003) * 3;
     ctx.font = '22px serif';
     ctx.textAlign = 'left';
