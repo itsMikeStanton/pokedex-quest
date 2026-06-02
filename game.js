@@ -16,181 +16,11 @@ const SAVE_KEY       = 'lukeymon_v3';
 const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8 };
 
 // ═══════════════════════════════════════════════════
-// ZONE MAPS  (4 zones, each 20×14)
+// ZONE MAPS
 // ═══════════════════════════════════════════════════
-const MAPS = [
-  // Zone 0: Meadow
-  [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-    [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
-    [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
-    [0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,2],
-    [0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-    [0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,1,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-    [2,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0,2],
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 1: Beach (20×35 — scrolls vertically)
-  [
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,1,4,2],
-    [2,4,1,1,4,4,2,2,4,4,4,4,4,4,4,1,1,1,4,2],
-    [2,4,4,4,4,4,2,2,4,4,4,4,4,4,4,4,4,4,4,2],
-    [0,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
-    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,4],
-    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,4],
-    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,2,2,4,4,4,4,4,4,2,2,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,3,3,3,3,4,4,4,1,1,4,4,2],
-    [2,4,1,1,4,4,4,3,3,3,3,3,3,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,3,3,3,3,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,2,4,4,4,4,4,4,4,4,2,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,3,3,3,3,3,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,2,4,3,3,3,3,3,4,2,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 2: City
-  [
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
-    [2,5,2,2,2,5,5,5,5,5,5,5,5,5,2,2,2,5,5,2],
-    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,2,2,2,5,5,2],
-    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,5,5,5,5,5,2],
-    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,0],
-    [2,5,2,2,5,5,5,5,5,5,5,5,5,5,2,2,5,5,5,0],
-    [2,5,2,2,5,5,1,1,5,5,5,5,1,1,2,2,5,5,5,0],
-    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
-    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
-    [2,5,2,2,2,5,5,5,5,5,5,5,5,5,2,2,2,5,5,2],
-    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,2,2,2,5,5,2],
-    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
-    [2,2,2,2,2,2,2,2,2,5,5,5,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 3: Highlands
-  [
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-    [2,0,1,1,1,0,2,2,0,0,0,0,2,2,0,1,1,1,0,2],
-    [2,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,2,2,0,0,0,0,2,2,0,1,1,0,0,2],
-    [2,0,1,1,0,0,0,0,3,3,3,3,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,1,0,0,0,0,2,2,0,0,0,0,1,1,1,0,2],
-    [2,0,1,1,1,0,0,0,0,2,2,0,0,0,0,1,1,1,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 4: Volcano (20×28 — scrolls vertically, entry at south)
-  [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,2,2,2,0,0,0,0,2,2,2,1,1,0,0,2],
-    [2,0,1,1,0,2,7,7,7,7,7,0,0,2,0,1,1,0,0,2],
-    [2,0,0,0,0,0,7,7,7,7,7,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,2,7,7,7,7,7,0,0,2,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,2,2,0,0,0,0,2,2,0,0,0,0,0,2],
-    [2,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,7,7,7,7,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,2,2,0,0,0,0,0,2,2,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,7,7,7,0,0,0,0,7,7,7,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,2,2,2,0,0,2,2,2,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,7,7,7,7,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 5: Dark Forest (40×14 — scrolls horizontally, entry at east edge)
-  [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,0,2,2,2,0,2,0,1,1,0,0,2,0,1,1,0,0,0,2,2,0,1,1,0,0,2,0,0,0,2,0,1,1,0,0,2,0,0,2],
-    [2,0,2,0,2,0,2,0,1,1,0,2,2,0,1,1,0,0,0,2,2,0,1,1,0,2,2,0,0,0,2,0,1,1,0,2,2,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,1,1,2,0,2,1,1,0,0,2,1,1,2,0,2,2,0,2,2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
-    [2,0,1,1,0,0,2,1,1,0,0,0,1,1,0,0,2,0,0,2,2,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [2,0,2,2,1,1,0,2,0,0,0,2,0,1,1,2,0,0,0,2,2,0,2,0,0,0,1,1,0,0,0,1,1,0,0,2,0,0,0,0],
-    [2,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,2,2,2,0,0,2,1,1,0,2,2,2,0,0,2,2,0,2,2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
-    [2,0,1,1,0,0,2,0,2,2,2,0,1,1,0,1,1,0,0,2,2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,0,0,2],
-    [2,0,1,1,2,0,1,1,0,0,0,1,2,0,0,1,1,0,0,2,2,0,1,1,0,0,1,1,0,0,0,1,1,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 6: Ice Cave
-  [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,2,2,0,8,8,8,0,2,2,0,1,1,0,0,2],
-    [2,0,1,1,0,0,2,0,8,8,8,0,2,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,8,8,8,0,0,0,0,0,0,0,0,2],
-    [0,0,0,0,0,0,0,0,8,8,8,0,0,0,0,0,0,0,0,2],
-    [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [0,0,0,0,0,0,2,2,0,0,0,0,2,2,0,0,0,0,0,2],
-    [2,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,8,8,8,8,0,0,0,0,0,0,0,2],
-    [2,0,1,1,0,0,0,0,8,8,8,8,0,0,0,1,1,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  ],
-  // Zone 7: Desert (40×14 — scrolls horizontally)
-  [
-    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,4,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
-    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,4,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,4,2],
-    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,4,4,1,1,4,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
-    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  ],
-];
+// Zone tile layouts are generated procedurally (organic, seeded) from
+// ZONE_SPECS below — see buildAllZones(). MAPS is populated after the
+// ZONE / EXIT / BARRIER data it depends on.
 
 // ═══════════════════════════════════════════════════
 // ZONE / EXIT / BARRIER DATA
@@ -247,6 +77,185 @@ const ZONE_MAP = {
 };
 
 const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
+
+// ═══════════════════════════════════════════════════
+// PROCEDURAL ZONE LAYOUTS
+// ═══════════════════════════════════════════════════
+// Each zone is grown organically from a base terrain plus scattered,
+// irregular clusters of obstacles/hazards and tall-grass spawn patches —
+// no mirrored rectangles. Generation is seeded (stable across reloads) and
+// validated for connectivity so every exit and grass patch stays reachable.
+const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE]);
+function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
+function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
+
+const ZONE_SPECS = [
+  // 0 Meadow — grassy fields, tree copses, a pond.
+  { base: T.PATH, shop: true, minGrass: 22,
+    features: [ { tile: T.TREE, blobs: 7, min: 3, max: 7 },
+                { tile: T.WATER, blobs: 2, min: 6, max: 12 } ],
+    grass: { blobs: 7, min: 4, max: 9 } },
+  // 1 Beach — sand with tide pools and palm clumps.
+  { base: T.SAND, minGrass: 46,
+    features: [ { tile: T.WATER, blobs: 4, min: 8, max: 16 },
+                { tile: T.TREE, blobs: 5, min: 2, max: 5 } ],
+    grass: { blobs: 14, min: 4, max: 9 } },
+  // 2 City — paved ground with scattered building/planter blocks.
+  { base: T.CITY, minGrass: 14,
+    features: [ { tile: T.TREE, blobs: 8, min: 3, max: 7 } ],
+    grass: { blobs: 5, min: 3, max: 6 } },
+  // 3 Highlands — rolling ground, rocky copses, a tarn.
+  { base: T.PATH, minGrass: 22,
+    features: [ { tile: T.TREE, blobs: 8, min: 3, max: 7 },
+                { tile: T.WATER, blobs: 1, min: 5, max: 9 } ],
+    grass: { blobs: 7, min: 4, max: 8 } },
+  // 4 Volcano — ground broken by lava flows and rock.
+  { base: T.PATH, minGrass: 28,
+    features: [ { tile: T.LAVA, blobs: 6, min: 4, max: 10 },
+                { tile: T.TREE, blobs: 6, min: 2, max: 5 } ],
+    grass: { blobs: 9, min: 3, max: 7 } },
+  // 5 Dark Forest — dense, irregular tree cover.
+  { base: T.PATH, minGrass: 36,
+    features: [ { tile: T.TREE, blobs: 18, min: 3, max: 8 } ],
+    grass: { blobs: 12, min: 4, max: 8 } },
+  // 6 Ice Cave — frozen ground slabs and rock.
+  { base: T.PATH, minGrass: 20,
+    features: [ { tile: T.ICE, blobs: 6, min: 4, max: 9 },
+                { tile: T.TREE, blobs: 4, min: 2, max: 5 } ],
+    grass: { blobs: 7, min: 3, max: 7 } },
+  // 7 Desert — open sand with rock outcrops.
+  { base: T.SAND, minGrass: 42,
+    features: [ { tile: T.TREE, blobs: 12, min: 2, max: 6 } ],
+    grass: { blobs: 14, min: 4, max: 8 } },
+];
+
+// Cells that must stay walkable & connected: border openings (+ the cell
+// just inside), player landing tiles, and (zone 0) the start + shop.
+function zoneAnchors(zoneId, cols, rows) {
+  const cells = [], inward = [];
+  EXITS.filter(e => e.from === zoneId).forEach(e => {
+    e.pos.forEach(p => {
+      if      (e.dir === 'south') { cells.push([p, rows - 1]); inward.push([p, rows - 2]); }
+      else if (e.dir === 'north') { cells.push([p, 0]);        inward.push([p, 1]); }
+      else if (e.dir === 'west')  { cells.push([0, p]);        inward.push([1, p]); }
+      else                        { cells.push([cols - 1, p]); inward.push([cols - 2, p]); }
+    });
+  });
+  EXITS.filter(e => e.to === zoneId).forEach(e => cells.push([e.entryX, e.entryY]));
+  if (zoneId === 0) { cells.push([10, 7]); cells.push([10, 5]); } // start + shop
+  return { cells, inward };
+}
+
+// Grow an irregular cluster of `tile` over `base` cells via a random frontier.
+function growBlob(grid, tile, cols, rows, size, rng, prot, base) {
+  let sx, sy, tries = 0;
+  do {
+    sx = 1 + Math.floor(rng() * (cols - 2));
+    sy = 1 + Math.floor(rng() * (rows - 2));
+  } while ((grid[sy][sx] !== base || prot.has(sy * cols + sx)) && ++tries < 50);
+  if (grid[sy][sx] !== base || prot.has(sy * cols + sx)) return;
+
+  const frontier = [[sx, sy]];
+  let placed = 0;
+  while (frontier.length && placed < size) {
+    const [x, y] = frontier.splice(Math.floor(rng() * frontier.length), 1)[0];
+    if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue;
+    if (prot.has(y * cols + x) || grid[y][x] !== base) continue;
+    grid[y][x] = tile;
+    placed++;
+    [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].forEach(n => {
+      if (rng() < 0.55) frontier.push(n);
+    });
+  }
+}
+
+function generateZoneLayout(zoneId, seed) {
+  const rng = mulberry32(seed);
+  const { cols, rows } = ZONE_INFO[zoneId];
+  const spec = ZONE_SPECS[zoneId];
+  const base = spec.base;
+  const grid = Array.from({ length: rows }, () => new Array(cols).fill(base));
+
+  // Border wall, openings carved by anchors below.
+  for (let c = 0; c < cols; c++) { grid[0][c] = T.TREE; grid[rows - 1][c] = T.TREE; }
+  for (let r = 0; r < rows; r++) { grid[r][0] = T.TREE; grid[r][cols - 1] = T.TREE; }
+
+  const prot = new Set();
+  const { cells, inward } = zoneAnchors(zoneId, cols, rows);
+  [...cells, ...inward].forEach(([x, y]) => { grid[y][x] = base; prot.add(y * cols + x); });
+
+  for (const f of spec.features)
+    for (let b = 0; b < f.blobs; b++)
+      growBlob(grid, f.tile, cols, rows, f.min + Math.floor(rng() * (f.max - f.min + 1)), rng, prot, base);
+
+  for (let b = 0; b < spec.grass.blobs; b++)
+    growBlob(grid, T.GRASS, cols, rows,
+             spec.grass.min + Math.floor(rng() * (spec.grass.max - spec.grass.min + 1)), rng, prot, base);
+
+  if (spec.shop) grid[5][10] = T.SHOP;
+  return grid;
+}
+
+function floodWalkable(grid, cols, rows, sx, sy) {
+  const seen = new Set([sy * cols + sx]);
+  const stack = [[sx, sy]];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      const id = ny * cols + nx;
+      if (seen.has(id) || !isWalkableTile(grid[ny][nx])) continue;
+      seen.add(id);
+      stack.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+function zoneIsValid(grid, zoneId) {
+  const { cols, rows } = ZONE_INFO[zoneId];
+  const { cells } = zoneAnchors(zoneId, cols, rows);
+  const seen = floodWalkable(grid, cols, rows, cells[0][0], cells[0][1]);
+  for (const [x, y] of cells) if (!seen.has(y * cols + x)) return false;
+  let grass = 0;
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < cols; x++)
+      if (grid[y][x] === T.GRASS) {
+        if (!seen.has(y * cols + x)) return false;
+        grass++;
+      }
+  return grass >= ZONE_SPECS[zoneId].minGrass;
+}
+
+function buildAllZones() {
+  return ZONE_INFO.map((z, zoneId) => {
+    let last = null;
+    for (let attempt = 0; attempt < 250; attempt++) {
+      const seed = (0x5EED * (zoneId + 1) + attempt * 0x9E3779B1) >>> 0;
+      last = generateZoneLayout(zoneId, seed);
+      if (zoneIsValid(last, zoneId)) return last;
+    }
+    return last; // extremely unlikely; ship the best effort
+  });
+}
+
+// Find the nearest walkable cell to (x,y) — used to rescue a saved player
+// position that a regenerated layout may have turned into an obstacle.
+function nearestWalkable(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  const m = MAPS[zone];
+  const inB = (px, py) => px >= 0 && px < cols && py >= 0 && py < rows;
+  if (inB(x, y) && isWalkableTile(m[y][x])) return [x, y];
+  for (let rad = 1; rad < Math.max(cols, rows); rad++)
+    for (let dy = -rad; dy <= rad; dy++)
+      for (let dx = -rad; dx <= rad; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (inB(nx, ny) && isWalkableTile(m[ny][nx])) return [nx, ny];
+      }
+  return [x, y];
+}
+
+const MAPS = buildAllZones();
 
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
@@ -859,7 +868,7 @@ function move(dx, dy, ts) {
 
   // 4. Check tile impassable
   const tile = MAPS[currentZone][ny][nx];
-  if (tile === T.TREE || tile === T.WATER || tile === T.LAVA || tile === T.ICE) {
+  if (isObstacleTile(tile)) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     beep(160, 0.07, 0.1, 'square');
@@ -1725,6 +1734,9 @@ function loadSave() {
         balls = data.balls ?? 5;
         coins = data.coins ?? 0;
       }
+      // Clamp zone and rescue position if the layout changed under a save.
+      if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
+      [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
       fromPx.x   = playerX * TILE_SIZE;
       fromPx.y   = playerY * TILE_SIZE;
       moveAnimTs = -9999;
