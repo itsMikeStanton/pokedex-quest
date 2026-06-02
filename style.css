@@ -149,8 +149,8 @@ body {
 }
 
 .title-logo {
-  font-size: 18px;
-  letter-spacing: 2px;
+  font-size: 24px;
+  letter-spacing: 3px;
   line-height: 1;
   text-align: center;
 }
@@ -1115,7 +1115,7 @@ body {
   #start-select-row { flex-shrink: 0; padding: 8px 0 16px; }
   .ss-btn { font-size: min(3vw, 9px); padding: min(2.5vw, 10px) min(6vw, 26px); }
 
-  .title-logo { font-size: 13px; }
+  .title-logo { font-size: 18px; }
 }
 
 /* Action button highlight on correct/wrong */
