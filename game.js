@@ -233,6 +233,19 @@ const BARRIERS = {
   sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', sign: '🌍' },
 };
 
+// World-map layout: schematic grid position (col/row, 1-indexed in a 4×4)
+// plus a representative icon for each zone. Connections are drawn from EXITS.
+const ZONE_MAP = {
+  4: { col: 2, row: 1, icon: '🌋' }, // Volcano
+  5: { col: 1, row: 2, icon: '🌲' }, // Dark Forest
+  3: { col: 2, row: 2, icon: '⛰️' }, // Highlands
+  0: { col: 3, row: 2, icon: '🌳' }, // Meadow
+  2: { col: 2, row: 3, icon: '🏙️' }, // City
+  1: { col: 3, row: 3, icon: '🏖️' }, // Beach
+  6: { col: 4, row: 3, icon: '❄️' }, // Ice Cave
+  7: { col: 2, row: 4, icon: '🏜️' }, // Desert
+};
+
 const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
 
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
@@ -607,6 +620,11 @@ function bindEvents() {
       e.preventDefault();
     }
     if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
+    // 'M' toggles the world map from the world screen.
+    if (e.key === 'm' || e.key === 'M') {
+      if (gameState === 'world') openMap();
+      else if (gameState === 'map') closeMap();
+    }
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -616,10 +634,14 @@ function bindEvents() {
 
   // World HUD
   document.getElementById('pokedex-btn').addEventListener('click', openPokedex);
+  document.getElementById('map-btn').addEventListener('click', openMap);
 
   // Pokédex
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
+
+  // World map
+  document.getElementById('map-back').addEventListener('click', closeMap);
 
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
@@ -1504,6 +1526,102 @@ function closeDetail() {
   document.getElementById('pokedex-detail').classList.add('hidden');
   document.getElementById('pokedex-grid').classList.remove('hidden');
   renderPokedexGrid();
+}
+
+// ═══════════════════════════════════════════════════
+// WORLD MAP
+// ═══════════════════════════════════════════════════
+// BFS from the start zone over exits whose barrier is currently unlocked.
+function reachableZones() {
+  const seen = new Set([0]);
+  const queue = [0];
+  while (queue.length) {
+    const z = queue.shift();
+    for (const e of EXITS) {
+      if (e.from !== z || !isBarrierUnlocked(e.barrier)) continue;
+      if (!seen.has(e.to)) { seen.add(e.to); queue.push(e.to); }
+    }
+  }
+  return seen;
+}
+
+function openMap() {
+  renderMap();
+  showScreen('map');
+}
+
+function closeMap() {
+  showScreen('world');
+}
+
+function renderMap() {
+  const open = reachableZones();
+  document.getElementById('map-open-count').textContent = open.size;
+
+  // Cell centres in the 400×400 SVG viewBox (4×4 grid → 100px cells).
+  const cx = id => (ZONE_MAP[id].col - 0.5) * 100;
+  const cy = id => (ZONE_MAP[id].row - 0.5) * 100;
+
+  // Draw each connection once. A link is "open" when its barrier is unlocked.
+  const drawn = new Set();
+  let svg = '';
+  EXITS.forEach(e => {
+    const key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to);
+    if (drawn.has(key)) return;
+    drawn.add(key);
+    const gate = EXITS.find(x =>
+      ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
+    const barrier = gate ? gate.barrier : null;
+    const passable = isBarrierUnlocked(barrier);
+    const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${passable ? 'link-open' : 'link-locked'}" />`;
+    if (!passable && barrier) {
+      svg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 5}" class="link-sign">${BARRIERS[barrier].sign}</text>`;
+    }
+  });
+  document.getElementById('map-lines').innerHTML = svg;
+
+  // Place the zone tiles.
+  const zones = document.getElementById('map-zones');
+  zones.innerHTML = '';
+  ZONE_INFO.forEach(z => {
+    const pos = ZONE_MAP[z.id];
+    if (!pos) return;
+    const isOpen = open.has(z.id);
+    const here   = z.id === currentZone;
+
+    const tile = document.createElement('div');
+    tile.className = 'map-zone' + (isOpen ? ' open' : ' locked') + (here ? ' here' : '');
+    tile.style.left = ((pos.col - 1) * 25) + '%';
+    tile.style.top  = ((pos.row - 1) * 25) + '%';
+
+    const icon = document.createElement('div');
+    icon.className = 'map-zone-icon';
+    icon.textContent = isOpen ? pos.icon : '🔒';
+
+    const name = document.createElement('div');
+    name.className = 'map-zone-name';
+    name.textContent = z.name;
+
+    tile.appendChild(icon);
+    tile.appendChild(name);
+
+    if (here) {
+      const you = document.createElement('div');
+      you.className = 'map-zone-tag you';
+      you.textContent = '📍 YOU';
+      tile.appendChild(you);
+    } else if (!isOpen) {
+      const gate = EXITS.find(e => e.to === z.id && e.barrier);
+      if (gate) {
+        const req = document.createElement('div');
+        req.className = 'map-zone-tag req';
+        req.textContent = BARRIERS[gate.barrier].sign + ' ' + BARRIERS[gate.barrier].needsType;
+        tile.appendChild(req);
+      }
+    }
+    zones.appendChild(tile);
+  });
 }
 
 // ═══════════════════════════════════════════════════
