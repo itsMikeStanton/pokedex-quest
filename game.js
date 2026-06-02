@@ -119,6 +119,9 @@ window.addEventListener('DOMContentLoaded', () => {
   canvas = document.getElementById('game-canvas');
   ctx    = canvas.getContext('2d');
 
+  // Prevent the whole page from scrolling on touch
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
   buildTileCache();
   loadSave();
   bindEvents();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.3">
 </head>
 <body>
 
@@ -126,24 +126,14 @@
       </div><!-- /screen-area -->
     </div><!-- /screen-bezel -->
 
-    <!-- Touch / D-Pad controls -->
+    <!-- Touch / D-Pad controls (absolute positioned cross layout) -->
     <div id="controls-row">
       <div id="dpad">
-        <div class="dpad-row">
-          <div class="dpad-empty"></div>
-          <button class="dpad-btn" id="dp-up"    data-dir="up">▲</button>
-          <div class="dpad-empty"></div>
-        </div>
-        <div class="dpad-row">
-          <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
-          <div id="dpad-center"></div>
-          <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
-        </div>
-        <div class="dpad-row">
-          <div class="dpad-empty"></div>
-          <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
-          <div class="dpad-empty"></div>
-        </div>
+        <button class="dpad-btn" id="dp-up"    data-dir="up">▲</button>
+        <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
+        <div    id="dpad-center"></div>
+        <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
+        <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
       </div>
       <div id="ab-buttons">
         <button class="ab-btn" id="btn-b">B</button>
@@ -154,10 +144,10 @@
     <div id="start-select-row">
       <button class="ss-btn" id="ss-select">SELECT</button>
       <button class="ss-btn" id="ss-start">START</button>
-      <span id="version">v1.2</span>
     </div>
 
   </div><!-- /device -->
+  <div id="version">v1.3</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>
