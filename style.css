@@ -837,6 +837,56 @@ body {
 .legend-swatch.open   { background: #3a8a4a; }
 .legend-swatch.locked { background: #884040; }
 
+/* ─── MEWTWO BATTLE SCREEN ──────────────────────────── */
+#battle-screen {
+  background: radial-gradient(circle at 50% 30%, #2a1840, #0a0a18);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px;
+  gap: 6px;
+  overflow-y: auto;
+}
+#battle-header { font-size: 10px; color: #c890f8; text-shadow: 0 0 8px #a040f0; margin-top: 2px; }
+#battle-mewtwo { font-size: 44px; line-height: 1; animation: detailpop .4s ease-out; filter: drop-shadow(0 0 10px #a040f0); }
+#battle-round { font-size: 7px; color: #f8d060; }
+#battle-demand { font-size: 7px; color: #e8e8ff; text-align: center; line-height: 1.8; }
+#battle-type {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 7px;
+}
+#battle-instruction { font-size: 6px; color: #a0a0c0; }
+#battle-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+}
+.battle-opt {
+  background: #141428;
+  border: 2px solid #3a3a60;
+  border-radius: 6px;
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.battle-opt:hover { border-color: #8060c0; background: #1e1e3a; }
+.battle-opt.correct { border-color: #38d038; background: #103018; }
+.battle-opt.wrong   { border-color: #e04040; background: #301010; }
+.battle-opt-emoji { font-size: 22px; line-height: 1; }
+.battle-opt-name  { font-size: 5px; color: #d0d0e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.battle-opt-type  { font-size: 4px; color: #fff; padding: 1px 4px; border-radius: 8px; }
+#battle-win { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 6px; }
+#battle-win-msg { font-size: 8px; color: #c890f8; }
+
 /* ─── COMPLETE SCREEN ───────────────────────────────── */
 #complete-screen {
   background: linear-gradient(160deg, #1a1a00, #302800, #1a0020);

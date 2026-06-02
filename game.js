@@ -847,6 +847,9 @@ function bindEvents() {
   document.getElementById('map-badges').addEventListener('click', openBadgeCase);
   document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
 
+  // Mewtwo battle
+  document.getElementById('battle-throw').addEventListener('click', () => { wakeAudio(); throwMasterAtMewtwo(); });
+
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1789,10 +1792,112 @@ function engageRoamer(roamer) {
   beginEncounter(poke, roamer);
 }
 
-// Replaced by the full battle in Pass 2.
+// ═══════════════════════════════════════════════════
+// MEWTWO BATTLE  (no timer; match Mewtwo's type 3 rounds, then Master Ball)
+// ═══════════════════════════════════════════════════
+let battleRoundNum = 0;
+let battleType     = null;
+
 function startMewtwoBattle(roamer) {
-  showMessage('🧬 Mewtwo glares at you with overwhelming power... (its battle is coming soon)');
-  beep(120, 0.2, 0.3, 'square');
+  currentLegend = roamer;
+  currentPoke   = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  clearWild();
+  clearTimeout(spawnTimerId);
+  battleRoundNum = 0;
+  document.getElementById('battle-win').classList.add('hidden');
+  document.getElementById('battle-options').classList.remove('hidden');
+  document.getElementById('battle-instruction').classList.remove('hidden');
+  showScreen('battle');
+  playEncounterJingle();
+  nextBattleRound();
+}
+
+function nextBattleRound() {
+  battleRoundNum++;
+  document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / 3`;
+
+  // The player owns everything by now, so every type is available to counter.
+  const owned = POKEMON_DATA.filter(p => p.legend !== 'mewtwo' && caughtIds.has(p.id));
+  const types = [...new Set(owned.map(p => p.type))];
+  battleType = types[Math.floor(Math.random() * types.length)];
+
+  const tEl = document.getElementById('battle-type');
+  tEl.textContent = battleType;
+  tEl.style.background = typeColor(battleType);
+  beep(150, 0.18, 0.3, 'square');
+
+  // Six options: guaranteed at least one of the demanded type, rest mixed.
+  const correct = owned.filter(p => p.type === battleType);
+  const others  = shuffle(owned.filter(p => p.type !== battleType));
+  const opts = shuffle([ correct[Math.floor(Math.random() * correct.length)], ...others.slice(0, 5) ]);
+
+  const grid = document.getElementById('battle-options');
+  grid.innerHTML = '';
+  opts.forEach(poke => {
+    const card = document.createElement('button');
+    card.className = 'battle-opt';
+    const ic = document.createElement('span');
+    ic.className = 'battle-opt-emoji';
+    ic.textContent = poke.emoji;
+    const nm = document.createElement('span');
+    nm.className = 'battle-opt-name';
+    nm.textContent = poke.name;
+    const tp = document.createElement('span');
+    tp.className = 'battle-opt-type';
+    tp.textContent = poke.type;
+    tp.style.background = typeColor(poke.type);
+    card.append(ic, nm, tp);
+    card.addEventListener('click', () => choosePokemon(poke, card));
+    grid.appendChild(card);
+  });
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function choosePokemon(poke, card) {
+  if (gameState !== 'battle') return;
+  document.querySelectorAll('.battle-opt').forEach(b => b.disabled = true);
+
+  if (poke.type === battleType) {
+    card.classList.add('correct');
+    beep(523, 0.12, 0.1);
+    setTimeout(() => beep(659, 0.12, 0.15), 110);
+    if (battleRoundNum >= 3) setTimeout(battleWon, 600);
+    else setTimeout(nextBattleRound, 700);
+  } else {
+    card.classList.add('wrong');
+    beep(160, 0.15, 0.2, 'square');
+    setTimeout(battleLost, 800);
+  }
+}
+
+function battleWon() {
+  document.getElementById('battle-options').classList.add('hidden');
+  document.getElementById('battle-instruction').classList.add('hidden');
+  document.getElementById('battle-win').classList.remove('hidden');
+  document.getElementById('battle-throw').disabled = masterBalls <= 0;
+  beep(523, 0.12, 0.12);
+  setTimeout(() => beep(659, 0.12, 0.12), 130);
+  setTimeout(() => beep(784, 0.18, 0.2), 260);
+}
+
+function throwMasterAtMewtwo() {
+  if (masterBalls <= 0) return;
+  masterBalls--;
+  updateHud();
+  saveGame();
+  caught();  // handles roamer removal, result screen, and dex completion
+}
+
+function battleLost() {
+  legendaryEscaped();  // Mewtwo vanishes to another faraway land
 }
 
 // ═══════════════════════════════════════════════════
