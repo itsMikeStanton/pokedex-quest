@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.6">
+  <link rel="stylesheet" href="style.css?v=1.7">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
         <div id="world-screen" class="screen">
           <canvas id="game-canvas" width="640" height="448"></canvas>
           <div id="hud">
+            <span id="zone-name"></span>
             <span id="hud-count">🎒 <span id="caught-count">0</span> / 15</span>
             <button id="pokedex-btn" class="pixel-btn small blue">📖 PokéDex</button>
           </div>
@@ -147,7 +148,7 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v1.6</div>
+  <div id="version">v1.7</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>

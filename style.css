@@ -110,6 +110,9 @@ body {
   flex-shrink: 0;
 }
 
+/* ─── HUD ZONE NAME ─────────────────────────────────── */
+#zone-name { font-size: 6px; color: #a0d8a0; }
+
 /* ─── MESSAGE BOX ───────────────────────────────────── */
 #message-box {
   position: absolute;

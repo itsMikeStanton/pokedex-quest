@@ -11,27 +11,108 @@ const TIMER_MS       = 6000;   // 6 seconds to choose
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
 const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
-const SAVE_KEY       = 'lukeymon_v1';
+const SAVE_KEY       = 'lukeymon_v2';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5 };
 
-// 20 × 14 tile map  (0=path, 1=grass, 2=tree, 3=water)
-const MAP = [
-  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
-  [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],  // player spawns col 10
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0,2],
-  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+// ═══════════════════════════════════════════════════
+// ZONE MAPS  (4 zones, each 20×14)
+// ═══════════════════════════════════════════════════
+const MAPS = [
+  // Zone 0: Meadow
+  [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
+    [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
+    [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,1,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
+    [2,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0,2],
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 1: Beach
+  [
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,1,4,2],
+    [2,4,1,1,4,4,2,2,4,4,4,4,4,4,4,1,1,1,4,2],
+    [2,4,4,4,4,4,2,2,4,4,4,4,4,4,4,4,4,4,4,2],
+    [0,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,2],
+    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,2],
+    [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
+    [2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 2: City
+  [
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
+    [2,5,2,2,2,5,5,5,5,5,5,5,5,5,2,2,2,5,5,2],
+    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,2,2,2,5,5,2],
+    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,5,5,5,5,5,2],
+    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,0],
+    [2,5,2,2,5,5,5,5,5,5,5,5,5,5,2,2,5,5,5,0],
+    [2,5,2,2,5,5,1,1,5,5,5,5,1,1,2,2,5,5,5,0],
+    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
+    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
+    [2,5,2,2,2,5,5,5,5,5,5,5,5,5,2,2,2,5,5,2],
+    [2,5,2,2,2,5,1,1,5,5,5,5,1,1,2,2,2,5,5,2],
+    [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 3: Highlands
+  [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
+    [2,0,1,1,1,0,2,2,0,0,0,0,2,2,0,1,1,1,0,2],
+    [2,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,2,2,0,0,0,0,2,2,0,1,1,0,0,2],
+    [2,0,1,1,0,0,0,0,3,3,3,3,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,1,0,0,0,0,2,2,0,0,0,0,1,1,1,0,2],
+    [2,0,1,1,1,0,0,0,0,2,2,0,0,0,0,1,1,1,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+  ],
 ];
+
+// ═══════════════════════════════════════════════════
+// ZONE / EXIT / BARRIER DATA
+// ═══════════════════════════════════════════════════
+const ZONE_INFO = [
+  { id: 0, name: 'Meadow'    },
+  { id: 1, name: 'Beach'     },
+  { id: 2, name: 'City'      },
+  { id: 3, name: 'Highlands' },
+];
+
+const EXITS = [
+  { from: 0, dir: 'south', pos: [9,10,11], to: 1, entryX: 10, entryY:  1, barrier: 'log'   },
+  { from: 1, dir: 'north', pos: [9,10,11], to: 0, entryX: 10, entryY: 12, barrier: null    },
+  { from: 1, dir: 'west',  pos: [5,6,7],   to: 2, entryX: 18, entryY:  6, barrier: 'rock'  },
+  { from: 2, dir: 'east',  pos: [5,6,7],   to: 1, entryX:  1, entryY:  6, barrier: null    },
+  { from: 2, dir: 'north', pos: [9,10,11], to: 3, entryX: 10, entryY: 12, barrier: 'fence' },
+  { from: 3, dir: 'south', pos: [9,10,11], to: 2, entryX: 10, entryY:  1, barrier: null    },
+];
+
+const BARRIERS = {
+  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!'    },
+  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!'  },
+  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!' },
+};
 
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
@@ -110,11 +191,12 @@ let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
+let currentZone = 0;
 
 // ── Animation state ─────────────────────────────────
-let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE }; // pixel origin of last move
-let moveAnimTs  = -9999;   // timestamp when slide started
-let bumpVec     = null;    // { dx, dy } during wall-bounce, else null
+let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
+let moveAnimTs  = -9999;
+let bumpVec     = null;
 let bumpAnimTs  = -9999;
 
 // Pre-cached tile canvases for performance
@@ -144,6 +226,8 @@ function buildTileCache() {
   buildGrass();
   buildTree();
   buildWater();
+  buildSand();
+  buildCity();
 }
 
 function makeTile() {
@@ -208,6 +292,31 @@ function buildWater() {
     x.fill();
   });
   tileCache[T.WATER] = c;
+}
+
+function buildSand() {
+  const [c, x] = makeTile();
+  x.fillStyle = '#e8c870';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // wavy highlight lines
+  x.fillStyle = '#d4b05a';
+  [4, 9, 14, 20, 25].forEach(y => {
+    x.fillRect(0, y, TILE_SIZE, 1);
+  });
+  tileCache[T.SAND] = c;
+}
+
+function buildCity() {
+  const [c, x] = makeTile();
+  x.fillStyle = '#909090';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // grid slab lines
+  x.fillStyle = '#787878';
+  x.fillRect(0, 15, TILE_SIZE, 1);
+  x.fillRect(0, 31, TILE_SIZE, 1);
+  x.fillRect(15, 0, 1, 15);
+  x.fillRect(15, 16, 1, 15);
+  tileCache[T.CITY] = c;
 }
 
 // ═══════════════════════════════════════════════════
@@ -317,24 +426,94 @@ function loop(ts) {
 }
 
 // ═══════════════════════════════════════════════════
+// BARRIER HELPERS
+// ═══════════════════════════════════════════════════
+function isBarrierUnlocked(key) {
+  if (!key) return true;
+  const needsType = BARRIERS[key].needsType;
+  return POKEMON_DATA.some(p => p.type === needsType && caughtIds.has(p.id));
+}
+
+// Returns barrier key if (nx, ny) is a locked border exit tile for the current zone.
+function getExitBarrierAt(nx, ny) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    if (!exit.barrier) continue;
+    if (isBarrierUnlocked(exit.barrier)) continue;
+    let match = false;
+    if (exit.dir === 'south' && ny === MAP_ROWS - 1 && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'north' && ny === 0            && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'west'  && nx === 0            && exit.pos.includes(ny)) match = true;
+    if (exit.dir === 'east'  && nx === MAP_COLS - 1 && exit.pos.includes(ny)) match = true;
+    if (match) return exit.barrier;
+  }
+  return null;
+}
+
+// Find exit for player at the border moving off-map
+function findActiveExit(x, y, dx, dy) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    if (exit.dir === 'south' && dy > 0  && y === MAP_ROWS - 1 && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'north' && dy < 0  && y === 0            && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'west'  && dx < 0  && x === 0            && exit.pos.includes(y)) return exit;
+    if (exit.dir === 'east'  && dx > 0  && x === MAP_COLS - 1 && exit.pos.includes(y)) return exit;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════
 // MOVEMENT
 // ═══════════════════════════════════════════════════
 function move(dx, dy, ts) {
+  // 1. Set direction
   playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
 
   const nx = playerX + dx;
   const ny = playerY + dy;
 
-  // Out of bounds or blocked → wall bounce
-  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS ||
-      MAP[ny][nx] === T.TREE || MAP[ny][nx] === T.WATER) {
+  // 2. Off-map: check for zone exit
+  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS) {
+    const exit = findActiveExit(playerX, playerY, dx, dy);
+    if (exit) {
+      if (isBarrierUnlocked(exit.barrier)) {
+        doTransition(exit, ts);
+      } else {
+        // Locked barrier — bump and hint
+        bumpVec    = { dx, dy };
+        bumpAnimTs = ts;
+        beep(160, 0.07, 0.1, 'square');
+        showMessage(BARRIERS[exit.barrier].hint);
+      }
+    } else {
+      // Plain wall
+      bumpVec    = { dx, dy };
+      bumpAnimTs = ts;
+      beep(160, 0.07, 0.1, 'square');
+    }
+    return;
+  }
+
+  // 3. Check barrier tile at destination (still in-map but on a border exit tile with locked barrier)
+  const barrierKey = getExitBarrierAt(nx, ny);
+  if (barrierKey) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    showMessage(BARRIERS[barrierKey].hint);
+    return;
+  }
+
+  // 4. Check tile impassable
+  const tile = MAPS[currentZone][ny][nx];
+  if (tile === T.TREE || tile === T.WATER) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     beep(160, 0.07, 0.1, 'square');
     return;
   }
 
-  // Capture current visual position as the slide's start point
+  // 5. Normal move
   const cur = getRenderPos(ts);
   fromPx.x   = cur.x;
   fromPx.y   = cur.y;
@@ -346,29 +525,138 @@ function move(dx, dy, ts) {
 
   beep(220, 0.04, 0.04, 'square');
 
-  const tile = MAP[ny][nx];
+  // 6. Encounter check (grass tiles only, filtered by zone)
   if (tile === T.GRASS && Math.random() < ENCOUNTER_RATE) {
-    const uncaught = POKEMON_DATA.filter(p => !caughtIds.has(p.id));
-    if (uncaught.length === 0) {
-      showMessage('You caught every Lukeymon! 🏆');
+    const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id));
+    if (pool.length === 0) {
+      // All zone Pokémon caught — still walk but no encounter
       return;
     }
-    const poke = uncaught[Math.floor(Math.random() * uncaught.length)];
+    const poke = pool[Math.floor(Math.random() * pool.length)];
     setTimeout(() => beginEncounter(poke), 80);
   }
+}
+
+// ═══════════════════════════════════════════════════
+// ZONE TRANSITION
+// ═══════════════════════════════════════════════════
+function doTransition(exit, ts) {
+  currentZone = exit.to;
+  playerX     = exit.entryX;
+  playerY     = exit.entryY;
+
+  // Face correct direction upon entry
+  const dirMap = { south: 'down', north: 'up', west: 'left', east: 'right' };
+  playerDir = dirMap[exit.dir];
+
+  // Reset animation state — snap to position, no slide glitch
+  fromPx.x   = playerX * TILE_SIZE;
+  fromPx.y   = playerY * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec    = null;
+
+  saveGame();
+  updateHud();
+  showMessage('📍 ' + ZONE_INFO[exit.to].name);
+
+  // Transition sound: two rising beeps
+  beep(330, 0.1, 0.1);
+  setTimeout(() => beep(440, 0.12, 0.15), 80);
 }
 
 // ═══════════════════════════════════════════════════
 // WORLD RENDERING
 // ═══════════════════════════════════════════════════
 function drawWorld(ts) {
+  const map = MAPS[currentZone];
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
-      ctx.drawImage(tileCache[MAP[r][c]], c * TILE_SIZE, r * TILE_SIZE);
+      ctx.drawImage(tileCache[map[r][c]], c * TILE_SIZE, r * TILE_SIZE);
     }
   }
+  drawBarriers(ts);
   const pos = getRenderPos(ts);
   drawPlayer(pos.x, pos.y);
+}
+
+// ─── Barrier graphics ────────────────────────────────
+function drawBarriers(ts) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    if (!exit.barrier || isBarrierUnlocked(exit.barrier)) continue;
+    for (const p of exit.pos) {
+      let bx, by;
+      if (exit.dir === 'south') { bx = p * TILE_SIZE; by = (MAP_ROWS - 1) * TILE_SIZE; }
+      else if (exit.dir === 'north') { bx = p * TILE_SIZE; by = 0; }
+      else if (exit.dir === 'west')  { bx = 0; by = p * TILE_SIZE; }
+      else if (exit.dir === 'east')  { bx = (MAP_COLS - 1) * TILE_SIZE; by = p * TILE_SIZE; }
+      drawBarrierTile(ctx, exit.barrier, bx, by, ts);
+    }
+  }
+}
+
+function drawBarrierTile(ctx, key, bx, by, ts) {
+  if (key === 'log') {
+    ctx.fillStyle = '#5C2A0A';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(bx + 1, by + 2 + i * 7, 30, 5);
+      ctx.fillStyle = '#A0522D';
+      ctx.fillRect(bx + 1, by + 2 + i * 7, 30, 2);
+    }
+    ctx.fillStyle = '#4a1a05';
+    ctx.fillRect(bx + 5, by + 3, 3, 3);
+    ctx.fillRect(bx + 22, by + 10, 3, 3);
+  } else if (key === 'rock') {
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    const rocks = [
+      { cx: 6,  cy: 4,  rx: 14, ry: 12 },
+      { cx: 18, cy: 6,  rx: 10, ry: 10 },
+      { cx: 4,  cy: 18, rx: 12, ry: 10 },
+      { cx: 20, cy: 20, rx: 8,  ry: 8  },
+    ];
+    for (const r of rocks) {
+      ctx.fillStyle = '#707070';
+      ctx.beginPath();
+      ctx.ellipse(bx + r.cx + r.rx/2, by + r.cy + r.ry/2, r.rx/2, r.ry/2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#909090';
+      ctx.beginPath();
+      ctx.ellipse(bx + r.cx + r.rx/2 - r.rx/3 + 1, by + r.cy + r.ry/2 - r.ry/3 + 1, r.rx/4, r.ry/4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (key === 'fence') {
+    ctx.fillStyle = '#0a0a18';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    // Posts
+    ctx.fillStyle = '#555';
+    ctx.fillRect(bx + 3, by + 1, 5, 30);
+    ctx.fillRect(bx + 24, by + 1, 5, 30);
+    // Animated wires
+    const sparking = Math.sin(ts * 0.008) > 0;
+    ctx.strokeStyle = sparking ? '#ffff44' : '#cc9900';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + 8, by + 9);
+    ctx.lineTo(bx + 24, by + 9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx + 8, by + 21);
+    ctx.lineTo(bx + 24, by + 21);
+    ctx.stroke();
+    // Insulator blobs
+    ctx.fillStyle = '#cc4400';
+    ctx.fillRect(bx + 6, by + 7, 4, 4);
+    ctx.fillRect(bx + 6, by + 19, 4, 4);
+    // Spark dots
+    if (sparking) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx + 14, by + 7, 2, 2);
+      ctx.fillRect(bx + 18, by + 19, 2, 2);
+    }
+  }
 }
 
 function drawPlayer(px, py) {
@@ -459,7 +747,7 @@ function resolveAction(action, btnEl) {
 function caught() {
   const isNew = !caughtIds.has(currentPoke.id);
   caughtIds.add(currentPoke.id);
-  saveCaught();
+  saveGame();
   updateHud();
 
   document.getElementById('result-stars').classList.remove('hidden');
@@ -599,6 +887,8 @@ function showMessage(text) {
 
 function updateHud() {
   document.getElementById('caught-count').textContent = caughtIds.size;
+  const zoneEl = document.getElementById('zone-name');
+  if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
 }
 
 // ═══════════════════════════════════════════════════
@@ -606,8 +896,13 @@ function updateHud() {
 // ═══════════════════════════════════════════════════
 function startNewGame() {
   caughtIds.clear();
+  currentZone = 0;
   playerX = 10; playerY = 7; playerDir = 'down';
-  saveCaught();
+  fromPx.x = 10 * TILE_SIZE;
+  fromPx.y = 7 * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec = null;
+  saveGame();
   updateHud();
   enterWorld();
 }
@@ -621,9 +916,14 @@ function enterWorld() {
 // ═══════════════════════════════════════════════════
 // SAVE / LOAD
 // ═══════════════════════════════════════════════════
-function saveCaught() {
+function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify([...caughtIds]));
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      caught: [...caughtIds],
+      zone:   currentZone,
+      x:      playerX,
+      y:      playerY,
+    }));
   } catch (_) {}
 }
 
@@ -631,8 +931,20 @@ function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
-      const ids = JSON.parse(raw);
-      caughtIds = new Set(ids);
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        // Legacy v1 format: just an array of caught ids
+        caughtIds = new Set(data);
+      } else {
+        caughtIds   = new Set(data.caught || []);
+        currentZone = data.zone  ?? 0;
+        playerX     = data.x    ?? 10;
+        playerY     = data.y    ?? 7;
+      }
+      fromPx.x   = playerX * TILE_SIZE;
+      fromPx.y   = playerY * TILE_SIZE;
+      moveAnimTs = -9999;
+      bumpVec    = null;
     }
   } catch (_) {}
 
