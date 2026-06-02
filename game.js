@@ -9,6 +9,8 @@ const MAP_ROWS       = 14;
 const ENCOUNTER_RATE = 0.20;   // 20% per grass step
 const TIMER_MS       = 6000;   // 6 seconds to choose
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
+const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
+const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v1';
 
 const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3 };
@@ -108,6 +110,12 @@ let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
+
+// ── Animation state ─────────────────────────────────
+let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE }; // pixel origin of last move
+let moveAnimTs  = -9999;   // timestamp when slide started
+let bumpVec     = null;    // { dx, dy } during wall-bounce, else null
+let bumpAnimTs  = -9999;
 
 // Pre-cached tile canvases for performance
 const tileCache = {};
@@ -257,6 +265,39 @@ function bindEvents() {
 }
 
 // ═══════════════════════════════════════════════════
+// RENDER POSITION  (interpolated between tiles)
+// ═══════════════════════════════════════════════════
+function getRenderPos(ts) {
+  const destX = playerX * TILE_SIZE;
+  const destY = playerY * TILE_SIZE;
+
+  // Wall-bump: nudge toward obstacle and spring back
+  if (bumpVec) {
+    const t = Math.min((ts - bumpAnimTs) / BUMP_ANIM_MS, 1);
+    if (t < 1) {
+      const dist = Math.sin(t * Math.PI) * 5; // 5 px max nudge
+      return { x: destX + bumpVec.dx * dist, y: destY + bumpVec.dy * dist };
+    }
+    bumpVec = null;
+  }
+
+  // Tile-to-tile slide with a tiny vertical hop arc
+  const mt = Math.min((ts - moveAnimTs) / MOVE_ANIM_MS, 1);
+  if (mt < 1) {
+    const ease = 1 - Math.pow(1 - mt, 3); // ease-out cubic
+    const hopY  = Math.sin(mt * Math.PI) * -3; // small upward arc mid-step
+    return {
+      x: fromPx.x + (destX - fromPx.x) * ease,
+      y: fromPx.y + (destY - fromPx.y) * ease + hopY,
+    };
+  }
+
+  // Idle gentle bob
+  const bob = Math.sin(ts * 0.0025) * 2.5;
+  return { x: destX, y: destY + bob };
+}
+
+// ═══════════════════════════════════════════════════
 // GAME LOOP
 // ═══════════════════════════════════════════════════
 function loop(ts) {
@@ -265,34 +306,47 @@ function loop(ts) {
   if (gameState === 'world') {
     if (ts - lastMoveTs >= MOVE_INTERVAL) {
       let moved = false;
-      if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1); moved = true; }
-      else if (keys['ArrowDown']  || keys['s'] || keys['S']) { move( 0, 1); moved = true; }
-      else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { move(-1, 0); moved = true; }
-      else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0); moved = true; }
+      if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1, ts); moved = true; }
+      else if (keys['ArrowDown']  || keys['s'] || keys['S']) { move( 0, 1, ts); moved = true; }
+      else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { move(-1, 0, ts); moved = true; }
+      else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0, ts); moved = true; }
       if (moved) lastMoveTs = ts;
     }
-    drawWorld();
+    drawWorld(ts);
   }
 }
 
 // ═══════════════════════════════════════════════════
 // MOVEMENT
 // ═══════════════════════════════════════════════════
-function move(dx, dy) {
+function move(dx, dy, ts) {
+  playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
+
   const nx = playerX + dx;
   const ny = playerY + dy;
-  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS) return;
 
-  const tile = MAP[ny][nx];
-  if (tile === T.TREE || tile === T.WATER) return;
+  // Out of bounds or blocked → wall bounce
+  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS ||
+      MAP[ny][nx] === T.TREE || MAP[ny][nx] === T.WATER) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
 
-  playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
+  // Capture current visual position as the slide's start point
+  const cur = getRenderPos(ts);
+  fromPx.x   = cur.x;
+  fromPx.y   = cur.y;
+  moveAnimTs = ts;
+
   playerX   = nx;
   playerY   = ny;
   playerStep ^= 1;
 
   beep(220, 0.04, 0.04, 'square');
 
+  const tile = MAP[ny][nx];
   if (tile === T.GRASS && Math.random() < ENCOUNTER_RATE) {
     const uncaught = POKEMON_DATA.filter(p => !caughtIds.has(p.id));
     if (uncaught.length === 0) {
@@ -307,15 +361,14 @@ function move(dx, dy) {
 // ═══════════════════════════════════════════════════
 // WORLD RENDERING
 // ═══════════════════════════════════════════════════
-function drawWorld() {
-  // Tiles
+function drawWorld(ts) {
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
       ctx.drawImage(tileCache[MAP[r][c]], c * TILE_SIZE, r * TILE_SIZE);
     }
   }
-  // Player
-  drawPlayer(playerX * TILE_SIZE, playerY * TILE_SIZE);
+  const pos = getRenderPos(ts);
+  drawPlayer(pos.x, pos.y);
 }
 
 function drawPlayer(px, py) {
