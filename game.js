@@ -6,7 +6,7 @@
 const TILE_SIZE      = 32;
 const MAP_COLS       = 20;
 const MAP_ROWS       = 14;
-const ENCOUNTER_RATE = 0.20;   // 20% per grass step
+const WILD_TIMEOUT   = 7000;   // ms a wild Pokémon stays on its tile before fleeing
 const TIMER_MS       = 6000;   // 6 seconds to choose
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
 const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
@@ -208,7 +208,10 @@ let caughtIds      = new Set();
 let balls          = 5;
 let coins          = 0;
 let collectedItems = new Set();
-let encHappy       = false;  // true after player does correct action in encounter
+let encHappy       = false;
+let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
+let spawnTimerId   = null;   // next spawn setTimeout id
+let expireTimerId  = null;   // current wild's disappear setTimeout id
 let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
@@ -611,14 +614,11 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 6. Encounter check (grass tiles only, filtered by zone)
-  if (tile === T.GRASS && Math.random() < ENCOUNTER_RATE) {
-    const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id));
-    if (pool.length === 0) {
-      // All zone Pokémon caught — still walk but no encounter
-      return;
-    }
-    const poke = pool[Math.floor(Math.random() * pool.length)];
+  // 6. Check if player stepped onto a wild Pokémon's tile
+  if (wildPoke && wildPoke.zone === currentZone &&
+      wildPoke.x === playerX && wildPoke.y === playerY) {
+    const poke = wildPoke.poke;
+    clearWild();
     setTimeout(() => beginEncounter(poke), 80);
   }
 }
@@ -648,6 +648,92 @@ function doTransition(exit, ts) {
   // Transition sound: two rising beeps
   beep(330, 0.1, 0.1);
   setTimeout(() => beep(440, 0.12, 0.15), 80);
+
+  clearWild();
+  scheduleSpawn();
+}
+
+// ═══════════════════════════════════════════════════
+// WILD POKÉMON SPAWNING
+// ═══════════════════════════════════════════════════
+function scheduleSpawn() {
+  clearTimeout(spawnTimerId);
+  const delay = 4000 + Math.random() * 5000; // 4–9 s between spawns
+  spawnTimerId = setTimeout(spawnWild, delay);
+}
+
+function clearWild() {
+  clearTimeout(expireTimerId);
+  wildPoke = null;
+}
+
+function spawnWild() {
+  if (gameState !== 'world') return;
+
+  clearWild();
+
+  // Pick a random uncaught Pokémon for the current zone
+  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id));
+  if (pool.length === 0) { scheduleSpawn(); return; }
+  const poke = pool[Math.floor(Math.random() * pool.length)];
+
+  // Find all grass tiles in this zone (excluding edges)
+  const map = MAPS[currentZone];
+  const candidates = [];
+  for (let r = 1; r < MAP_ROWS - 1; r++) {
+    for (let c = 1; c < MAP_COLS - 1; c++) {
+      if (map[r][c] === T.GRASS) candidates.push({ x: c, y: r });
+    }
+  }
+  if (candidates.length === 0) { scheduleSpawn(); return; }
+
+  const tile = candidates[Math.floor(Math.random() * candidates.length)];
+  wildPoke = { poke, x: tile.x, y: tile.y, zone: currentZone, expireAt: Date.now() + WILD_TIMEOUT };
+
+  // Rustle sound
+  beep(350, 0.05, 0.07, 'sine');
+  setTimeout(() => beep(290, 0.04, 0.09, 'sine'), 110);
+
+  // If player is already standing there, trigger immediately
+  if (playerX === tile.x && playerY === tile.y) {
+    const p = wildPoke.poke;
+    clearWild();
+    beginEncounter(p);
+    return;
+  }
+
+  // Auto-despawn after timeout
+  expireTimerId = setTimeout(() => {
+    wildPoke = null;
+    scheduleSpawn();
+  }, WILD_TIMEOUT);
+}
+
+function drawWild(ts) {
+  if (!wildPoke || wildPoke.zone !== currentZone) return;
+
+  const remaining = wildPoke.expireAt - Date.now();
+  if (remaining <= 0) return;
+
+  const px = wildPoke.x * TILE_SIZE;
+  const py = wildPoke.y * TILE_SIZE;
+
+  // Wiggle the grass tile
+  const angle = Math.sin(ts * 0.012) * 0.18;
+  ctx.save();
+  ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+  ctx.rotate(angle);
+  ctx.drawImage(tileCache[T.GRASS], -TILE_SIZE / 2, -TILE_SIZE / 2);
+  ctx.restore();
+
+  // Blink in final 2.5 s — every 300 ms
+  if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
+
+  // Emoji floats above tile with gentle bob
+  const bob = Math.sin(ts * 0.005) * 3;
+  ctx.font = '17px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(wildPoke.poke.emoji, px + TILE_SIZE / 2, py - 2 + bob);
 }
 
 // ═══════════════════════════════════════════════════
@@ -662,6 +748,7 @@ function drawWorld(ts) {
   }
   drawBarriers(ts);
   drawPickups();
+  drawWild(ts);
   const pos = getRenderPos(ts);
   drawPlayer(pos.x, pos.y);
 }
@@ -837,6 +924,9 @@ function beginEncounter(poke) {
   currentPoke = poke;
   gameState   = 'encounter';
 
+  clearWild();
+  clearTimeout(spawnTimerId);
+
   // Reset throw animation from previous encounter
   const pokeWrap = document.getElementById('enc-pokemon-wrap');
   pokeWrap.style.animation = '';
@@ -993,6 +1083,7 @@ function fled() {
 
 function returnToWorld() {
   showScreen('world');
+  scheduleSpawn();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1000,6 +1091,7 @@ function returnToWorld() {
 // ═══════════════════════════════════════════════════
 function openShop() {
   gameState = 'shop';
+  clearTimeout(spawnTimerId);
   document.getElementById('shop-coin-count').textContent = coins;
   document.getElementById('shop-ball-count').textContent = balls;
   refreshShopButtons();
@@ -1008,6 +1100,7 @@ function openShop() {
 
 function closeShop() {
   showScreen('world');
+  scheduleSpawn();
 }
 
 function refreshShopButtons() {
@@ -1144,6 +1237,8 @@ function startNewGame() {
   collectedItems.clear();
   balls = 5;
   coins = 0;
+  clearWild();
+  clearTimeout(spawnTimerId);
   currentZone = 0;
   playerX = 10; playerY = 7; playerDir = 'down';
   fromPx.x = 10 * TILE_SIZE;
@@ -1159,6 +1254,7 @@ function enterWorld() {
   gameState = 'world';
   showScreen('world');
   updateHud();
+  scheduleSpawn();
 }
 
 // ═══════════════════════════════════════════════════
