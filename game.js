@@ -584,14 +584,26 @@ function drawBarriers(ts) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
   for (const exit of zoneExits) {
     if (!exit.barrier || isBarrierUnlocked(exit.barrier)) continue;
+    const signEmoji = exit.barrier === 'log' ? '🔥' : exit.barrier === 'rock' ? '💧' : '⚡';
+    const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     for (const p of exit.pos) {
       let bx, by;
-      if (exit.dir === 'south') { bx = p * TILE_SIZE; by = (MAP_ROWS - 1) * TILE_SIZE; }
+      if      (exit.dir === 'south') { bx = p * TILE_SIZE; by = (MAP_ROWS - 1) * TILE_SIZE; }
       else if (exit.dir === 'north') { bx = p * TILE_SIZE; by = 0; }
       else if (exit.dir === 'west')  { bx = 0; by = p * TILE_SIZE; }
       else if (exit.dir === 'east')  { bx = (MAP_COLS - 1) * TILE_SIZE; by = p * TILE_SIZE; }
       drawBarrierTile(ctx, exit.barrier, bx, by, ts);
     }
+    // Draw a floating emoji sign above / beside the middle barrier tile
+    let sx, sy;
+    if      (exit.dir === 'south') { sx = midP * TILE_SIZE + 4; sy = (MAP_ROWS - 2) * TILE_SIZE + 4; }
+    else if (exit.dir === 'north') { sx = midP * TILE_SIZE + 4; sy = TILE_SIZE + 4; }
+    else if (exit.dir === 'west')  { sx = TILE_SIZE + 4;                sy = midP * TILE_SIZE + 4; }
+    else                           { sx = (MAP_COLS - 2) * TILE_SIZE + 4; sy = midP * TILE_SIZE + 4; }
+    const bob = Math.sin(ts * 0.003) * 3;
+    ctx.font = '22px serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(signEmoji, sx, sy + bob + 20);
   }
 }
 
