@@ -13,7 +13,7 @@ const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8 };
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS  (4 zones, each 20×14)
@@ -26,9 +26,9 @@ const MAPS = [
     [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
     [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
     [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-    [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
+    [0,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,2],
+    [0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
+    [0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,1,0,2],
@@ -43,9 +43,9 @@ const MAPS = [
     [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,1,4,2],
     [2,4,1,1,4,4,2,2,4,4,4,4,4,4,4,1,1,1,4,2],
     [2,4,4,4,4,4,2,2,4,4,4,4,4,4,4,4,4,4,4,2],
-    [0,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
-    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,2],
-    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,2],
+    [0,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,4],
+    [0,4,1,1,4,4,4,4,3,3,3,4,4,4,4,1,1,4,4,4],
     [2,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4,2],
     [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
     [2,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,2],
@@ -68,11 +68,11 @@ const MAPS = [
     [2,5,2,2,2,5,5,5,5,5,5,5,5,5,2,2,2,5,5,2],
     [2,5,2,2,2,5,1,1,5,5,5,5,1,1,2,2,2,5,5,2],
     [2,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,2],
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,2,2,2,2,2,2,2,2,5,5,5,2,2,2,2,2,2,2,2],
   ],
   // Zone 3: Highlands
   [
-    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
     [2,0,1,1,1,0,2,2,0,0,0,0,2,2,0,1,1,1,0,2],
@@ -87,16 +87,88 @@ const MAPS = [
     [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
     [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
   ],
+  // Zone 4: Volcano
+  [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,2,2,2,0,0,0,0,2,2,2,1,1,0,0,2],
+    [2,0,1,1,0,2,7,7,7,7,7,0,0,2,0,1,1,0,0,2],
+    [2,0,0,0,0,0,7,7,7,7,7,0,0,0,0,0,0,0,0,2],
+    [2,0,0,0,0,2,7,7,7,7,7,0,0,2,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,2,2,0,0,0,0,2,2,0,0,0,0,0,2],
+    [2,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,7,7,7,7,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,7,7,7,7,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 5: Dark Forest
+  [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,1,1,1,0,0,2,0,0,0,0,2,0,1,1,1,0,0,2],
+    [2,0,1,1,1,0,2,2,0,2,2,0,2,2,1,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
+    [2,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [2,0,2,0,0,0,1,1,0,0,0,1,1,0,0,2,0,0,0,0],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,2,2,0,0,1,1,0,0,0,1,1,0,0,2,2,0,0,2],
+    [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,0,0,2],
+    [2,0,1,1,0,0,1,1,0,0,0,1,1,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 6: Ice Cave
+  [
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,2,2,0,8,8,8,0,2,2,0,1,1,0,0,2],
+    [2,0,1,1,0,0,2,0,8,8,8,0,2,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,8,8,8,0,0,0,0,0,0,0,0,2],
+    [0,0,0,0,0,0,0,0,8,8,8,0,0,0,0,0,0,0,0,2],
+    [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [0,0,0,0,0,0,2,2,0,0,0,0,2,2,0,0,0,0,0,2],
+    [2,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,8,8,8,8,0,0,0,0,0,0,0,2],
+    [2,0,1,1,0,0,0,0,8,8,8,8,0,0,0,1,1,0,0,2],
+    [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  ],
+  // Zone 7: Desert
+  [
+    [2,2,2,2,2,2,2,2,2,0,0,0,2,2,2,2,2,2,2,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,2,4,4,4,4,4,4,2,4,1,1,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
+    [2,4,4,4,4,4,4,4,2,4,4,2,4,4,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,2,4,4,4,4,4,4,2,4,4,4,4,4,2],
+    [2,4,1,1,4,4,4,4,4,4,4,4,4,4,4,1,1,4,4,2],
+    [2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,2],
+    [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  ],
 ];
 
 // ═══════════════════════════════════════════════════
 // ZONE / EXIT / BARRIER DATA
 // ═══════════════════════════════════════════════════
 const ZONE_INFO = [
-  { id: 0, name: 'Meadow'    },
-  { id: 1, name: 'Beach'     },
-  { id: 2, name: 'City'      },
-  { id: 3, name: 'Highlands' },
+  { id: 0, name: 'Meadow'      },
+  { id: 1, name: 'Beach'       },
+  { id: 2, name: 'City'        },
+  { id: 3, name: 'Highlands'   },
+  { id: 4, name: 'Volcano'     },
+  { id: 5, name: 'Dark Forest' },
+  { id: 6, name: 'Ice Cave'    },
+  { id: 7, name: 'Desert'      },
 ];
 
 const EXITS = [
@@ -106,12 +178,24 @@ const EXITS = [
   { from: 2, dir: 'east',  pos: [5,6,7],   to: 1, entryX:  1, entryY:  6, barrier: null    },
   { from: 2, dir: 'north', pos: [9,10,11], to: 3, entryX: 10, entryY: 12, barrier: 'fence' },
   { from: 3, dir: 'south', pos: [9,10,11], to: 2, entryX: 10, entryY:  1, barrier: null    },
+  { from: 3, dir: 'north', pos: [9,10,11], to: 4, entryX: 10, entryY: 12, barrier: 'lava'  },
+  { from: 4, dir: 'south', pos: [9,10,11], to: 3, entryX: 10, entryY:  1, barrier: null    },
+  { from: 0, dir: 'west',  pos: [5,6,7],   to: 5, entryX: 18, entryY:  6, barrier: 'vine'  },
+  { from: 5, dir: 'east',  pos: [5,6,7],   to: 0, entryX:  1, entryY:  6, barrier: null    },
+  { from: 1, dir: 'east',  pos: [5,6,7],   to: 6, entryX:  1, entryY:  6, barrier: 'frost' },
+  { from: 6, dir: 'west',  pos: [5,6,7],   to: 1, entryX: 18, entryY:  6, barrier: null    },
+  { from: 2, dir: 'south', pos: [9,10,11], to: 7, entryX: 10, entryY:  1, barrier: 'sand'  },
+  { from: 7, dir: 'north', pos: [9,10,11], to: 2, entryX: 10, entryY: 12, barrier: null    },
 ];
 
 const BARRIERS = {
-  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!'    },
-  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!'  },
-  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!' },
+  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       sign: '🔥' },
+  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!',     sign: '💧' },
+  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!',   sign: '⚡' },
+  lava:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to cool the lava flow!',   sign: '💧' },
+  vine:  { needsType: 'Grass',    hint: 'Catch a 🌿 Grass Pokémon to cut through the vines!', sign: '🌿' },
+  frost: { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to melt the ice wall!',     sign: '🔥' },
+  sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', sign: '🌍' },
 };
 
 const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
@@ -237,6 +321,8 @@ function buildTileCache() {
   buildSand();
   buildCity();
   buildShop();
+  buildLava();
+  buildIce();
 }
 
 function makeTile() {
@@ -346,6 +432,36 @@ function buildShop() {
   x.font = '13px serif';
   x.fillText('🏪', 7, 14);
   tileCache[T.SHOP] = c;
+}
+
+function buildLava() {
+  const [c, x] = makeTile();
+  x.fillStyle = '#c83000';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#ff6820';
+  [[2,4,12,4],[18,2,8,3],[6,16,14,3],[20,22,8,4],[0,28,16,4]].forEach(([lx,ly,lw,lh]) => {
+    x.fillRect(lx, ly, lw, lh);
+  });
+  x.fillStyle = '#ffd040';
+  [[8,8,3,2],[22,14,4,2],[14,24,3,2]].forEach(([lx,ly,lw,lh]) => {
+    x.fillRect(lx, ly, lw, lh);
+  });
+  tileCache[T.LAVA] = c;
+}
+
+function buildIce() {
+  const [c, x] = makeTile();
+  x.fillStyle = '#b8d8f0';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#e8f4ff';
+  [[0,10,16,2],[20,6,12,2],[8,20,20,2],[0,28,10,2],[24,24,8,2]].forEach(([lx,ly,lw,lh]) => {
+    x.fillRect(lx, ly, lw, lh);
+  });
+  x.fillStyle = '#90c0e0';
+  [[4,4,6,6],[22,16,6,6],[10,26,6,4]].forEach(([lx,ly,lw,lh]) => {
+    x.fillRect(lx, ly, lw, lh);
+  });
+  tileCache[T.ICE] = c;
 }
 
 // ═══════════════════════════════════════════════════
@@ -550,7 +666,7 @@ function move(dx, dy, ts) {
 
   // 4. Check tile impassable
   const tile = MAPS[currentZone][ny][nx];
-  if (tile === T.TREE || tile === T.WATER) {
+  if (tile === T.TREE || tile === T.WATER || tile === T.LAVA || tile === T.ICE) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     beep(160, 0.07, 0.1, 'square');
@@ -725,6 +841,16 @@ function drawWorld(ts) {
       ctx.drawImage(tileCache[map[r][c]], c * TILE_SIZE, r * TILE_SIZE);
     }
   }
+  const zoneTints = {
+    4: 'rgba(255,80,0,0.14)',
+    5: 'rgba(0,30,0,0.22)',
+    6: 'rgba(160,210,255,0.16)',
+    7: 'rgba(220,170,50,0.08)',
+  };
+  if (zoneTints[currentZone]) {
+    ctx.fillStyle = zoneTints[currentZone];
+    ctx.fillRect(0, 0, MAP_COLS * TILE_SIZE, MAP_ROWS * TILE_SIZE);
+  }
   drawBarriers(ts);
   drawWild(ts);
   const pos = getRenderPos(ts);
@@ -736,7 +862,7 @@ function drawBarriers(ts) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
   for (const exit of zoneExits) {
     if (!exit.barrier || isBarrierUnlocked(exit.barrier)) continue;
-    const signEmoji = exit.barrier === 'log' ? '🔥' : exit.barrier === 'rock' ? '💧' : '⚡';
+    const signEmoji = BARRIERS[exit.barrier].sign;
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     for (const p of exit.pos) {
       let bx, by;
@@ -820,6 +946,63 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
       ctx.fillRect(bx + 14, by + 7, 2, 2);
       ctx.fillRect(bx + 18, by + 19, 2, 2);
     }
+  } else if (key === 'vine') {
+    ctx.fillStyle = '#1a4010';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#3a7020';
+    ctx.fillRect(bx + 5,  by, 4, TILE_SIZE);
+    ctx.fillRect(bx + 13, by, 4, TILE_SIZE);
+    ctx.fillRect(bx + 21, by, 4, TILE_SIZE);
+    ctx.fillStyle = '#50a030';
+    [[3,6,8,6],[11,12,8,6],[19,4,8,6],[5,20,6,6],[15,18,8,6]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+    ctx.fillStyle = '#70c050';
+    [[4,7,4,3],[12,13,4,3],[20,5,4,3]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+  } else if (key === 'frost') {
+    ctx.fillStyle = '#a0c8e8';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#d8eeff';
+    ctx.fillRect(bx+2, by+2, 12, 28);
+    ctx.fillRect(bx+16, by+6, 12, 22);
+    ctx.fillStyle = '#b8d8f8';
+    ctx.fillRect(bx+4, by+8, 6, 16);
+    ctx.fillRect(bx+18, by+4, 8, 20);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx+6,  by+4,  2, 8);
+    ctx.fillRect(bx+4,  by+8,  8, 2);
+    ctx.fillRect(bx+20, by+10, 2, 8);
+    ctx.fillRect(bx+18, by+14, 8, 2);
+  } else if (key === 'sand') {
+    ctx.fillStyle = '#c89828';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = '#b88020';
+      ctx.fillRect(bx, by + i * 8, TILE_SIZE, 7);
+      ctx.fillStyle = '#d0a030';
+      ctx.fillRect(bx + (i % 2 === 0 ? 0 : 14), by + i * 8, 14, 6);
+    }
+    ctx.fillStyle = '#e8c040';
+    [[4,2,3,3],[16,10,3,3],[8,18,3,3],[22,26,3,3]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+  } else if (key === 'lava') {
+    ctx.fillStyle = '#c03010';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#ff6010';
+    ctx.fillRect(bx, by,      TILE_SIZE, 6);
+    ctx.fillRect(bx, by + 12, TILE_SIZE, 6);
+    ctx.fillRect(bx, by + 24, TILE_SIZE, 6);
+    ctx.fillStyle = '#ffaa30';
+    ctx.beginPath();
+    ctx.ellipse(bx+8,  by+9,  5, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(bx+22, by+21, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffd060';
+    ctx.fillRect(bx+6,  by+8,  2, 2);
+    ctx.fillRect(bx+20, by+20, 2, 2);
   }
 }
 
