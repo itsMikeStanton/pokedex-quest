@@ -352,7 +352,7 @@ function beginEncounter(poke) {
   document.getElementById('enc-name').textContent      = poke.name;
   document.getElementById('enc-type-badge').textContent = poke.type;
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
-  document.getElementById('enc-emoji-display').textContent   = poke.emoji;
+  setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 80);
   document.getElementById('enc-thought-emoji').textContent   = poke.actionEmoji;
   document.getElementById('enc-thought-text').textContent    =
     poke.action === 'feed' ? 'I want food!' :
@@ -410,7 +410,7 @@ function caught() {
   updateHud();
 
   document.getElementById('result-stars').classList.remove('hidden');
-  document.getElementById('result-icon').textContent    = currentPoke.emoji;
+  setPokeDisplay(document.getElementById('result-icon'), currentPoke, 80);
   document.getElementById('result-title').textContent   = isNew ? '✨ GOT IT! ✨' : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = isNew
@@ -429,7 +429,8 @@ function caught() {
 
 function fled() {
   document.getElementById('result-stars').classList.add('hidden');
-  document.getElementById('result-icon').textContent    = '💨';
+  const iconEl = document.getElementById('result-icon');
+  iconEl.innerHTML = '<span style="font-size:64px">💨</span>';
   document.getElementById('result-title').textContent   = 'IT GOT AWAY!';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = 'Try again — walk in the grass!';
@@ -470,7 +471,11 @@ function renderPokedexGrid() {
 
     const emojiDiv = document.createElement('div');
     emojiDiv.className = 'dex-card-emoji';
-    emojiDiv.textContent = poke.emoji;
+    if (caught) {
+      emojiDiv.appendChild(pokeImg(poke, 40));
+    } else {
+      emojiDiv.textContent = '?';
+    }
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'dex-card-name';
@@ -491,7 +496,7 @@ function showDetail(poke) {
   const detail = document.getElementById('pokedex-detail');
   detail.classList.remove('hidden');
 
-  document.getElementById('detail-emoji').textContent  = poke.emoji;
+  setPokeDisplay(document.getElementById('detail-emoji'), poke, 96);
   document.getElementById('detail-name').textContent   = poke.name;
   document.getElementById('detail-number').textContent = `#${String(poke.id).padStart(3, '0')}`;
   document.getElementById('detail-type').textContent   = poke.type;
@@ -509,8 +514,15 @@ function closeDetail() {
 // COMPLETE SCREEN
 // ═══════════════════════════════════════════════════
 function showComplete() {
-  const row = POKEMON_DATA.map(p => p.emoji).join(' ');
-  document.getElementById('complete-row').textContent = row;
+  const rowEl = document.getElementById('complete-row');
+  rowEl.innerHTML = '';
+  POKEMON_DATA.forEach(p => {
+    const wrap = document.createElement('span');
+    wrap.style.display = 'inline-block';
+    wrap.style.margin  = '2px';
+    wrap.appendChild(pokeImg(p, 28));
+    rowEl.appendChild(wrap);
+  });
   showScreen('complete');
 }
 
@@ -620,6 +632,34 @@ function playFledSound() {
   beep(440, 0.12, 0.12);
   setTimeout(() => beep(330, 0.10, 0.12), 140);
   setTimeout(() => beep(220, 0.10, 0.25), 280);
+}
+
+// ═══════════════════════════════════════════════════
+// SPRITE HELPER — image with emoji fallback
+// ═══════════════════════════════════════════════════
+
+// Returns an <img> element; if the file 404s it swaps itself for an emoji span.
+function pokeImg(poke, sizePx) {
+  const img = new Image();
+  img.src    = poke.sprite;
+  img.alt    = poke.name;
+  img.width  = sizePx;
+  img.height = sizePx;
+  img.className = 'poke-sprite';
+  img.onerror = () => {
+    const span = document.createElement('span');
+    span.textContent  = poke.emoji;
+    span.style.fontSize = Math.round(sizePx * 0.75) + 'px';
+    span.style.lineHeight = '1';
+    img.replaceWith(span);
+  };
+  return img;
+}
+
+// Replace all children of el with a fresh sprite/emoji for poke.
+function setPokeDisplay(el, poke, sizePx) {
+  el.innerHTML = '';
+  el.appendChild(pokeImg(poke, sizePx));
 }
 
 // ═══════════════════════════════════════════════════

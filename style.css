@@ -604,6 +604,13 @@ body {
   box-shadow: 0 2px 0 #666672;
 }
 
+/* Custom creature sprites */
+.poke-sprite {
+  image-rendering: pixelated;
+  object-fit: contain;
+  display: block;
+}
+
 /* Version stamp — fixed to page bottom-right, tiny */
 #version {
   position: fixed;
