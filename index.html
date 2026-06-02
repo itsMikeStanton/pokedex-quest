@@ -129,15 +129,21 @@
     <!-- Touch / D-Pad controls -->
     <div id="controls-row">
       <div id="dpad">
-        <div class="dpad-empty"></div>
-        <button class="dpad-btn" id="dp-up"    data-dir="up">▲</button>
-        <div class="dpad-empty"></div>
-        <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
-        <div id="dpad-center"></div>
-        <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
-        <div class="dpad-empty"></div>
-        <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
-        <div class="dpad-empty"></div>
+        <div class="dpad-row">
+          <div class="dpad-empty"></div>
+          <button class="dpad-btn" id="dp-up"    data-dir="up">▲</button>
+          <div class="dpad-empty"></div>
+        </div>
+        <div class="dpad-row">
+          <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
+          <div id="dpad-center"></div>
+          <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
+        </div>
+        <div class="dpad-row">
+          <div class="dpad-empty"></div>
+          <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
+          <div class="dpad-empty"></div>
+        </div>
       </div>
       <div id="ab-buttons">
         <button class="ab-btn" id="btn-b">B</button>
@@ -148,6 +154,7 @@
     <div id="start-select-row">
       <button class="ss-btn" id="ss-select">SELECT</button>
       <button class="ss-btn" id="ss-start">START</button>
+      <span id="version">v1.2</span>
     </div>
 
   </div><!-- /device -->
