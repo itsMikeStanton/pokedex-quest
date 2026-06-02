@@ -1869,9 +1869,13 @@ function nextBattleRound() {
   battleRoundNum++;
   document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / 3`;
 
-  // The player owns everything by now, so every type is available to counter.
-  const owned = POKEMON_DATA.filter(p => p.legend !== 'mewtwo' && caughtIds.has(p.id));
-  const types = [...new Set(owned.map(p => p.type))];
+  // Draw options from your caught Lukeymon. Normally that's the whole roster
+  // (Mewtwo only appears once everything else is caught); fall back to the full
+  // roster if you somehow have too few (e.g. summoned via the debug menu).
+  let pool = POKEMON_DATA.filter(p => p.legend !== 'mewtwo' && caughtIds.has(p.id));
+  if (pool.length < 6) pool = POKEMON_DATA.filter(p => p.legend !== 'mewtwo');
+
+  const types = [...new Set(pool.map(p => p.type))];
   battleType = types[Math.floor(Math.random() * types.length)];
 
   const tEl = document.getElementById('battle-type');
@@ -1880,9 +1884,10 @@ function nextBattleRound() {
   beep(150, 0.18, 0.3, 'square');
 
   // Six options: guaranteed at least one of the demanded type, rest mixed.
-  const correct = owned.filter(p => p.type === battleType);
-  const others  = shuffle(owned.filter(p => p.type !== battleType));
-  const opts = shuffle([ correct[Math.floor(Math.random() * correct.length)], ...others.slice(0, 5) ]);
+  const correct = pool.filter(p => p.type === battleType);
+  const others  = shuffle(pool.filter(p => p.type !== battleType));
+  const opts = shuffle([ correct[Math.floor(Math.random() * correct.length)], ...others.slice(0, 5) ])
+                 .filter(Boolean);
 
   const grid = document.getElementById('battle-options');
   grid.innerHTML = '';
