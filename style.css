@@ -586,8 +586,10 @@ body {
 #start-select-row {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 24px;
   padding: 6px 0 14px;
+  width: 100%;
 }
 .ss-btn {
   background: #909098;
