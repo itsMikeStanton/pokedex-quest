@@ -561,6 +561,7 @@ window.addEventListener('DOMContentLoaded', () => {
   buildTileCache();
   loadSave();
   bindEvents();
+  setupDebugMenu();
   requestAnimationFrame(loop);
 });
 
@@ -825,6 +826,8 @@ function bindEvents() {
       if (gameState === 'world') openMap();
       else if (gameState === 'map') closeMap();
     }
+    // Backtick (`) toggles the debug menu.
+    if (e.key === '`' || e.key === '~') { e.preventDefault(); toggleDebug(); }
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -2411,4 +2414,126 @@ function typeColor(type) {
     Ghost:    '#4030a0', Psychic: '#a02060',
   };
   return map[type] || '#404050';
+}
+
+// ═══════════════════════════════════════════════════
+// DEBUG MENU  (toggle with the ` backtick key)
+// ═══════════════════════════════════════════════════
+let dbgPanel = null;
+
+function setupDebugMenu() {
+  const p = document.createElement('div');
+  p.id = 'debug-panel';
+  Object.assign(p.style, {
+    position: 'fixed', top: '0', left: '0', zIndex: '99999',
+    width: '184px', maxHeight: '100vh', overflowY: 'auto',
+    background: 'rgba(8,10,18,0.94)', color: '#cfe', padding: '6px 8px',
+    font: '10px/1.5 monospace', border: '1px solid #345', display: 'none',
+    boxShadow: '2px 2px 12px rgba(0,0,0,.6)',
+  });
+
+  const status = document.createElement('pre');
+  status.id = 'debug-status';
+  Object.assign(status.style, { margin: '0 0 6px', color: '#7fd', whiteSpace: 'pre-wrap', fontSize: '9px' });
+  p.appendChild(status);
+
+  const section = label => {
+    const h = document.createElement('div');
+    h.textContent = label;
+    Object.assign(h.style, { color: '#fa6', marginTop: '6px', fontWeight: 'bold' });
+    p.appendChild(h);
+  };
+  const btn = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    Object.assign(b.style, {
+      display: 'inline-block', margin: '2px 2px 0 0', padding: '2px 5px',
+      font: '9px monospace', background: '#1d2b40', color: '#dfe',
+      border: '1px solid #46688c', borderRadius: '3px', cursor: 'pointer',
+    });
+    b.addEventListener('click', () => { fn(); dbgRefresh(); });
+    p.appendChild(b);
+  };
+
+  section('ITEMS');
+  btn('+10 Balls',   () => { balls += 10; });
+  btn('+5 Master',   () => { masterBalls += 5; });
+  btn('+100 Coins',  () => { coins += 100; });
+
+  section('CATCH');
+  btn('Catch ALL',        () => { POKEMON_DATA.forEach(p => caughtIds.add(p.id)); awardTrioBadge(); refreshRoamers(); });
+  btn('All but Mewtwo',   () => { POKEMON_DATA.forEach(p => { if (p.legend !== 'mewtwo') caughtIds.add(p.id); }); awardTrioBadge(); refreshRoamers(); });
+  btn('3 Birds',          () => { [144,145,146].forEach(id => caughtIds.add(id)); awardTrioBadge(); refreshRoamers(); });
+  btn('Clear caught',     () => { caughtIds.clear(); refreshRoamers(); });
+
+  section('BARRIERS');
+  btn('Unlock all', () => { Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k)); });
+  btn('Lock all',   () => { unlockedBarriers.clear(); });
+
+  section('BADGES');
+  btn('Grant all', () => { COLLECTIBLES.forEach(c => collected.add(c.id)); });
+  btn('Clear',     () => { collected.clear(); });
+
+  section('LEGENDARIES (here)');
+  btn('Summon Mew',    () => dbgSummon('mew'));
+  btn('Summon Mewtwo', () => dbgSummon('mewtwo'));
+  btn('Relocate all',  () => { roamers.forEach(relocateRoamer); });
+
+  section('TELEPORT');
+  ZONE_INFO.forEach(z => btn(z.name, () => dbgTeleport(z.id)));
+
+  section('SAVE');
+  btn('Save',  () => saveGame());
+  btn('RESET game', () => { localStorage.removeItem(SAVE_KEY); startNewGame(); });
+  btn('Close',  () => toggleDebug());
+
+  document.body.appendChild(p);
+  dbgPanel = p;
+}
+
+function toggleDebug() {
+  if (!dbgPanel) return;
+  dbgPanel.style.display = (dbgPanel.style.display === 'none') ? 'block' : 'none';
+  dbgRefresh();
+}
+
+function dbgRefresh() {
+  saveGame();
+  updateHud();
+  if (gameState === 'map')    renderMap();
+  if (gameState === 'badges') renderBadgeCase();
+  if (gameState === 'pokedex') renderPokedexGrid();
+  const s = document.getElementById('debug-status');
+  if (s) {
+    s.textContent =
+      `zone ${currentZone} (${ZONE_INFO[currentZone].name})  @${playerX},${playerY}\n` +
+      `state:${gameState}\n` +
+      `dex ${caughtIds.size}/${POKEMON_DATA.length}  badges ${collected.size}/${COLLECTIBLES.length}\n` +
+      `balls ${balls}  master ${masterBalls}  coins ${coins}\n` +
+      `barriers ${unlockedBarriers.size}/${Object.keys(BARRIERS).length}\n` +
+      `roamers: ${roamers.map(r => r.legend + '@' + ZONE_INFO[r.zone].name).join(', ') || 'none'}`;
+  }
+}
+
+// Drop a legendary right next to the player (works regardless of progress).
+function dbgSummon(legend) {
+  roamers = roamers.filter(r => r.legend !== legend);
+  const poke = POKEMON_DATA.find(p => p.legend === legend);
+  caughtIds.delete(poke.id);
+  const [x, y] = nearestOpenTile(currentZone, playerX + 1, playerY);
+  roamers.push({ legend, pokeId: poke.id, zone: currentZone, x, y });
+}
+
+function dbgTeleport(zone) {
+  currentZone = zone;
+  const { cols, rows } = ZONE_INFO[zone];
+  [playerX, playerY] = nearestWalkable(zone, Math.floor(cols / 2), Math.floor(rows / 2));
+  fromPx.x = playerX * TILE_SIZE;
+  fromPx.y = playerY * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec = null;
+  clearWild();
+  gameState = 'world';
+  showScreen('world');
+  scheduleSpawn();
 }
