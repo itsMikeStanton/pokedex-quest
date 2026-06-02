@@ -591,7 +591,7 @@ let _kamiLastKey = null, _kamiLastTime = 0;
 
 function kamiInput(key) {
   const now = Date.now();
-  if (key === _kamiLastKey && now - _kamiLastTime < 150) return; // dedupe touch+pointer double-fire
+  if (key === _kamiLastKey && now - _kamiLastTime < 20) return; // dedupe touch+pointer double-fire (~1ms apart)
   _kamiLastKey = key;
   _kamiLastTime = now;
   kamiBuffer.push(key);
