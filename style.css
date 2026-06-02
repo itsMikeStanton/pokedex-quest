@@ -992,13 +992,6 @@ body {
 }
 #dp-up    { top: 0;    left: 51px; }
 #dp-left  { top: 51px; left: 0;    }
-#dpad-center {
-  position: absolute;
-  top: 51px; left: 51px;
-  width: 48px; height: 48px;
-  background: #909098;
-  border-radius: 4px;
-}
 #dp-right { top: 51px; left: 102px; }
 #dp-down  { top: 102px; left: 51px; }
 
@@ -1066,7 +1059,60 @@ body {
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
 @media (max-width: 500px) {
-  #device { border-radius: 0; width: 100vw; }
+  /* Fill the whole phone like a real Game Boy: the screen keeps its size,
+     the body/controls stretch to fill the rest, and the d-pad scales up
+     as large as it can. (PC layout is untouched.) */
+  body { height: 100dvh; }
+  #device {
+    border-radius: 0;
+    width: 100vw;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+  #screen-bezel { flex-shrink: 0; }
+
+  /* Controls fill all remaining vertical space below the screen. */
+  #controls-row {
+    flex: 1 1 auto;
+    justify-content: space-evenly;
+    padding: 10px;
+  }
+
+  /* Big responsive d-pad: a square whose four arms tile a 3×3 grid
+     (centre left open). Sized by whichever of width/height is tighter. */
+  #dpad {
+    width: min(48vw, 44vh);
+    height: min(48vw, 44vh);
+  }
+  .dpad-btn {
+    width: 33.34%;
+    height: 33.34%;
+    font-size: min(8vw, 38px);
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    box-shadow: 0 6px 0 #505060;
+  }
+  #dp-up    { top: 0;       left: 33.33%; }
+  #dp-left  { top: 33.33%;  left: 0;      }
+  #dp-right { top: 33.33%;  left: 66.66%; }
+  #dp-down  { top: 66.66%;  left: 33.33%; }
+
+  /* Larger A/B buttons to match. */
+  #ab-buttons { gap: min(3vw, 14px); }
+  .ab-btn {
+    width: min(19vw, 17vh);
+    height: min(19vw, 17vh);
+    font-size: min(6vw, 24px);
+  }
+
+  #start-select-row { flex-shrink: 0; padding: 8px 0 16px; }
+  .ss-btn { font-size: min(3vw, 9px); padding: min(2.5vw, 10px) min(6vw, 26px); }
+
   .title-logo { font-size: 13px; }
 }
 
