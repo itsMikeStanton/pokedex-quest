@@ -1073,18 +1073,20 @@ body {
   }
   #screen-bezel { flex-shrink: 0; }
 
-  /* Controls fill all remaining vertical space below the screen. */
+  /* Controls fill all remaining vertical space below the screen.
+     Centred with an explicit gap so the d-pad and buttons never touch. */
   #controls-row {
     flex: 1 1 auto;
-    justify-content: space-evenly;
+    justify-content: center;
+    gap: min(7vw, 34px);
     padding: 10px;
   }
 
   /* Big responsive d-pad: a square whose four arms tile a 3×3 grid
      (centre left open). Sized by whichever of width/height is tighter. */
   #dpad {
-    width: min(48vw, 44vh);
-    height: min(48vw, 44vh);
+    width: min(46vw, 42vh);
+    height: min(46vw, 42vh);
   }
   .dpad-btn {
     width: 33.34%;
@@ -1105,8 +1107,8 @@ body {
   /* Larger A/B buttons to match. */
   #ab-buttons { gap: min(3vw, 14px); }
   .ab-btn {
-    width: min(19vw, 17vh);
-    height: min(19vw, 17vh);
+    width: min(18vw, 16vh);
+    height: min(18vw, 16vh);
     font-size: min(6vw, 24px);
   }
 
