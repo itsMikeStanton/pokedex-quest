@@ -114,24 +114,7 @@ const BARRIERS = {
   fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!' },
 };
 
-const PICKUPS = [
-  // Zone 0: Meadow
-  { id:0,  zone:0, x:4,  y:5,  type:'ball' },
-  { id:1,  zone:0, x:14, y:5,  type:'coin' },
-  { id:2,  zone:0, x:4,  y:9,  type:'coin' },
-  { id:3,  zone:0, x:14, y:9,  type:'ball' },
-  { id:4,  zone:0, x:10, y:12, type:'coin' },
-  // Zone 1: Beach
-  { id:5,  zone:1, x:4,  y:3,  type:'ball' },
-  { id:6,  zone:1, x:13, y:3,  type:'coin' },
-  { id:7,  zone:1, x:12, y:6,  type:'coin' },
-  // Zone 2: City
-  { id:8,  zone:2, x:8,  y:5,  type:'coin' },
-  { id:9,  zone:2, x:8,  y:9,  type:'ball' },
-  // Zone 3: Highlands
-  { id:10, zone:3, x:4,  y:9,  type:'ball' },
-  { id:11, zone:3, x:13, y:9,  type:'coin' },
-];
+const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
 
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
@@ -207,7 +190,6 @@ let keys        = {};
 let caughtIds      = new Set();
 let balls          = 5;
 let coins          = 0;
-let collectedItems = new Set();
 let encHappy       = false;
 let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
 let spawnTimerId   = null;   // next spawn setTimeout id
@@ -587,39 +569,36 @@ function move(dx, dy, ts) {
 
   beep(220, 0.04, 0.04, 'square');
 
-  // Collect any pickup at this tile
-  const pickup = PICKUPS.find(p =>
-    p.zone === currentZone && p.x === playerX && p.y === playerY && !collectedItems.has(p.id)
-  );
-  if (pickup) {
-    collectedItems.add(pickup.id);
-    if (pickup.type === 'ball') {
-      balls++;
-      showMessage(`🔴 Found a PokéBall!  (${balls} total)`);
-      beep(660, 0.1, 0.08);
-      setTimeout(() => beep(880, 0.1, 0.1), 90);
-    } else {
-      coins++;
-      showMessage(`💰 Found a coin!  (${coins} total)`);
-      beep(880, 0.08, 0.08);
-      setTimeout(() => beep(1100, 0.08, 0.08), 90);
-    }
-    updateHud();
-    saveGame();
-  }
-
   // Open shop when stepping onto shop tile
   if (MAPS[currentZone][playerY][playerX] === T.SHOP) {
     setTimeout(() => openShop(), 80);
     return;
   }
 
-  // 6. Check if player stepped onto a wild Pokémon's tile
+  // Check if player stepped onto a wild Pokémon's tile
   if (wildPoke && wildPoke.zone === currentZone &&
       wildPoke.x === playerX && wildPoke.y === playerY) {
     const poke = wildPoke.poke;
     clearWild();
     setTimeout(() => beginEncounter(poke), 80);
+    return;
+  }
+
+  // Random grass pickup — 12% chance to find a ball or coin
+  if (tile === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
+    if (Math.random() < 0.5) {
+      balls++;
+      showMessage(`🔴 Found a PokéBall! (${balls} total)`);
+      beep(660, 0.1, 0.08);
+      setTimeout(() => beep(880, 0.1, 0.1), 90);
+    } else {
+      coins++;
+      showMessage(`💰 Found a coin! (${coins} total)`);
+      beep(880, 0.08, 0.08);
+      setTimeout(() => beep(1100, 0.08, 0.08), 90);
+    }
+    updateHud();
+    saveGame();
   }
 }
 
@@ -747,57 +726,9 @@ function drawWorld(ts) {
     }
   }
   drawBarriers(ts);
-  drawPickups();
   drawWild(ts);
   const pos = getRenderPos(ts);
   drawPlayer(pos.x, pos.y);
-}
-
-// ─── Pickup graphics ─────────────────────────────────
-function drawPickups() {
-  for (const p of PICKUPS) {
-    if (p.zone !== currentZone || collectedItems.has(p.id)) continue;
-    const px = p.x * TILE_SIZE;
-    const py = p.y * TILE_SIZE;
-    if (p.type === 'ball') {
-      // Top red half
-      ctx.fillStyle = '#e02828';
-      ctx.beginPath();
-      ctx.arc(px + 16, py + 20, 8, Math.PI, 0, true);
-      ctx.fill();
-      // Bottom white half
-      ctx.fillStyle = '#f8f8f8';
-      ctx.beginPath();
-      ctx.arc(px + 16, py + 20, 8, 0, Math.PI);
-      ctx.fill();
-      // Divider line
-      ctx.fillStyle = '#202020';
-      ctx.fillRect(px + 8, py + 18, 16, 2);
-      // Center button (white then dark)
-      ctx.fillStyle = '#f8f8f8';
-      ctx.beginPath();
-      ctx.arc(px + 16, py + 19, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#202020';
-      ctx.beginPath();
-      ctx.arc(px + 16, py + 19, 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // Gold coin
-      ctx.fillStyle = '#e0a000';
-      ctx.beginPath();
-      ctx.arc(px + 16, py + 20, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f8d020';
-      ctx.beginPath();
-      ctx.arc(px + 14, py + 18, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#c07800';
-      ctx.beginPath();
-      ctx.arc(px + 18, py + 22, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
 }
 
 // ─── Barrier graphics ────────────────────────────────
@@ -1234,7 +1165,6 @@ function updateHud() {
 // ═══════════════════════════════════════════════════
 function startNewGame() {
   caughtIds.clear();
-  collectedItems.clear();
   balls = 5;
   coins = 0;
   clearWild();
@@ -1269,7 +1199,6 @@ function saveGame() {
       y:         playerY,
       balls,
       coins,
-      collected: [...collectedItems],
     }));
   } catch (_) {}
 }
@@ -1287,9 +1216,8 @@ function loadSave() {
         currentZone    = data.zone  ?? 0;
         playerX        = data.x    ?? 10;
         playerY        = data.y    ?? 7;
-        balls          = data.balls     ?? 5;
-        coins          = data.coins     ?? 0;
-        collectedItems = new Set(data.collected || []);
+        balls = data.balls ?? 5;
+        coins = data.coins ?? 0;
       }
       fromPx.x   = playerX * TILE_SIZE;
       fromPx.y   = playerY * TILE_SIZE;
