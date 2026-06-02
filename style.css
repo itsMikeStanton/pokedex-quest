@@ -231,6 +231,52 @@ body {
   align-items: center;
   padding: 10px 12px;
   gap: 6px;
+  position: relative;
+}
+
+/* Thrown pokéball (absolutely positioned, flies upward) */
+#throw-ball {
+  position: absolute;
+  bottom: 55px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #e02020 0%, #e02020 47%, #282828 47%, #282828 53%, #f0f0f0 53%);
+  border: 2.5px solid #111;
+  z-index: 10;
+  pointer-events: none;
+}
+#throw-ball::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #111;
+}
+
+@keyframes ball-fly {
+  0%   { transform: translateX(-50%) translateY(0px)     rotate(0deg)   scale(1);   opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-210px)  rotate(720deg) scale(0.45); opacity: 0.1; }
+}
+
+@keyframes poke-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  15%  { transform: rotate(-20deg) scale(1.12) translateY(-5px); }
+  30%  { transform: rotate(18deg)  scale(0.9)  translateY(3px); }
+  45%  { transform: rotate(-13deg) scale(1.08) translateY(-4px); }
+  60%  { transform: rotate(11deg)  scale(0.93) translateY(2px); }
+  78%  { transform: rotate(-6deg)  scale(1.03); }
+  90%  { transform: rotate(4deg)   scale(0.98); }
+}
+
+@keyframes poke-shrink {
+  0%   { transform: scale(1)    rotate(0deg);  opacity: 1; filter: brightness(1); }
+  20%  { transform: scale(1.18) rotate(-6deg); opacity: 1; filter: brightness(2.5); }
+  100% { transform: scale(0)    rotate(25deg); opacity: 0; filter: brightness(4); }
 }
 
 #enc-header {

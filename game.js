@@ -837,6 +837,13 @@ function beginEncounter(poke) {
   currentPoke = poke;
   gameState   = 'encounter';
 
+  // Reset throw animation from previous encounter
+  const pokeWrap = document.getElementById('enc-pokemon-wrap');
+  pokeWrap.style.animation = '';
+  pokeWrap.style.opacity   = '';
+  pokeWrap.style.transform = '';
+  document.getElementById('throw-ball').classList.add('hidden');
+
   document.getElementById('enc-name').textContent      = poke.name;
   document.getElementById('enc-type-badge').textContent = poke.type;
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
@@ -909,11 +916,41 @@ function throwBall() {
   balls--;
   updateHud();
   saveGame();
-  // Throw animation sound
-  beep(440, 0.15, 0.08);
-  setTimeout(() => beep(330, 0.12, 0.08), 100);
-  setTimeout(() => beep(550, 0.18, 0.2),  200);
-  setTimeout(() => caught(), 400);
+
+  document.getElementById('enc-throw-btn').disabled = true;
+
+  const ballEl   = document.getElementById('throw-ball');
+  const pokeWrap = document.getElementById('enc-pokemon-wrap');
+
+  // Reset
+  ballEl.style.animation   = 'none';
+  pokeWrap.style.animation = '';
+  pokeWrap.style.opacity   = '1';
+  ballEl.classList.remove('hidden');
+
+  // Phase 1 — ball spins upward (0–380ms)
+  beep(420, 0.18, 0.1);
+  setTimeout(() => beep(310, 0.14, 0.1), 130);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ballEl.style.animation = 'ball-fly 0.38s ease-in forwards';
+  }));
+
+  // Phase 2 — impact thud + pokemon wiggles (380ms)
+  setTimeout(() => {
+    ballEl.classList.add('hidden');
+    beep(180, 0.25, 0.1, 'square');
+    setTimeout(() => beep(140, 0.2, 0.15, 'square'), 75);
+    pokeWrap.style.animation = 'poke-wiggle 0.58s ease-in-out forwards';
+  }, 370);
+
+  // Phase 3 — pokemon shrinks into the ball (1000ms)
+  setTimeout(() => {
+    beep(120, 0.15, 0.55, 'square');
+    pokeWrap.style.animation = 'poke-shrink 0.55s ease-in forwards';
+  }, 1000);
+
+  // Phase 4 — done, go to caught screen (1600ms)
+  setTimeout(() => caught(), 1600);
 }
 
 function caught() {
