@@ -39,7 +39,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Flying',
     description: 'A common sight in forests and woods. It flaps its wings to kick up blinding sand.',
-    zones: [0],
+    zones: [1],
   },
   {
     id: 19, name: 'Rattata', sprite: 'sprites/019.png', emoji: '🐭',
@@ -87,7 +87,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'While lulling its enemies with its vacant look, this clever Pokémon uses its psychic powers.',
-    zones: [1],
+    zones: [0],
   },
   {
     id: 94, name: 'Gengar', sprite: 'sprites/094.png', emoji: '👻',
@@ -153,7 +153,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Bug',
     description: 'Mushrooms grow on its back from spores attached at birth. They drain the host\'s energy.',
-    zones: [0],
+    zones: [5],
   },
   {
     id: 63, name: 'Abra', sprite: 'sprites/063.png', emoji: '🔮',
@@ -161,7 +161,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Psychic',
     description: 'It sleeps 18 hours a day. Even while sleeping it senses danger and can teleport to safety.',
-    zones: [0, 3],
+    zones: [0],
   },
 
   // ── Zone 1 additions (Beach) ──────────────────────────
@@ -171,7 +171,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Its spiral belly is transparent skin — you can see its insides! It prefers swampy areas.',
-    zones: [1],
+    zones: [0],
   },
   {
     id: 72, name: 'Tentacool', sprite: 'sprites/072.png', emoji: '🔵',
@@ -187,7 +187,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Incredibly slow and dopey. It takes 5 seconds to feel pain when its tail gets bitten.',
-    zones: [1],
+    zones: [3],
   },
   {
     id: 86, name: 'Seel', sprite: 'sprites/086.png', emoji: '🦭',
@@ -195,7 +195,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Loves to sleep in icy water. The colder the weather, the more active and lively it becomes!',
-    zones: [1],
+    zones: [6],
   },
   {
     id: 90, name: 'Shellder', sprite: 'sprites/090.png', emoji: '🐚',
@@ -243,7 +243,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'A gentle giant that understands human speech and happily carries people across the sea.',
-    zones: [1],
+    zones: [6],
   },
   {
     id: 138, name: 'Omanyte', sprite: 'sprites/138.png', emoji: '🐌',
@@ -261,7 +261,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Flying',
     description: 'It flaps its small wings rapidly to stay airborne. Its loud, shrill cry can be heard far away.',
-    zones: [2],
+    zones: [1],
   },
   {
     id: 41, name: 'Zubat', sprite: 'sprites/041.png', emoji: '🦇',
@@ -269,7 +269,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Poison',
     description: 'Hangs upside down in dark places during the day. Has no eyes but navigates perfectly by ultrasound.',
-    zones: [2],
+    zones: [7],
   },
   {
     id: 66, name: 'Machop', sprite: 'sprites/066.png', emoji: '💪',
@@ -285,7 +285,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Rock',
     description: 'Sleeps deeply in fields and on mountain paths. Hikers often trip over them by mistake.',
-    zones: [2],
+    zones: [7],
   },
   {
     id: 81, name: 'Magnemite', sprite: 'sprites/081.png', emoji: '🧲',
@@ -325,7 +325,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'When it encounters an enemy, its body instantly transforms into a perfect copy of that foe.',
-    zones: [2, 3],
+    zones: [2],
   },
   {
     id: 137, name: 'Porygon', sprite: 'sprites/137.png', emoji: '💻',
@@ -359,7 +359,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Fire',
     description: 'Very protective of its territory. It will bark and bite to drive off intruders, but is loyal to friends.',
-    zones: [3],
+    zones: [4],
   },
   {
     id: 77, name: 'Ponyta', sprite: 'sprites/077.png', emoji: '🐴',
@@ -375,7 +375,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Ground',
     description: 'It always wears the skull of its dead mother. On the night of a full moon, it cries for her.',
-    zones: [3],
+    zones: [7],
   },
   {
     id: 115, name: 'Kangaskhan', sprite: 'sprites/115.png', emoji: '🦘',
@@ -679,7 +679,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'It digs burrows to sleep in and curls into a ball when threatened. It can also bowl into enemies!',
-    zones: [7],
+    zones: [1],
   },
   {
     id: 28, name: 'Sandslash', sprite: 'sprites/028.png', emoji: '🌵',
@@ -711,7 +711,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'Lives most of its life underground. It loosens soil for plants to grow, making farmers very happy!',
-    zones: [7],
+    zones: [2],
   },
   {
     id: 51, name: 'Dugtrio', sprite: 'sprites/051.png', emoji: '🔱',
