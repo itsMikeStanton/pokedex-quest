@@ -497,6 +497,7 @@ body {
   color: #e8e8ff;
 }
 .shop-price { color: #f8d060; }
+.shop-row.master-row { background: rgba(160,120,220,.18); border: 1px solid #7858a8; }
 
 /* ─── RESULT SCREEN ─────────────────────────────────── */
 #result-screen {

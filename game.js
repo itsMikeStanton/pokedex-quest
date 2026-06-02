@@ -326,6 +326,8 @@ const COLLECTIBLES = [
   { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', name: 'Thicket Badge' },
   { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', name: 'Glacier Badge' },
   { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', name: 'Dune Badge' },
+  // Awarded automatically — not placed in the world.
+  { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
 ];
 
 // Friendly characters you can walk up to and talk with. They stand on a tile
@@ -371,13 +373,71 @@ function nearestOpenTile(zone, x, y) {
   return nearestWalkable(zone, x, y);
 }
 NPCS.forEach(n => { [n.x, n.y] = nearestOpenTile(n.zone, n.x, n.y); });
-COLLECTIBLES.forEach(c => { [c.x, c.y] = nearestWalkable(c.zone, c.x, c.y); });
+COLLECTIBLES.forEach(c => { if (!c.auto) [c.x, c.y] = nearestWalkable(c.zone, c.x, c.y); });
 
 function npcAt(zone, x, y) {
   return NPCS.find(n => n.zone === zone && n.x === x && n.y === y) || null;
 }
 function collectibleAt(zone, x, y) {
   return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
+}
+
+// ─── Legendary roamers (Mew / Mewtwo) ────────────────
+const FARAWAY_ZONES = [4, 5, 6, 7]; // Volcano, Dark Forest, Ice Cave, Desert
+
+// Whether every Pokémon except Mewtwo has been caught (gates Mewtwo's arrival).
+function allOthersCaught() {
+  return POKEMON_DATA.every(p => p.legend === 'mewtwo' || caughtIds.has(p.id));
+}
+
+// A random open spot in a faraway zone (optionally avoiding `notZone`).
+function farawaySpot(notZone) {
+  const zones = FARAWAY_ZONES.filter(z => z !== notZone);
+  const zone = zones[Math.floor(Math.random() * zones.length)];
+  const { cols, rows } = ZONE_INFO[zone];
+  const [x, y] = nearestOpenTile(zone, 2 + Math.floor(Math.random() * (cols - 4)),
+                                       2 + Math.floor(Math.random() * (rows - 4)));
+  return { zone, x, y };
+}
+
+// Build the active roamer list from the current catch state (+ saved positions).
+function initRoamers() {
+  roamers = [];
+  const saved = {};
+  if (loadedRoamers) loadedRoamers.forEach(r => { saved[r.legend] = r; });
+
+  POKEMON_DATA.forEach(p => {
+    if (!p.legend || caughtIds.has(p.id)) return;
+    if (p.legend === 'mewtwo' && !allOthersCaught()) return; // Mewtwo only at the end
+    const s = saved[p.legend];
+    const pos = (s && FARAWAY_ZONES.includes(s.zone)) ? s : farawaySpot();
+    roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
+  });
+}
+
+function roamerAt(zone, x, y) {
+  return roamers.find(r => r.zone === zone && r.x === x && r.y === y) || null;
+}
+
+// Add any newly-eligible roamer (e.g. Mewtwo once everything else is caught)
+// and drop any that have been captured — without moving the others.
+function refreshRoamers() {
+  roamers = roamers.filter(r => !caughtIds.has(r.pokeId));
+  POKEMON_DATA.forEach(p => {
+    if (!p.legend || caughtIds.has(p.id)) return;
+    if (p.legend === 'mewtwo' && !allOthersCaught()) return;
+    if (!roamers.some(r => r.legend === p.legend)) {
+      const pos = farawaySpot();
+      roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
+    }
+  });
+}
+
+// On a failed encounter the legendary slips away to another faraway land.
+function relocateRoamer(r) {
+  const pos = farawaySpot(r.zone);
+  r.zone = pos.zone; r.x = pos.x; r.y = pos.y;
+  saveGame();
 }
 
 
@@ -455,7 +515,12 @@ let keys        = {};
 let kamiBuffer  = [];
 let caughtIds      = new Set();
 let balls          = 5;
+let masterBalls    = 0;        // for capturing Mew / Mewtwo only
 let coins          = 0;
+let roamers        = [];       // active legendary roamers: { legend, pokeId, zone, x, y }
+let loadedRoamers  = null;     // roamer positions restored from save
+let currentLegend  = null;     // roamer being engaged in the current encounter/battle
+let pendingMsg     = null;     // a message to surface when the player returns to the world
 let encHappy       = false;
 let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
 let spawnTimerId   = null;   // next spawn setTimeout id
@@ -807,7 +872,8 @@ function bindEvents() {
   document.querySelectorAll('.shop-buy-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       wakeAudio();
-      buyBalls(parseInt(btn.dataset.qty), parseInt(btn.dataset.cost));
+      if (btn.dataset.master) buyMaster(parseInt(btn.dataset.cost));
+      else buyBalls(parseInt(btn.dataset.qty), parseInt(btn.dataset.cost));
     });
   });
 
@@ -1012,6 +1078,15 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3a. A legendary roamer (Mew / Mewtwo) standing on the destination tile.
+  const roamer = roamerAt(currentZone, nx, ny);
+  if (roamer) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    engageRoamer(roamer);
+    return;
+  }
+
   // 3b. Talk to an NPC standing on the destination tile (they block it).
   const npc = npcAt(currentZone, nx, ny);
   if (npc) {
@@ -1202,6 +1277,18 @@ function drawEntities(ts) {
     const py = n.y * TILE_SIZE - camY;
     ctx.font = '22px serif';
     ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+  }
+  // Roaming legendaries — larger, with an aura of sparkles.
+  for (const r of roamers) {
+    if (r.zone !== currentZone) continue;
+    const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
+    const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+    const py = r.y * TILE_SIZE - camY;
+    ctx.font = '13px serif';
+    ctx.fillText('✨', px - 12, py + 6 + bob);
+    ctx.fillText('✨', px + 12, py + 2 - bob);
+    ctx.font = '26px serif';
+    ctx.fillText(poke.emoji, px, py + 24 + bob);
   }
 }
 
@@ -1457,9 +1544,10 @@ function drawPlayer(px, py) {
 // ═══════════════════════════════════════════════════
 // ENCOUNTER
 // ═══════════════════════════════════════════════════
-function beginEncounter(poke) {
+function beginEncounter(poke, roamer = null) {
   encHappy = false;
   currentPoke = poke;
+  currentLegend = roamer;
   gameState   = 'encounter';
 
   clearWild();
@@ -1509,7 +1597,13 @@ function startTimer() {
   fill.style.width = '0%';
 
   timerStart = Date.now();
-  timerId = setTimeout(() => fled(), TIMER_MS);
+  timerId = setTimeout(() => encounterFailed(), TIMER_MS);
+}
+
+// A failed encounter: legendaries slip away and relocate; others just flee.
+function encounterFailed() {
+  if (currentLegend) legendaryEscaped();
+  else fled();
 }
 
 function resolveAction(action, btnEl) {
@@ -1522,16 +1616,24 @@ function resolveAction(action, btnEl) {
     beep(523, 0.12, 0.1);
     setTimeout(() => beep(659, 0.12, 0.15), 120);
     // Tamed! Clear away the taming info — just leave the THROW button.
+    const legend = currentLegend;
     setTimeout(() => {
       document.getElementById('enc-buttons').classList.add('hidden');
       document.getElementById('enc-thought-bubble').classList.add('hidden');
       document.getElementById('enc-prompt').classList.add('hidden');
       document.getElementById('timer-wrap').classList.add('hidden');
       document.getElementById('enc-throw-wrap').classList.remove('hidden');
-      if (balls <= 0) {
+      const haveBall = legend ? masterBalls > 0 : balls > 0;
+      document.getElementById('enc-happy-msg').textContent = legend
+        ? '✨ It trusts you! Throw the Master Ball!'
+        : "❤️ It's happy!  Throw a PokéBall!";
+      document.getElementById('enc-throw-btn').innerHTML = legend
+        ? '🟣 Throw Master Ball!'
+        : '<span class="pb"></span> Throw!';
+      if (!haveBall) {
         document.getElementById('enc-no-balls-msg').classList.remove('hidden');
         document.getElementById('enc-throw-btn').disabled = true;
-        setTimeout(() => fled(), 4000);
+        setTimeout(() => encounterFailed(), 4000);
       } else {
         document.getElementById('enc-throw-btn').disabled = false;
         document.getElementById('enc-no-balls-msg').classList.add('hidden');
@@ -1542,13 +1644,18 @@ function resolveAction(action, btnEl) {
     document.querySelectorAll('.action-btn').forEach(b => {
       if (b.dataset.action === currentPoke.action) b.classList.add('correct');
     });
-    setTimeout(() => fled(), 700);
+    setTimeout(() => encounterFailed(), 700);
   }
 }
 
 function throwBall() {
-  if (balls <= 0) return;
-  balls--;
+  if (currentLegend) {
+    if (masterBalls <= 0) return;
+    masterBalls--;
+  } else {
+    if (balls <= 0) return;
+    balls--;
+  }
   updateHud();
   saveGame();
 
@@ -1589,14 +1696,23 @@ function throwBall() {
 }
 
 function caught() {
-  const isNew = !caughtIds.has(currentPoke.id);
+  const isNew  = !caughtIds.has(currentPoke.id);
+  const legend = currentLegend;
   caughtIds.add(currentPoke.id);
+  if (legend) {                       // remove the captured roamer from the world
+    roamers = roamers.filter(r => r !== legend);
+    currentLegend = null;
+  }
+  awardTrioBadge();                   // catching the 3rd legendary bird grants a badge
+  refreshRoamers();                   // may now make Mewtwo appear
   saveGame();
   updateHud();
 
   document.getElementById('result-stars').classList.remove('hidden');
   setPokeDisplay(document.getElementById('result-icon'), currentPoke, 80);
-  document.getElementById('result-title').textContent   = isNew ? '✨ GOT IT! ✨' : '⭐ CAUGHT AGAIN! ⭐';
+  document.getElementById('result-title').textContent   = legend ? '🌟 LEGENDARY! 🌟'
+                                                        : isNew  ? '✨ GOT IT! ✨'
+                                                                 : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = isNew
     ? 'Added to your PokéDex!'
@@ -1609,6 +1725,15 @@ function caught() {
 
   if (caughtIds.size === POKEMON_DATA.length) {
     setTimeout(showComplete, 2200);
+  }
+}
+
+// Catching Articuno + Zapdos + Moltres grants the Trio Badge automatically.
+function awardTrioBadge() {
+  const birds = [144, 145, 146];
+  if (birds.every(id => caughtIds.has(id)) && !collected.has('badge_trio')) {
+    collected.add('badge_trio');
+    pendingMsg = '🦅 The legendary birds bond with you — you earned the Trio Badge!';
   }
 }
 
@@ -1629,6 +1754,45 @@ function fled() {
 function returnToWorld() {
   showScreen('world');
   scheduleSpawn();
+  if (pendingMsg) { showMessage(pendingMsg); pendingMsg = null; }
+}
+
+// A legendary you failed to capture vanishes and reappears elsewhere.
+function legendaryEscaped() {
+  const legend = currentLegend;
+  currentLegend = null;
+  const poke = POKEMON_DATA.find(p => p.id === legend.pokeId);
+  if (legend) relocateRoamer(legend);
+
+  document.getElementById('result-stars').classList.add('hidden');
+  document.getElementById('result-icon').innerHTML = '<span style="font-size:64px">💨</span>';
+  document.getElementById('result-title').textContent   = 'IT VANISHED!';
+  document.getElementById('result-name').textContent    = poke ? poke.name : '';
+  document.getElementById('result-message').textContent = 'It slipped away to another faraway land...';
+
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active fled';
+  showScreen('result');
+  playFledSound();
+}
+
+// Walking into a roaming legendary.
+function engageRoamer(roamer) {
+  const poke = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  if (masterBalls <= 0) {
+    showMessage(`✨ ${poke.name} appears! You need a 🟣 Master Ball to capture it — get one at the 🏪 Shop.`);
+    beep(300, 0.1, 0.12, 'sine');
+    setTimeout(() => beep(380, 0.1, 0.14, 'sine'), 130);
+    return;
+  }
+  if (roamer.legend === 'mewtwo') { startMewtwoBattle(roamer); return; }
+  beginEncounter(poke, roamer);
+}
+
+// Replaced by the full battle in Pass 2.
+function startMewtwoBattle(roamer) {
+  showMessage('🧬 Mewtwo glares at you with overwhelming power... (its battle is coming soon)');
+  beep(120, 0.2, 0.3, 'square');
 }
 
 // ═══════════════════════════════════════════════════
@@ -1639,6 +1803,8 @@ function openShop() {
   clearTimeout(spawnTimerId);
   document.getElementById('shop-coin-count').textContent = coins;
   document.getElementById('shop-ball-count').textContent = balls;
+  const sm = document.getElementById('shop-master-count');
+  if (sm) sm.textContent = masterBalls;
   refreshShopButtons();
   showScreen('shop');
 }
@@ -1667,6 +1833,20 @@ function buyBalls(qty, cost) {
   setTimeout(() => beep(880, 0.12, 0.15), 100);
 }
 
+function buyMaster(cost) {
+  if (coins < cost) return;
+  coins -= cost;
+  masterBalls++;
+  updateHud();
+  saveGame();
+  document.getElementById('shop-coin-count').textContent = coins;
+  const sm = document.getElementById('shop-master-count');
+  if (sm) sm.textContent = masterBalls;
+  refreshShopButtons();
+  beep(700, 0.12, 0.1);
+  setTimeout(() => beep(950, 0.14, 0.16), 110);
+}
+
 // ═══════════════════════════════════════════════════
 // POKÉDEX
 // ═══════════════════════════════════════════════════
@@ -1685,6 +1865,7 @@ function renderPokedexGrid() {
   const grid = document.getElementById('pokedex-grid');
   grid.innerHTML = '';
   document.getElementById('dex-count').textContent = caughtIds.size;
+  document.getElementById('dex-total').textContent = POKEMON_DATA.length;
 
   POKEMON_DATA.forEach(poke => {
     const card = document.createElement('div');
@@ -1852,6 +2033,7 @@ function renderMap() {
 
   // Badge tray.
   document.getElementById('badge-count').textContent = collected.size;
+  document.getElementById('badge-total').textContent = COLLECTIBLES.length;
   const tray = document.getElementById('map-badges-row');
   tray.innerHTML = '';
   COLLECTIBLES.forEach(c => {
@@ -1875,6 +2057,7 @@ function closeBadgeCase() {
 }
 function renderBadgeCase() {
   document.getElementById('badges-count').textContent = collected.size;
+  document.getElementById('badges-total').textContent = COLLECTIBLES.length;
   const grid = document.getElementById('badges-grid');
   grid.innerHTML = '';
   COLLECTIBLES.forEach(c => {
@@ -1892,7 +2075,8 @@ function renderBadgeCase() {
 
     const loc = document.createElement('div');
     loc.className = 'badge-card-loc';
-    loc.textContent = (have ? 'Found in ' : '📍 ') + ZONE_INFO[c.zone].name;
+    loc.textContent = c.auto ? (have ? 'Earned!' : c.hint)
+                             : (have ? 'Found in ' : '📍 ') + ZONE_INFO[c.zone].name;
 
     card.append(icon, name, loc);
     grid.appendChild(card);
@@ -1935,8 +2119,15 @@ function showMessage(html) {
 
 function updateHud() {
   document.getElementById('caught-count').textContent = caughtIds.size;
+  document.getElementById('total-count').textContent  = POKEMON_DATA.length;
   document.getElementById('ball-count').textContent   = balls;
   document.getElementById('coin-count').textContent   = coins;
+  // Master balls only shown once you own one.
+  const mh = document.getElementById('hud-master');
+  if (mh) {
+    mh.classList.toggle('hidden', masterBalls <= 0);
+    document.getElementById('master-count').textContent = masterBalls;
+  }
   const zoneEl = document.getElementById('zone-name');
   if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
 }
@@ -1949,7 +2140,10 @@ function startNewGame() {
   unlockedBarriers.clear();
   collected.clear();
   balls = 5;
+  masterBalls = 0;
   coins = 0;
+  loadedRoamers = null;
+  initRoamers();
   clearWild();
   clearTimeout(spawnTimerId);
   currentZone = 0;
@@ -1979,10 +2173,12 @@ function saveGame() {
       caught:    [...caughtIds],
       barriers:  [...unlockedBarriers],
       collected: [...collected],
+      roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
       zone:      currentZone,
       x:         playerX,
       y:         playerY,
       balls,
+      masterBalls,
       coins,
     }));
   } catch (_) {}
@@ -2000,10 +2196,12 @@ function loadSave() {
         caughtIds        = new Set(data.caught || []);
         unlockedBarriers = new Set(data.barriers || []);
         collected        = new Set(data.collected || []);
+        loadedRoamers    = data.roamers || null;
         currentZone    = data.zone  ?? 0;
         playerX        = data.x    ?? 10;
         playerY        = data.y    ?? 7;
         balls = data.balls ?? 5;
+        masterBalls = data.masterBalls ?? 0;
         coins = data.coins ?? 0;
       }
       // Clamp zone and rescue position if the layout changed under a save.
@@ -2016,6 +2214,7 @@ function loadSave() {
     }
   } catch (_) {}
 
+  initRoamers();
   updateHud();
 
   if (caughtIds.size > 0) {

@@ -31,8 +31,9 @@
           <canvas id="game-canvas" width="640" height="448"></canvas>
           <div id="hud">
             <span id="hud-balls"><span class="pb"></span><span id="ball-count">5</span></span>
+            <span id="hud-master" class="hidden">🟣<span id="master-count">0</span></span>
             <span id="hud-coins">💰<span id="coin-count">0</span></span>
-            <span id="hud-count">🎒<span id="caught-count">0</span>/90</span>
+            <span id="hud-count">🎒<span id="caught-count">0</span>/<span id="total-count">90</span></span>
             <button id="map-btn" class="pixel-btn small blue">🗺️</button>
             <button id="pokedex-btn" class="pixel-btn small blue">📖</button>
           </div>
@@ -106,7 +107,7 @@
           <div id="pokedex-topbar">
             <button id="pokedex-back" class="pixel-btn small red">◀ BACK</button>
             <span id="pokedex-title">POKÉDEX</span>
-            <span id="pokedex-counter"><span id="dex-count">0</span>/90</span>
+            <span id="pokedex-counter"><span id="dex-count">0</span>/<span id="dex-total">90</span></span>
           </div>
           <div id="pokedex-grid"></div>
 
@@ -149,7 +150,7 @@
             <div id="map-zones"></div>
           </div>
           <button id="map-badges" type="button">
-            <span id="map-badges-label">BADGES <span id="badge-count">0</span>/4</span>
+            <span id="map-badges-label">BADGES <span id="badge-count">0</span>/<span id="badge-total">5</span></span>
             <span id="map-badges-row"></span>
             <span id="map-badges-view">view ▸</span>
           </button>
@@ -165,7 +166,7 @@
           <div id="badges-topbar">
             <button id="badges-back" class="pixel-btn small red">◀ BACK</button>
             <span id="badges-title">BADGE CASE</span>
-            <span id="badges-counter"><span id="badges-count">0</span>/4</span>
+            <span id="badges-counter"><span id="badges-count">0</span>/<span id="badges-total">5</span></span>
           </div>
           <div id="badges-grid"></div>
         </div>
@@ -185,6 +186,7 @@
           <div id="shop-header">🏪 SHOP</div>
           <div id="shop-stock">
             <div><span class="pb"></span> Balls: <span id="shop-ball-count">5</span></div>
+            <div>🟣 Master: <span id="shop-master-count">0</span></div>
             <div>💰 Coins: <span id="shop-coin-count">0</span></div>
           </div>
           <div id="shop-items">
@@ -202,6 +204,11 @@
               <span>5 PokéBalls</span>
               <span class="shop-price">10 💰</span>
               <button class="pixel-btn green shop-buy-btn" data-qty="5" data-cost="10">BUY</button>
+            </div>
+            <div class="shop-row master-row">
+              <span>🟣 Master Ball</span>
+              <span class="shop-price">60 💰</span>
+              <button class="pixel-btn blue shop-buy-btn" data-master="1" data-cost="60">BUY</button>
             </div>
           </div>
           <button id="shop-close" class="pixel-btn red">◀ LEAVE</button>
@@ -231,7 +238,7 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.2.1</div>
+  <div id="version">v2.3.0</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>

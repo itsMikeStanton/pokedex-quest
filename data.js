@@ -737,6 +737,34 @@ const POKEMON_DATA = [
     description: 'It carries the skull of its lost mother as a weapon. A kind touch can ease its lonely, aching heart.',
     zones: [7],
   },
+
+  // ── Legendary bird (catchable like the others) ───────
+  {
+    id: 145, name: 'Zapdos', sprite: 'sprites/145.png', emoji: '⚡',
+    color: '#F8D030', bgColor: '#fff4b0',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Electric',
+    description: 'A legendary bird said to appear when the sky turns dark and lightning storms rage in the highlands.',
+    zones: [3],
+  },
+
+  // ── Master-Ball legendaries (roam the faraway lands; never hide in grass) ──
+  {
+    id: 151, name: 'Mew', sprite: 'sprites/151.png', emoji: '🌸',
+    color: '#F8B0D0', bgColor: '#ffe0f0',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Psychic',
+    description: 'So rare it is still considered a mirage by many experts. Said to hold the DNA of every Lukeymon.',
+    zones: [], legend: 'mew', masterOnly: true,
+  },
+  {
+    id: 150, name: 'Mewtwo', sprite: 'sprites/150.png', emoji: '🧬',
+    color: '#A078B0', bgColor: '#e8d8f0',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Psychic',
+    description: 'Created by recombining Mew\'s genes. Its battle prowess is unmatched — only a true master can calm it.',
+    zones: [], legend: 'mewtwo', masterOnly: true,
+  },
 ];
 
 // ─── Pokédex stat block ──────────────────────────────────────────────
@@ -831,8 +859,11 @@ const DEX_INFO = {
   138: ['Spiral',      0.4,   7.5],
   143: ['Sleeping',    2.1, 460.0],
   144: ['Freeze',      1.7,  55.4],
+  145: ['Electric',    1.6,  52.6],
   146: ['Flame',       2.0,  60.0],
   148: ['Dragon',      4.0,  16.5],
+  150: ['Genetic',     2.0, 122.0],
+  151: ['New Species', 0.4,   4.0],
 };
 
 // How each befriending action wins a Lukeymon over (ties to the catch mechanic).
