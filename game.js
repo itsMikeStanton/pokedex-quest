@@ -54,13 +54,13 @@ const EXITS = [
 ];
 
 const BARRIERS = {
-  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       sign: '🔥' },
-  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!',     sign: '💧' },
-  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!',   sign: '⚡' },
-  lava:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to cool the lava flow!',   sign: '💧' },
-  vine:  { needsType: 'Grass',    hint: 'Catch a 🌿 Grass Pokémon to cut through the vines!', sign: '🌿' },
-  frost: { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to melt the ice wall!',     sign: '🔥' },
-  sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', sign: '🌍' },
+  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       cleared: '🔥 Your Fire Pokémon burns away the logs!',      sign: '🔥' },
+  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!',     cleared: '💧 Your Water Pokémon washes the rocks aside!',  sign: '💧' },
+  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!',   cleared: '⚡ Your Electric Pokémon shorts out the fence!', sign: '⚡' },
+  lava:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to cool the lava flow!',   cleared: '💧 Your Water Pokémon cools the lava flow!',     sign: '💧' },
+  vine:  { needsType: 'Grass',    hint: 'Catch a 🌿 Grass Pokémon to cut through the vines!', cleared: '🌿 Your Grass Pokémon cuts through the vines!',  sign: '🌿' },
+  frost: { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to melt the ice wall!',     cleared: '🔥 Your Fire Pokémon melts the ice wall!',       sign: '🔥' },
+  sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', cleared: '🌍 Your Ground Pokémon clears the sand wall!',   sign: '🌍' },
 };
 
 // World-map layout: schematic grid position (col/row, 1-indexed in a 4×4)
@@ -400,6 +400,7 @@ let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
 let currentZone = 0;
+let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 
 // ── Animation state ─────────────────────────────────
 let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
@@ -784,6 +785,7 @@ function kamiInput(key) {
 function activateKami() {
   kamiBuffer = [];
   POKEMON_DATA.forEach(p => caughtIds.add(p.id));
+  Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k));
   balls += 99;
   saveGame();
   updateHud();
@@ -845,10 +847,15 @@ function loop(ts) {
 // ═══════════════════════════════════════════════════
 // BARRIER HELPERS
 // ═══════════════════════════════════════════════════
+// A barrier is only open once the player has physically cleared it by walking
+// into it with the right type — not automatically when the type is caught.
 function isBarrierUnlocked(key) {
-  if (!key) return true;
-  const needsType = BARRIERS[key].needsType;
-  return POKEMON_DATA.some(p => p.type === needsType && caughtIds.has(p.id));
+  return !key || unlockedBarriers.has(key);
+}
+
+// Whether the player currently has a caught Pokémon of the given type.
+function playerHasType(type) {
+  return POKEMON_DATA.some(p => p.type === type && caughtIds.has(p.id));
 }
 
 // Returns barrier key if (nx, ny) is a locked border exit tile for the current zone.
@@ -914,13 +921,23 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 3. Check barrier tile at destination (still in-map but on a border exit tile with locked barrier)
+  // 3. Check barrier tile at destination (still in-map but on a border exit
+  //    tile with a not-yet-cleared barrier). Walking into it with the right
+  //    type clears it on the spot; otherwise it blocks with a hint.
   const barrierKey = getExitBarrierAt(nx, ny);
   if (barrierKey) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    beep(160, 0.07, 0.1, 'square');
-    showMessage(BARRIERS[barrierKey].hint);
+    if (playerHasType(BARRIERS[barrierKey].needsType)) {
+      unlockedBarriers.add(barrierKey);
+      saveGame();
+      beep(523, 0.1, 0.1);
+      setTimeout(() => beep(784, 0.14, 0.18), 110);
+      showMessage(BARRIERS[barrierKey].cleared);
+    } else {
+      beep(160, 0.07, 0.1, 'square');
+      showMessage(BARRIERS[barrierKey].hint);
+    }
     return;
   }
 
@@ -1345,6 +1362,10 @@ function beginEncounter(poke) {
   document.getElementById('enc-throw-wrap').classList.add('hidden');
   document.getElementById('enc-no-balls-msg').classList.add('hidden');
   document.getElementById('enc-buttons').classList.remove('hidden');
+  // Restore the taming info for this fresh encounter (hidden once tamed).
+  document.getElementById('enc-thought-bubble').classList.remove('hidden');
+  document.getElementById('enc-prompt').classList.remove('hidden');
+  document.getElementById('timer-wrap').classList.remove('hidden');
 
   showScreen('encounter');
   playEncounterJingle();
@@ -1376,9 +1397,12 @@ function resolveAction(action, btnEl) {
     btnEl.classList.add('correct');
     beep(523, 0.12, 0.1);
     setTimeout(() => beep(659, 0.12, 0.15), 120);
-    // Hide action buttons, show throw UI
+    // Tamed! Clear away the taming info — just leave the THROW button.
     setTimeout(() => {
       document.getElementById('enc-buttons').classList.add('hidden');
+      document.getElementById('enc-thought-bubble').classList.add('hidden');
+      document.getElementById('enc-prompt').classList.add('hidden');
+      document.getElementById('timer-wrap').classList.add('hidden');
       document.getElementById('enc-throw-wrap').classList.remove('hidden');
       if (balls <= 0) {
         document.getElementById('enc-no-balls-msg').classList.remove('hidden');
@@ -1750,6 +1774,7 @@ function updateHud() {
 // ═══════════════════════════════════════════════════
 function startNewGame() {
   caughtIds.clear();
+  unlockedBarriers.clear();
   balls = 5;
   coins = 0;
   clearWild();
@@ -1779,6 +1804,7 @@ function saveGame() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       caught:    [...caughtIds],
+      barriers:  [...unlockedBarriers],
       zone:      currentZone,
       x:         playerX,
       y:         playerY,
@@ -1797,7 +1823,8 @@ function loadSave() {
         // Legacy v1 format: just an array of caught ids
         caughtIds = new Set(data);
       } else {
-        caughtIds      = new Set(data.caught || []);
+        caughtIds        = new Set(data.caught || []);
+        unlockedBarriers = new Set(data.barriers || []);
         currentZone    = data.zone  ?? 0;
         playerX        = data.x    ?? 10;
         playerY        = data.y    ?? 7;
