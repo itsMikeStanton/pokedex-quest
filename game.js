@@ -238,13 +238,18 @@ function bindEvents() {
   // Complete restart
   document.getElementById('complete-restart').addEventListener('click', startNewGame);
 
-  // D-pad touch
+  // D-pad — use both touch and pointer events for maximum mobile compatibility
+  const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   document.querySelectorAll('.dpad-btn').forEach(btn => {
-    const dir = btn.dataset.dir;
-    const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[keyMap[dir]] = true; wakeAudio(); });
-    btn.addEventListener('pointerup',   e => { e.preventDefault(); keys[keyMap[dir]] = false; });
-    btn.addEventListener('pointerleave',e => { keys[keyMap[dir]] = false; });
+    const k = keyMap[btn.dataset.dir];
+    const press   = e => { e.preventDefault(); keys[k] = true;  wakeAudio(); };
+    const release = e => { e.preventDefault(); keys[k] = false; };
+    btn.addEventListener('touchstart',  press,   { passive: false });
+    btn.addEventListener('touchend',    release, { passive: false });
+    btn.addEventListener('touchcancel', release, { passive: false });
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup',   release);
+    btn.addEventListener('pointercancel', release);
   });
 }
 
