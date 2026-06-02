@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Lukeymon</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="device">
+    <div id="brand">LUKEYMON</div>
+    <div id="screen-bezel">
+      <div id="screen-area">
+
+        <!-- TITLE SCREEN -->
+        <div id="title-screen" class="screen active">
+          <div class="title-logo">
+            <span>L</span><span>U</span><span>K</span><span>E</span><span>Y</span><span>M</span><span>O</span><span>N</span>
+          </div>
+          <p class="title-tagline">Catch ʼem with kindness!</p>
+          <div class="title-deco">🌿&nbsp;&nbsp;🔥&nbsp;&nbsp;💧&nbsp;&nbsp;⚡&nbsp;&nbsp;👻</div>
+          <button id="start-btn" class="pixel-btn green">▶ NEW GAME</button>
+          <button id="continue-btn" class="pixel-btn blue hidden">▶ CONTINUE</button>
+          <p class="title-hint">Arrow keys or WASD to move</p>
+        </div>
+
+        <!-- WORLD SCREEN -->
+        <div id="world-screen" class="screen">
+          <canvas id="game-canvas" width="640" height="448"></canvas>
+          <div id="hud">
+            <span id="hud-count">🎒 <span id="caught-count">0</span> / 15</span>
+            <button id="pokedex-btn" class="pixel-btn small blue">📖 PokéDex</button>
+          </div>
+          <div id="message-box" class="hidden">
+            <span id="message-text"></span>
+          </div>
+        </div>
+
+        <!-- ENCOUNTER SCREEN -->
+        <div id="encounter-screen" class="screen">
+          <div id="enc-header">
+            <div id="enc-name">??????????</div>
+            <div id="enc-type-badge">???</div>
+          </div>
+
+          <div id="enc-pokemon-wrap">
+            <div id="enc-emoji-display"></div>
+            <div id="enc-sparkles" aria-hidden="true">✨</div>
+          </div>
+
+          <div id="enc-thought-bubble">
+            <div id="enc-thought-inner">
+              <span id="enc-thought-emoji"></span>
+              <span id="enc-thought-text"></span>
+            </div>
+            <div class="bubble-tail"></div>
+          </div>
+
+          <p id="enc-prompt">What does it want?</p>
+
+          <div id="enc-buttons">
+            <button class="action-btn feed-btn" data-action="feed">
+              <span class="action-icon">🍎</span>
+              <span class="action-label">Feed</span>
+            </button>
+            <button class="action-btn pet-btn" data-action="pet">
+              <span class="action-icon">🤚</span>
+              <span class="action-label">Pet</span>
+            </button>
+            <button class="action-btn play-btn" data-action="play">
+              <span class="action-icon">⚽</span>
+              <span class="action-label">Play</span>
+            </button>
+          </div>
+
+          <div id="timer-wrap">
+            <div id="timer-bar">
+              <div id="timer-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESULT SCREEN (success + fled share this) -->
+        <div id="result-screen" class="screen">
+          <div id="result-stars" class="hidden">⭐ ⭐ ⭐</div>
+          <div id="result-icon"></div>
+          <div id="result-title"></div>
+          <div id="result-name"></div>
+          <div id="result-message"></div>
+          <button id="result-continue" class="pixel-btn green">CONTINUE ▶</button>
+        </div>
+
+        <!-- POKÉDEX SCREEN -->
+        <div id="pokedex-screen" class="screen">
+          <div id="pokedex-topbar">
+            <button id="pokedex-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="pokedex-title">POKÉDEX</span>
+            <span id="pokedex-counter"><span id="dex-count">0</span>/15</span>
+          </div>
+          <div id="pokedex-grid"></div>
+
+          <div id="pokedex-detail" class="hidden">
+            <button id="detail-back" class="pixel-btn small red">◀</button>
+            <div id="detail-emoji"></div>
+            <div id="detail-name"></div>
+            <div id="detail-meta">
+              <span id="detail-number"></span>
+              <span id="detail-type"></span>
+            </div>
+            <div id="detail-desc"></div>
+          </div>
+        </div>
+
+        <!-- COMPLETE SCREEN -->
+        <div id="complete-screen" class="screen">
+          <div id="complete-trophy">🏆</div>
+          <div id="complete-title">YOU DID IT!</div>
+          <div id="complete-sub">All 15 Lukeymon caught!</div>
+          <div id="complete-row"></div>
+          <p id="complete-praise">You are a true Pokémon master! 🌟</p>
+          <button id="complete-restart" class="pixel-btn blue">PLAY AGAIN</button>
+        </div>
+
+      </div><!-- /screen-area -->
+    </div><!-- /screen-bezel -->
+
+    <!-- Touch / D-Pad controls -->
+    <div id="controls-row">
+      <div id="dpad">
+        <button class="dpad-btn" id="dp-up"   data-dir="up">▲</button>
+        <div id="dpad-mid">
+          <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
+          <div id="dpad-center"></div>
+          <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
+        </div>
+        <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
+      </div>
+      <div id="ab-buttons">
+        <button class="ab-btn" id="btn-b">B</button>
+        <button class="ab-btn" id="btn-a">A</button>
+      </div>
+    </div>
+
+    <div id="start-select-row">
+      <button class="ss-btn" id="ss-select">SELECT</button>
+      <button class="ss-btn" id="ss-start">START</button>
+    </div>
+
+  </div><!-- /device -->
+
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
