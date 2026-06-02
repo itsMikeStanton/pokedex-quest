@@ -333,20 +333,20 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', lines: [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 20, lines: [
     'Welcome to the Lukeymon lands, friend!',
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     'Some paths are blocked. Catch the right type, then WALK INTO the barrier to clear it!',
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', lines: [
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 15, lines: [
     'Keeping the city safe, trainer.',
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', lines: [
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 15, lines: [
     'Waves are perfect today, dude!',
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', lines: [
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 30, lines: [
     '...you wandered this deep into the forest? Impressive.',
     'Collect every badge AND every Lukeymon, and you will be a true master.',
   ] },
@@ -533,6 +533,9 @@ let audioCtx    = null;
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
+let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
+let currentNPC = null;             // NPC whose dialog is open
+let npcLineIdx = 0;
 
 // ── Animation state ─────────────────────────────────
 let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
@@ -852,6 +855,9 @@ function bindEvents() {
 
   // Mewtwo battle
   document.getElementById('battle-throw').addEventListener('click', () => { wakeAudio(); throwMasterAtMewtwo(); });
+
+  // NPC dialog
+  document.getElementById('npc-advance').addEventListener('click', () => { wakeAudio(); advanceNPC(); });
 
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
@@ -1257,10 +1263,51 @@ function spawnWild() {
 }
 
 function talkNPC(npc) {
-  npc._i = (npc._i == null) ? 0 : (npc._i + 1) % npc.lines.length;
-  showMessage(`<b>${npc.emoji} ${npc.name}:</b> ${npc.lines[npc._i]}`);
+  currentNPC = npc;
+  npcLineIdx = 0;
+  clearTimeout(spawnTimerId);
+
+  document.getElementById('npc-emoji').textContent = npc.emoji;
+  document.getElementById('npc-name').textContent  = npc.name;
+
+  // One-time gift the first time you meet this character.
+  const reward = document.getElementById('npc-reward');
+  if (!metNPCs.has(npc.name)) {
+    metNPCs.add(npc.name);
+    coins += npc.gift;
+    updateHud();
+    saveGame();
+    reward.textContent = `🌸 A gift! +${npc.gift} 💰`;
+    reward.classList.remove('hidden');
+    beep(700, 0.1, 0.1);
+    setTimeout(() => beep(950, 0.12, 0.16), 110);
+  } else {
+    reward.classList.add('hidden');
+  }
+
+  renderNpcLine();
+  showScreen('npc');
+}
+
+function renderNpcLine() {
+  document.getElementById('npc-text').textContent = currentNPC.lines[npcLineIdx];
+  const last = npcLineIdx >= currentNPC.lines.length - 1;
+  document.getElementById('npc-advance').textContent = last ? 'CLOSE ✓' : 'NEXT ▶';
   beep(440, 0.05, 0.06, 'sine');
-  setTimeout(() => beep(550, 0.05, 0.07, 'sine'), 80);
+  setTimeout(() => beep(550, 0.05, 0.07, 'sine'), 70);
+}
+
+function advanceNPC() {
+  document.getElementById('npc-reward').classList.add('hidden');
+  if (npcLineIdx >= currentNPC.lines.length - 1) { closeNPC(); return; }
+  npcLineIdx++;
+  renderNpcLine();
+}
+
+function closeNPC() {
+  currentNPC = null;
+  showScreen('world');
+  scheduleSpawn();
 }
 
 // Draw fixed collectibles (bobbing) and NPCs for the current zone.
@@ -2247,6 +2294,7 @@ function startNewGame() {
   caughtIds.clear();
   unlockedBarriers.clear();
   collected.clear();
+  metNPCs.clear();
   balls = 5;
   masterBalls = 0;
   coins = 0;
@@ -2281,6 +2329,7 @@ function saveGame() {
       caught:    [...caughtIds],
       barriers:  [...unlockedBarriers],
       collected: [...collected],
+      metNPCs:   [...metNPCs],
       roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
       zone:      currentZone,
       x:         playerX,
@@ -2304,6 +2353,7 @@ function loadSave() {
         caughtIds        = new Set(data.caught || []);
         unlockedBarriers = new Set(data.barriers || []);
         collected        = new Set(data.collected || []);
+        metNPCs          = new Set(data.metNPCs || []);
         loadedRoamers    = data.roamers || null;
         currentZone    = data.zone  ?? 0;
         playerX        = data.x    ?? 10;
@@ -2482,6 +2532,9 @@ function setupDebugMenu() {
   section('TELEPORT');
   ZONE_INFO.forEach(z => btn(z.name, () => dbgTeleport(z.id)));
 
+  section('MISC');
+  btn('Clear NPC visits', () => { metNPCs.clear(); });
+
   section('SAVE');
   btn('Save',  () => saveGame());
   btn('RESET game', () => { localStorage.removeItem(SAVE_KEY); startNewGame(); });
@@ -2489,6 +2542,20 @@ function setupDebugMenu() {
 
   document.body.appendChild(p);
   dbgPanel = p;
+
+  // Mobile-friendly toggle: a small floating button (the ` key works too).
+  const fab = document.createElement('button');
+  fab.id = 'debug-fab';
+  fab.textContent = '🐞';
+  Object.assign(fab.style, {
+    position: 'fixed', bottom: '6px', right: '6px', zIndex: '99998',
+    width: '34px', height: '34px', borderRadius: '50%',
+    border: '1px solid #46688c', background: 'rgba(20,30,48,0.7)',
+    color: '#fff', fontSize: '16px', cursor: 'pointer', lineHeight: '1',
+    padding: '0', touchAction: 'manipulation',
+  });
+  fab.addEventListener('click', e => { e.preventDefault(); toggleDebug(); });
+  document.body.appendChild(fab);
 }
 
 function toggleDebug() {

@@ -463,6 +463,47 @@ body {
 }
 
 /* ─── SHOP SCREEN ───────────────────────────────────── */
+/* ─── NPC DIALOG ────────────────────────────────────── */
+#npc-screen {
+  background: linear-gradient(180deg, #0e1428 0%, #182040 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 16px 14px;
+  gap: 8px;
+}
+#npc-emoji {
+  font-size: 52px;
+  line-height: 1;
+  animation: detailpop .3s ease-out;
+}
+#npc-name {
+  font-size: 9px;
+  color: #f8d060;
+  text-shadow: 1px 1px 0 #000;
+}
+#npc-bubble {
+  background: #f8f8f0;
+  color: #202028;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 7px;
+  line-height: 1.9;
+  max-width: 270px;
+  text-align: center;
+  position: relative;
+  border: 2px solid #c8c8d0;
+}
+#npc-bubble::after {
+  content: '';
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: #f8f8f0;
+}
+#npc-reward { font-size: 7px; color: #80e880; }
+#npc-buttons { margin-top: 4px; }
+
 #shop-screen {
   background: linear-gradient(180deg, #1a0a2a 0%, #2a1040 100%);
   align-items: center;
