@@ -506,7 +506,7 @@ function buildIce() {
 // ═══════════════════════════════════════════════════
 function bindEvents() {
   // Keyboard
-  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a' };
+  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start' };
   document.addEventListener('keydown', e => {
     keys[e.key] = true;
     wakeAudio();
@@ -577,12 +577,16 @@ function bindEvents() {
     el.addEventListener('pointerdown', e => { e.preventDefault(); kamiInput(name); wakeAudio(); });
     el.addEventListener('touchstart',  e => { e.preventDefault(); kamiInput(name); wakeAudio(); }, { passive: false });
   });
+
+  const startEl = document.getElementById('ss-start');
+  startEl.addEventListener('pointerdown', e => { kamiInput('start'); });
+  startEl.addEventListener('touchstart',  e => { kamiInput('start'); }, { passive: false });
 }
 
 // ═══════════════════════════════════════════════════
 // KAMI CODE  (↑ ↑ ↓ ↓ ← → ← → B A)
 // ═══════════════════════════════════════════════════
-const KAMI_CODE = ['up','up','down','down','left','right','left','right','b','a'];
+const KAMI_CODE = ['up','up','down','down','left','right','left','right','b','a','start'];
 
 function kamiInput(key) {
   kamiBuffer.push(key);
