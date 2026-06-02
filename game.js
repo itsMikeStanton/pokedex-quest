@@ -338,8 +338,12 @@ window.addEventListener('DOMContentLoaded', () => {
   canvas = document.getElementById('game-canvas');
   ctx    = canvas.getContext('2d');
 
-  // Prevent the whole page from scrolling on touch
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  // Prevent the whole page from scrolling on touch — but allow scrolling
+  // inside the Pokédex (its grid and detail panel scroll internally).
+  document.addEventListener('touchmove', e => {
+    if (e.target.closest && e.target.closest('#pokedex-grid, #pokedex-detail')) return;
+    e.preventDefault();
+  }, { passive: false });
 
   buildTileCache();
   loadSave();
@@ -350,16 +354,19 @@ window.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════
 // TILE CACHE
 // ═══════════════════════════════════════════════════
+// Each tile type caches an ARRAY of pre-rendered variants. Variants differ
+// by jittered detail and scattered natural decorations (flowers, pebbles,
+// shells, ripples...) so the world doesn't read as a rigid repeating grid.
 function buildTileCache() {
-  buildPath();
-  buildGrass();
-  buildTree();
-  buildWater();
-  buildSand();
-  buildCity();
-  buildShop();
-  buildLava();
-  buildIce();
+  buildVariants(T.PATH,  4, paintPath);
+  buildVariants(T.GRASS, 6, paintGrass);
+  buildVariants(T.TREE,  4, paintTree);
+  buildVariants(T.WATER, 4, paintWater);
+  buildVariants(T.SAND,  5, paintSand);
+  buildVariants(T.CITY,  3, paintCity);
+  buildVariants(T.SHOP,  1, paintShop);
+  buildVariants(T.LAVA,  4, paintLava);
+  buildVariants(T.ICE,   4, paintIce);
 }
 
 function makeTile() {
@@ -368,78 +375,163 @@ function makeTile() {
   return [c, c.getContext('2d')];
 }
 
-function buildPath() {
-  const [c, x] = makeTile();
+// Small deterministic PRNG so each variant is fixed across reloads.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildVariants(type, count, paint) {
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    const [c, x] = makeTile();
+    paint(x, mulberry32(0x9E3779B9 ^ (type * 131 + i)), i);
+    arr.push(c);
+  }
+  tileCache[type] = arr;
+}
+
+// Pick a stable variant index for a given map cell.
+function tileVariant(zone, r, c, n) {
+  let h = ((zone + 1) * 73856093) ^ ((r + 1) * 19349663) ^ ((c + 1) * 83492791);
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % n;
+}
+
+function paintPath(x, rng) {
   x.fillStyle = '#d0b068';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // jittered stone seams
   x.fillStyle = '#c0a050';
-  // subtle stone lines
-  x.fillRect(0, 15, TILE_SIZE, 1);
-  x.fillRect(16, 0, 1, 15);
+  const sy = 13 + Math.floor(rng() * 6);
+  x.fillRect(0, sy, TILE_SIZE, 1);
   x.fillRect(0, 31, TILE_SIZE, 1);
-  x.fillRect(8, 16, 1, 15);
-  tileCache[T.PATH] = c;
+  x.fillRect(12 + Math.floor(rng() * 10), 0, 1, sy);
+  x.fillRect(4 + Math.floor(rng() * 10), sy + 1, 1, TILE_SIZE - sy);
+  // scattered pebbles
+  const pebbles = Math.floor(rng() * 3);
+  for (let i = 0; i < pebbles; i++) {
+    x.fillStyle = rng() < 0.5 ? '#b89848' : '#dcc078';
+    x.beginPath();
+    x.arc(3 + rng() * 26, 3 + rng() * 26, 1 + rng() * 1.5, 0, Math.PI * 2);
+    x.fill();
+  }
 }
 
-function buildGrass() {
-  const [c, x] = makeTile();
+function paintGrass(x, rng) {
   x.fillStyle = '#38b038';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // soft patchy shading
+  x.fillStyle = 'rgba(40,144,42,0.45)';
+  for (let i = 0; i < 2; i++) {
+    x.beginPath();
+    x.ellipse(rng() * 32, rng() * 32, 5 + rng() * 6, 4 + rng() * 4, 0, 0, Math.PI * 2);
+    x.fill();
+  }
+  // blades
   x.fillStyle = '#28902a';
-  // grass blades
-  [[4,6],[10,2],[17,7],[24,3],[28,8]].forEach(([bx, by]) => {
-    x.fillRect(bx, by, 2, 7);
-    x.fillRect(bx+1, by-2, 2, 5);
-  });
-  tileCache[T.GRASS] = c;
+  const blades = 4 + Math.floor(rng() * 3);
+  for (let i = 0; i < blades; i++) {
+    const bx = 2 + Math.floor(rng() * 28);
+    const by = 4 + Math.floor(rng() * 22);
+    x.fillRect(bx, by, 2, 6);
+    x.fillRect(bx + 1, by - 2, 2, 4);
+  }
+  // occasional flower or pebble
+  const deco = rng();
+  if (deco < 0.33) {
+    const fx = 6 + Math.floor(rng() * 20);
+    const fy = 7 + Math.floor(rng() * 18);
+    x.fillStyle = ['#f8d030', '#f87090', '#ffffff', '#c878f0'][Math.floor(rng() * 4)];
+    x.fillRect(fx - 2, fy, 2, 2);
+    x.fillRect(fx + 2, fy, 2, 2);
+    x.fillRect(fx, fy - 2, 2, 2);
+    x.fillRect(fx, fy + 2, 2, 2);
+    x.fillStyle = '#ffe860';
+    x.fillRect(fx, fy, 2, 2);
+  } else if (deco < 0.5) {
+    x.fillStyle = '#9a9a86';
+    x.beginPath();
+    x.arc(6 + rng() * 20, 8 + rng() * 18, 2, 0, Math.PI * 2);
+    x.fill();
+  }
 }
 
-function buildTree() {
-  const [c, x] = makeTile();
+function paintTree(x, rng) {
   x.fillStyle = '#1a4018';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  // foliage circle
+  const ox = (rng() - 0.5) * 4;
+  const oy = (rng() - 0.5) * 3;
+  // foliage
   x.fillStyle = '#306830';
   x.beginPath();
-  x.arc(16, 14, 13, 0, Math.PI * 2);
+  x.arc(16 + ox, 14 + oy, 12 + rng() * 2, 0, Math.PI * 2);
   x.fill();
   x.fillStyle = '#204820';
   x.beginPath();
-  x.arc(11, 11, 7, 0, Math.PI * 2);
+  x.arc(11 + ox, 11 + oy, 6 + rng() * 2, 0, Math.PI * 2);
   x.fill();
+  // occasional fruit / sunlit leaf
+  if (rng() < 0.4) {
+    x.fillStyle = rng() < 0.5 ? '#e8d040' : '#3a8a3a';
+    x.beginPath();
+    x.arc(11 + rng() * 12, 9 + rng() * 9, 1.6, 0, Math.PI * 2);
+    x.fill();
+  }
   // trunk
   x.fillStyle = '#5a3010';
   x.fillRect(13, 25, 6, 7);
-  tileCache[T.TREE] = c;
 }
 
-function buildWater() {
-  const [c, x] = makeTile();
+function paintWater(x, rng) {
   x.fillStyle = '#2060d0';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   x.fillStyle = '#3880e8';
-  [[3,8,10,3],[16,18,8,3],[6,24,12,3]].forEach(([wx,wy,ww,wh]) => {
+  const ripples = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < ripples; i++) {
+    const ww = 6 + rng() * 8;
+    const wh = 2 + rng() * 2;
     x.beginPath();
-    x.ellipse(wx + ww/2, wy + wh/2, ww/2, wh/2, 0, 0, Math.PI * 2);
+    x.ellipse(2 + rng() * 26, 4 + rng() * 24, ww / 2, wh / 2, 0, 0, Math.PI * 2);
     x.fill();
-  });
-  tileCache[T.WATER] = c;
+  }
+  // sun glint
+  if (rng() < 0.4) {
+    x.fillStyle = '#bfe0ff';
+    x.fillRect(4 + Math.floor(rng() * 22), 4 + Math.floor(rng() * 22), 2, 2);
+  }
 }
 
-function buildSand() {
-  const [c, x] = makeTile();
+function paintSand(x, rng) {
   x.fillStyle = '#e8c870';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  // wavy highlight lines
+  // jittered wavy highlight lines
   x.fillStyle = '#d4b05a';
   [4, 9, 14, 20, 25].forEach(y => {
-    x.fillRect(0, y, TILE_SIZE, 1);
+    x.fillRect(0, y + (Math.floor(rng() * 5) - 2), TILE_SIZE, 1);
   });
-  tileCache[T.SAND] = c;
+  const deco = rng();
+  if (deco < 0.25) {
+    // little shell
+    x.fillStyle = '#f0a0b0';
+    x.beginPath();
+    x.arc(8 + rng() * 16, 9 + rng() * 14, 3, Math.PI, 0);
+    x.fill();
+  } else if (deco < 0.45) {
+    // pebble
+    x.fillStyle = '#c8a860';
+    x.beginPath();
+    x.arc(6 + rng() * 20, 6 + rng() * 20, 2, 0, Math.PI * 2);
+    x.fill();
+  }
 }
 
-function buildCity() {
-  const [c, x] = makeTile();
+function paintCity(x, rng) {
   x.fillStyle = '#909090';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   // grid slab lines
@@ -448,11 +540,14 @@ function buildCity() {
   x.fillRect(0, 31, TILE_SIZE, 1);
   x.fillRect(15, 0, 1, 15);
   x.fillRect(15, 16, 1, 15);
-  tileCache[T.CITY] = c;
+  // occasional crack / drain
+  if (rng() < 0.4) {
+    x.fillStyle = '#6a6a6a';
+    x.fillRect(4 + Math.floor(rng() * 22), 4 + Math.floor(rng() * 22), 3, 3);
+  }
 }
 
-function buildShop() {
-  const [c, x] = makeTile();
+function paintShop(x) {
   x.fillStyle = '#e8d0a8';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   // Awning
@@ -468,37 +563,35 @@ function buildShop() {
   // Sign
   x.font = '13px serif';
   x.fillText('🏪', 7, 14);
-  tileCache[T.SHOP] = c;
 }
 
-function buildLava() {
-  const [c, x] = makeTile();
+function paintLava(x, rng) {
   x.fillStyle = '#c83000';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   x.fillStyle = '#ff6820';
-  [[2,4,12,4],[18,2,8,3],[6,16,14,3],[20,22,8,4],[0,28,16,4]].forEach(([lx,ly,lw,lh]) => {
-    x.fillRect(lx, ly, lw, lh);
-  });
+  const flows = 4 + Math.floor(rng() * 2);
+  for (let i = 0; i < flows; i++) {
+    x.fillRect(Math.floor(rng() * 24), Math.floor(rng() * 28),
+               6 + Math.floor(rng() * 8), 3 + Math.floor(rng() * 2));
+  }
   x.fillStyle = '#ffd040';
-  [[8,8,3,2],[22,14,4,2],[14,24,3,2]].forEach(([lx,ly,lw,lh]) => {
-    x.fillRect(lx, ly, lw, lh);
-  });
-  tileCache[T.LAVA] = c;
+  for (let i = 0; i < 3; i++) {
+    x.fillRect(4 + Math.floor(rng() * 24), 4 + Math.floor(rng() * 24), 3, 2);
+  }
 }
 
-function buildIce() {
-  const [c, x] = makeTile();
+function paintIce(x, rng) {
   x.fillStyle = '#b8d8f0';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   x.fillStyle = '#e8f4ff';
-  [[0,10,16,2],[20,6,12,2],[8,20,20,2],[0,28,10,2],[24,24,8,2]].forEach(([lx,ly,lw,lh]) => {
-    x.fillRect(lx, ly, lw, lh);
-  });
+  for (let i = 0; i < 5; i++) {
+    x.fillRect(Math.floor(rng() * 20), Math.floor(rng() * 30),
+               8 + Math.floor(rng() * 12), 2);
+  }
   x.fillStyle = '#90c0e0';
-  [[4,4,6,6],[22,16,6,6],[10,26,6,4]].forEach(([lx,ly,lw,lh]) => {
-    x.fillRect(lx, ly, lw, lh);
-  });
-  tileCache[T.ICE] = c;
+  for (let i = 0; i < 3; i++) {
+    x.fillRect(Math.floor(rng() * 26), Math.floor(rng() * 26), 6, 4 + Math.floor(rng() * 2));
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -897,7 +990,9 @@ function drawWild(ts) {
   ctx.save();
   ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2);
   ctx.rotate(angle);
-  ctx.drawImage(tileCache[T.GRASS], -TILE_SIZE / 2, -TILE_SIZE / 2);
+  const grassVars = tileCache[T.GRASS];
+  ctx.drawImage(grassVars[tileVariant(currentZone, wildPoke.y, wildPoke.x, grassVars.length)],
+                -TILE_SIZE / 2, -TILE_SIZE / 2);
   ctx.restore();
 
   // Blink in final 2.5 s — every 300 ms
@@ -935,7 +1030,9 @@ function drawWorld(ts) {
   const endR   = Math.min(rows, startR + 16);
   for (let r = startR; r < endR; r++) {
     for (let c = startC; c < endC; c++) {
-      ctx.drawImage(tileCache[map[r][c]], c * TILE_SIZE - camX, r * TILE_SIZE - camY);
+      const variants = tileCache[map[r][c]];
+      const img = variants[tileVariant(currentZone, r, c, variants.length)];
+      ctx.drawImage(img, c * TILE_SIZE - camX, r * TILE_SIZE - camY);
     }
   }
   const zoneTints = {
@@ -1389,7 +1486,18 @@ function showDetail(poke) {
   document.getElementById('detail-number').textContent = `#${String(poke.id).padStart(3, '0')}`;
   document.getElementById('detail-type').textContent   = poke.type;
   document.getElementById('detail-type').style.background = typeColor(poke.type);
+
+  document.getElementById('detail-category').textContent =
+    poke.category ? `${poke.category} Pokémon` : '';
+  document.getElementById('detail-height').textContent =
+    poke.height != null ? `${poke.height.toFixed(1)} m`  : '—';
+  document.getElementById('detail-weight').textContent =
+    poke.weight != null ? `${poke.weight.toFixed(1)} kg` : '—';
+
   document.getElementById('detail-desc').textContent   = poke.description;
+
+  document.getElementById('detail-befriend-icon').textContent = poke.actionEmoji || '💚';
+  document.getElementById('detail-befriend-text').textContent = poke.befriendTip || '';
 }
 
 function closeDetail() {
