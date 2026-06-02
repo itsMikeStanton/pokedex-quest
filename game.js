@@ -587,8 +587,13 @@ function bindEvents() {
 // KAMI CODE  (↑ ↑ ↓ ↓ ← → ← → B A)
 // ═══════════════════════════════════════════════════
 const KAMI_CODE = ['up','up','down','down','left','right','left','right','b','a','start'];
+let _kamiLastKey = null, _kamiLastTime = 0;
 
 function kamiInput(key) {
+  const now = Date.now();
+  if (key === _kamiLastKey && now - _kamiLastTime < 150) return; // dedupe touch+pointer double-fire
+  _kamiLastKey = key;
+  _kamiLastTime = now;
   kamiBuffer.push(key);
   if (kamiBuffer.length > KAMI_CODE.length) kamiBuffer.shift();
   if (kamiBuffer.join(',') === KAMI_CODE.join(',')) activateKami();
