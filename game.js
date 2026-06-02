@@ -86,7 +86,7 @@ const EDGE_ROUTES = {
   '0-5': [[250, 18], [50, 18]],
 };
 
-const GRASS_PICKUP_CHANCE = 0.12; // 12% per grass step to find a ball or coin
+const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coin
 
 // ═══════════════════════════════════════════════════
 // PROCEDURAL ZONE LAYOUTS
@@ -333,20 +333,20 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 20, lines: [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 40, lines: [
     'Welcome to the Lukeymon lands, friend!',
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     'Some paths are blocked. Catch the right type, then WALK INTO the barrier to clear it!',
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 15, lines: [
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, lines: [
     'Keeping the city safe, trainer.',
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 15, lines: [
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, lines: [
     'Waves are perfect today, dude!',
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 30, lines: [
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, lines: [
     '...you wandered this deep into the forest? Impressive.',
     'Collect every badge AND every Lukeymon, and you will be a true master.',
   ] },
@@ -1157,9 +1157,9 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // Random grass pickup — 12% chance to find a ball or coin
+  // Random grass pickup — chance to find a ball (more common) or a coin
   if (tile === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
-    if (Math.random() < 0.5) {
+    if (Math.random() < 0.6) {
       balls++;
       showMessage(`<span class="pb"></span> Found a PokéBall! (${balls} total)`);
       beep(660, 0.1, 0.08);
@@ -1748,10 +1748,13 @@ function throwBall() {
   setTimeout(() => caught(), 1600);
 }
 
+const NEW_CATCH_BOUNTY = 5; // coins awarded for each newly-discovered species
+
 function caught() {
   const isNew  = !caughtIds.has(currentPoke.id);
   const legend = currentLegend;
   caughtIds.add(currentPoke.id);
+  if (isNew) coins += NEW_CATCH_BOUNTY;   // reward discovering a new species
   if (legend) {                       // remove the captured roamer from the world
     roamers = roamers.filter(r => r !== legend);
     currentLegend = null;
@@ -1768,7 +1771,7 @@ function caught() {
                                                                  : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = isNew
-    ? 'Added to your PokéDex!'
+    ? `Added to your PokéDex!  +${NEW_CATCH_BOUNTY} 💰`
     : 'Already in your PokéDex — great job anyway!';
 
   const rs = document.getElementById('result-screen');
@@ -2297,7 +2300,7 @@ function startNewGame() {
   unlockedBarriers.clear();
   collected.clear();
   metNPCs.clear();
-  balls = 5;
+  balls = 12;
   masterBalls = 0;
   coins = 0;
   loadedRoamers = null;
