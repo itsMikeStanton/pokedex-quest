@@ -597,7 +597,7 @@ function move(dx, dy, ts) {
       setTimeout(() => beep(880, 0.1, 0.1), 90);
     } else {
       coins++;
-      showMessage(`🪙 Found a coin!  (${coins} total)`);
+      showMessage(`💰 Found a coin!  (${coins} total)`);
       beep(880, 0.08, 0.08);
       setTimeout(() => beep(1100, 0.08, 0.08), 90);
     }
