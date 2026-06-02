@@ -588,7 +588,7 @@ function move(dx, dy, ts) {
   if (tile === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
     if (Math.random() < 0.5) {
       balls++;
-      showMessage(`🔴 Found a PokéBall! (${balls} total)`);
+      showMessage(`<span class="pb"></span> Found a PokéBall! (${balls} total)`);
       beep(660, 0.1, 0.08);
       setTimeout(() => beep(880, 0.1, 0.1), 90);
     } else {
@@ -1144,9 +1144,9 @@ function showScreen(id) {
   if (id !== 'encounter') gameState = id;
 }
 
-function showMessage(text) {
+function showMessage(html) {
   const box = document.getElementById('message-box');
-  document.getElementById('message-text').textContent = text;
+  document.getElementById('message-text').innerHTML = html;
   box.classList.remove('hidden');
   clearTimeout(showMessage._t);
   showMessage._t = setTimeout(() => box.classList.add('hidden'), 3000);

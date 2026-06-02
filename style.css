@@ -258,6 +258,28 @@ body {
   border: 2px solid #111;
 }
 
+/* ─── Inline PokéBall icon (matches throw-ball art) ── */
+.pb {
+  display: inline-block;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #e02020 0%, #e02020 46%, #282828 46%, #282828 54%, #f0f0f0 54%);
+  border: 1.5px solid #111;
+  vertical-align: middle;
+  position: relative;
+  flex-shrink: 0;
+}
+.pb::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #111;
+}
+
 @keyframes ball-fly {
   0%   { transform: translateX(-50%) translateY(0px)     rotate(0deg)   scale(1);   opacity: 1; }
   100% { transform: translateX(-50%) translateY(-210px)  rotate(720deg) scale(0.45); opacity: 0.1; }
