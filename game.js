@@ -2022,7 +2022,8 @@ function choosePokemon(poke, card) {
   } else {
     card.classList.add('wrong');
     beep(160, 0.15, 0.2, 'square');
-    setTimeout(battleLost, 800);
+    // Wrong type — it charges in but bounces off Mewtwo, flashing, then Mewtwo escapes.
+    battleBounce(poke, battleLost);
   }
 }
 
@@ -2085,6 +2086,64 @@ function battleThud(stage, mR, sR) {
   boom.style.top  = Math.round((mR.top  - sR.top)  + mR.height / 2) + 'px';
   stage.appendChild(boom);
   setTimeout(() => boom.remove(), 460);
+}
+
+// Wrong pick: the Pokémon charges up, gets repelled by Mewtwo and tumbles back
+// down flashing red, then onDone (Mewtwo escapes).
+function battleBounce(poke, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const mew   = document.getElementById('battle-mewtwo');
+  const atk = document.createElement('div');
+  atk.className = 'battle-attacker';
+  atk.appendChild(pokeImg(poke, 108));
+  stage.appendChild(atk);
+
+  if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
+
+  requestAnimationFrame(() => {
+    const sR = stage.getBoundingClientRect();
+    const mR = mew.getBoundingClientRect();
+    const aR = atk.getBoundingClientRect();
+    const startX = sR.width / 2 - aR.width / 2;
+    const startY = sR.height - aR.height - 16;
+    atk.style.left = Math.round(startX) + 'px';
+    atk.style.top  = Math.round(startY) + 'px';
+    const hitY = (mR.top - sR.top) + mR.height * 0.5 - aR.height / 2;
+    const dy = hitY - startY;            // negative → up toward Mewtwo
+    const DUR = 1150;
+    const NORMAL = 'drop-shadow(0 5px 6px rgba(0,0,0,.55))';
+    const REDLIT = 'brightness(1.9) drop-shadow(0 0 12px #ff5050)';
+    const REDDIM = 'brightness(1) drop-shadow(0 0 6px #ff3030)';
+    const anim = atk.animate([
+      { transform: 'translateY(46px) scale(0.5)',  opacity: 0, filter: NORMAL, offset: 0, easing: 'ease-out' },
+      { transform: 'translateY(0) scale(1)',        opacity: 1, filter: NORMAL, offset: 0.13 },                  // pops in…
+      { transform: 'translateY(0) scale(1)',        opacity: 1, filter: NORMAL, offset: 0.46, easing: 'cubic-bezier(.6,0,.95,.35)' }, // …holds, then charges
+      { transform: `translateY(${dy}px) scale(1.05)`,            opacity: 1,    filter: REDLIT, offset: 0.57 },  // hits the shield
+      { transform: `translateY(${dy * 0.45}px) scale(0.92) rotate(-14deg)`, opacity: 0.2, filter: REDDIM, offset: 0.65, easing: 'ease-out' }, // bounces back, flash off
+      { transform: `translateY(${dy * 0.12}px) scale(1) rotate(11deg)`,     opacity: 1,   filter: REDLIT, offset: 0.74 }, // flash on
+      { transform: 'translateY(42px) scale(0.85) rotate(-6deg)',            opacity: 0.2, filter: REDDIM, offset: 0.86 }, // flash off
+      { transform: 'translateY(82px) scale(0.55) rotate(0)',               opacity: 0,   filter: REDDIM, offset: 1 },     // tumbles away
+    ], { duration: DUR, easing: 'linear' });
+
+    setTimeout(() => { mewtwoRepel(mew); battleRepelSound(); }, Math.round(DUR * 0.57));
+    anim.onfinish = () => { atk.remove(); onDone && onDone(); };
+  });
+}
+
+// Mewtwo shrugs off a wrong pick with a purple shield pulse.
+function mewtwoRepel(mew) {
+  if (!mew.animate) return;
+  mew.animate([
+    { transform: 'scale(1)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)' },
+    { transform: 'scale(1.12)', filter: 'brightness(1.6) drop-shadow(0 0 24px #c060ff)' },
+    { transform: 'scale(1)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)' },
+  ], { duration: 380, easing: 'ease-out' });
+}
+
+function battleRepelSound() {
+  beep(190, 0.10, 0.18, 'square');
+  setTimeout(() => beep(120, 0.12, 0.22, 'square'), 120);
+  setTimeout(() => beep(85,  0.16, 0.32, 'square'), 260);
 }
 
 function battleWon() {
