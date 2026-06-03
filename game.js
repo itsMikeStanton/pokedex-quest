@@ -346,6 +346,7 @@ let petX        = 10;
 let petY        = 7;
 let petFromPx   = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let petMoveAnimTs = -9999;
+let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
 let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
 let surfNoted   = false;  // shown the "you can surf" hint this session yet?
 
@@ -861,6 +862,8 @@ function petFollow(tx, ty, ts) {
   const cur = getPetRenderPos(ts);
   petFromPx.x = cur.x;
   petFromPx.y = cur.y;
+  if (tx > petX) petFacing = 1;        // moving right
+  else if (tx < petX) petFacing = -1;  // moving left → flip; vertical keeps last facing
   petX = tx; petY = ty;
   petMoveAnimTs = ts;
 }
@@ -1426,15 +1429,33 @@ function drawPet(ts) {
   const px = rp.x - camX, py = rp.y - camY;
   const img = canvasSprite(poke);
   if (img.complete && img.naturalWidth) {
-    const h = 24, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    // Slightly oversized (taller than a tile) so the buddy reads clearly.
+    const h = 34, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    const dx = Math.round(px + (TILE_SIZE - w) / 2);
+    const dy = Math.round(py + TILE_SIZE - h + 4);
     const prev = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, Math.round(px + (TILE_SIZE - w) / 2), Math.round(py + TILE_SIZE - h), w, h);
+    if (petFacing === -1) {           // flip horizontally to face left
+      ctx.save();
+      ctx.translate(dx + w, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, dx, dy, w, h);
+    }
     ctx.imageSmoothingEnabled = prev;
   } else {
-    ctx.font = '20px serif';
+    ctx.font = '24px serif';
     ctx.textAlign = 'center';
-    ctx.fillText(poke.emoji, px + TILE_SIZE / 2, py + TILE_SIZE - 4);
+    ctx.save();
+    if (petFacing === -1) {
+      ctx.translate(px + TILE_SIZE, 0); ctx.scale(-1, 1);
+      ctx.fillText(poke.emoji, TILE_SIZE / 2, py + TILE_SIZE - 2);
+    } else {
+      ctx.fillText(poke.emoji, px + TILE_SIZE / 2, py + TILE_SIZE - 2);
+    }
+    ctx.restore();
   }
 }
 
