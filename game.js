@@ -1983,6 +1983,7 @@ function closeMap() {
 function renderMap() {
   const open = reachableZones();
   document.getElementById('map-open-count').textContent = open.size;
+  document.getElementById('map-total').textContent = ZONE_INFO.length;
 
   // Cell centres in the 400×400 SVG viewBox (4×4 grid → 100px cells).
   const cx = id => (ZONE_MAP[id].col - 0.5) * 100;
