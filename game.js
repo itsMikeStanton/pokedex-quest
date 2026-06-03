@@ -1312,6 +1312,14 @@ function closeNPC() {
   scheduleSpawn();
 }
 
+// Cached Image objects for drawing sprites onto the canvas (pixelated).
+const _canvasSprites = {};
+function canvasSprite(poke) {
+  let img = _canvasSprites[poke.id];
+  if (!img) { img = new Image(); img.src = poke.sprite; _canvasSprites[poke.id] = img; }
+  return img;
+}
+
 // Draw fixed collectibles (bobbing) and NPCs for the current zone.
 function drawEntities(ts) {
   const bob = Math.sin(ts * 0.005) * 3;
@@ -1333,17 +1341,26 @@ function drawEntities(ts) {
     ctx.font = '22px serif';
     ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
   }
-  // Roaming legendaries — larger, with an aura of sparkles.
+  // Roaming legendaries — drawn with their real sprite, with an aura of sparkles.
   for (const r of roamers) {
     if (r.zone !== currentZone) continue;
     const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
     const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
     const py = r.y * TILE_SIZE - camY;
     ctx.font = '13px serif';
-    ctx.fillText('✨', px - 12, py + 6 + bob);
-    ctx.fillText('✨', px + 12, py + 2 - bob);
-    ctx.font = '26px serif';
-    ctx.fillText(poke.emoji, px, py + 24 + bob);
+    ctx.fillText('✨', px - 14, py + 4 + bob);
+    ctx.fillText('✨', px + 14, py - 2 - bob);
+    const img = canvasSprite(poke);
+    if (img.complete && img.naturalWidth) {
+      const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+      const prev = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
+      ctx.imageSmoothingEnabled = prev;
+    } else {
+      ctx.font = '26px serif';
+      ctx.fillText(poke.emoji, px, py + 24 + bob);
+    }
   }
 }
 
@@ -1369,17 +1386,33 @@ function drawWild(ts) {
   // Blink in final 2.5 s — every 300 ms
   if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
 
-  // A red "!" alert sits centred ON the rustling grass tile.
-  const cx = px + TILE_SIZE / 2;
-  const ty = py + 5;   // 22px-tall mark centred in the 32px tile
+  // A red "!" alert, centred ON the rustling grass tile. It pops in on appear
+  // (scale overshoot + drop) then idles with a gentle bob.
+  const elapsed = WILD_TIMEOUT - remaining;
+  const POP = 280;
+  let scale, yoff;
+  if (elapsed < POP) {
+    const t = elapsed / POP;
+    const c1 = 1.70158, c3 = c1 + 1;            // easeOutBack
+    scale = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    yoff  = -10 * (1 - t);                        // drops down into place
+  } else {
+    scale = 1;
+    yoff  = Math.sin(ts * 0.006) * 1.5;          // gentle idle bob
+  }
+
+  ctx.save();
+  ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2 + yoff);
+  ctx.scale(scale, scale);
   // dark outline
   ctx.fillStyle = '#1a1a1a';
-  ctx.fillRect(cx - 4, ty - 1, 8, 15);
-  ctx.fillRect(cx - 4, ty + 15, 8, 8);
+  ctx.fillRect(-4, -12, 8, 15);
+  ctx.fillRect(-4, 4, 8, 8);
   // red fill
   ctx.fillStyle = '#e81028';
-  ctx.fillRect(cx - 3, ty, 6, 13);
-  ctx.fillRect(cx - 3, ty + 16, 6, 6);
+  ctx.fillRect(-3, -11, 6, 13);
+  ctx.fillRect(-3, 5, 6, 6);
+  ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1868,6 +1901,7 @@ function startMewtwoBattle(roamer) {
   document.getElementById('battle-win').classList.add('hidden');
   document.getElementById('battle-options').classList.remove('hidden');
   document.getElementById('battle-instruction').classList.remove('hidden');
+  setPokeDisplay(document.getElementById('battle-mewtwo'), currentPoke, 80); // real art
   showScreen('battle');
   playEncounterJingle();
   nextBattleRound();
