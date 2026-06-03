@@ -315,6 +315,18 @@ function nearestWalkable(zone, x, y) {
 
 const MAPS = buildAllZones();
 
+// Apply any hand-authored maps from editor.html (maps.js → CUSTOM_MAPS),
+// using a custom zone only when its dimensions match; procedural otherwise.
+if (typeof CUSTOM_MAPS !== 'undefined' && CUSTOM_MAPS) {
+  for (let z = 0; z < MAPS.length; z++) {
+    const cm = CUSTOM_MAPS[z];
+    const { cols, rows } = ZONE_INFO[z];
+    if (Array.isArray(cm) && cm.length === rows && Array.isArray(cm[0]) && cm[0].length === cols) {
+      MAPS[z] = cm.map(row => row.slice());
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════
 // COLLECTIBLES (badges) & NPCs
 // ═══════════════════════════════════════════════════
@@ -2718,6 +2730,7 @@ function setupDebugMenu() {
 
   section('MISC');
   btn('Clear NPC visits', () => { metNPCs.clear(); });
+  btn('Copy map JSON', () => dbgCopyMaps());
 
   section('SAVE');
   btn('Save',  () => saveGame());
@@ -2773,6 +2786,18 @@ function dbgSummon(legend) {
   caughtIds.delete(poke.id);
   const [x, y] = nearestOpenTile(currentZone, playerX + 1, playerY);
   roamers.push({ legend, pokeId: poke.id, zone: currentZone, x, y });
+}
+
+// Dump the current maps as JSON (paste into editor.html → Import to seed it).
+function dbgCopyMaps() {
+  let s = '{\n';
+  for (let z = 0; z < MAPS.length; z++) {
+    s += `  "${z}": [\n` + MAPS[z].map(r => '    [' + r.join(',') + ']').join(',\n') +
+         '\n  ]' + (z < MAPS.length - 1 ? ',' : '') + '\n';
+  }
+  s += '}';
+  if (navigator.clipboard) navigator.clipboard.writeText(s).catch(() => {});
+  showMessage('🗺️ Current map JSON copied — paste into the editor');
 }
 
 function dbgTeleport(zone) {
