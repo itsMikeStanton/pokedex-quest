@@ -52,15 +52,9 @@ const ZONE_MAP = {};
   });
 })();
 
-// Most connections are straight lines between adjacent tiles. Meadow↔Dark
-// Forest is the exception: the two zones sit on the same row with Highlands
-// between them (the world graph is non-planar), so a straight line would run
-// through Highlands and read as a fake connection. Route it over the top
-// instead — waypoints are in the 400×400 SVG viewBox, clear of every node and
-// connector. Keyed by "minId-maxId".
-const EDGE_ROUTES = {
-  '0-5': [[250, 18], [50, 18]],
-};
+// Optional elbow routing for mini-map connectors, keyed by "minId-maxId".
+// Empty now that the world is planar — straight lines never cross a node.
+const EDGE_ROUTES = {};
 
 const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coin
 
