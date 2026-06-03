@@ -625,7 +625,7 @@ function paintBoulder(x, rng) {
 // ═══════════════════════════════════════════════════
 function bindEvents() {
   // Keyboard
-  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start' };
+  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start', Shift:'select' };
   document.addEventListener('keydown', e => {
     if (e.target && e.target.tagName === 'INPUT') return; // don't hijack text fields
     keys[e.key] = true;
@@ -639,8 +639,6 @@ function bindEvents() {
       if (gameState === 'world') openMap();
       else if (gameState === 'map') closeMap();
     }
-    // Backtick (`) toggles the debug menu.
-    if (e.key === '`' || e.key === '~') { e.preventDefault(); toggleDebug(); }
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -728,12 +726,20 @@ function bindEvents() {
   const startEl = document.getElementById('ss-start');
   startEl.addEventListener('pointerdown', e => { kamiInput('start'); });
   startEl.addEventListener('touchstart',  e => { kamiInput('start'); }, { passive: false });
+
+  const selectEl = document.getElementById('ss-select');
+  selectEl.addEventListener('pointerdown', e => { kamiInput('select'); });
+  selectEl.addEventListener('touchstart',  e => { kamiInput('select'); }, { passive: false });
 }
 
 // ═══════════════════════════════════════════════════
-// KAMI CODE  (↑ ↑ ↓ ↓ ← → ← → B A)
+// SECRET CODES  (shared input buffer, checked as suffixes)
+//   KAMI  : ↑ ↑ ↓ ↓ ← → ← → B A Start  → catch everything
+//   DEBUG : A B B A Select Start        → toggle the debug menu
 // ═══════════════════════════════════════════════════
-const KAMI_CODE = ['up','up','down','down','left','right','left','right','b','a','start'];
+const KAMI_CODE  = ['up','up','down','down','left','right','left','right','b','a','start'];
+const DEBUG_CODE = ['a','b','b','a','select','start'];
+const CODE_MAX   = Math.max(KAMI_CODE.length, DEBUG_CODE.length);
 let _kamiLastKey = null, _kamiLastTime = 0;
 
 function kamiInput(key) {
@@ -742,8 +748,10 @@ function kamiInput(key) {
   _kamiLastKey = key;
   _kamiLastTime = now;
   kamiBuffer.push(key);
-  if (kamiBuffer.length > KAMI_CODE.length) kamiBuffer.shift();
-  if (kamiBuffer.join(',') === KAMI_CODE.join(',')) activateKami();
+  if (kamiBuffer.length > CODE_MAX) kamiBuffer.shift();
+  const endsWith = code => kamiBuffer.slice(-code.length).join(',') === code.join(',');
+  if (endsWith(KAMI_CODE))  { kamiBuffer = []; activateKami(); }
+  else if (endsWith(DEBUG_CODE)) { kamiBuffer = []; toggleDebug(); }
 }
 
 function activateKami() {
@@ -2537,20 +2545,8 @@ function setupDebugMenu() {
 
   document.body.appendChild(p);
   dbgPanel = p;
-
-  // Mobile-friendly toggle: a small floating button (the ` key works too).
-  const fab = document.createElement('button');
-  fab.id = 'debug-fab';
-  fab.textContent = '🐞';
-  Object.assign(fab.style, {
-    position: 'fixed', bottom: '6px', right: '6px', zIndex: '99998',
-    width: '34px', height: '34px', borderRadius: '50%',
-    border: '1px solid #46688c', background: 'rgba(20,30,48,0.7)',
-    color: '#fff', fontSize: '16px', cursor: 'pointer', lineHeight: '1',
-    padding: '0', touchAction: 'manipulation',
-  });
-  fab.addEventListener('click', e => { e.preventDefault(); toggleDebug(); });
-  document.body.appendChild(fab);
+  // No visible toggle — the menu is opened with the secret code: A B B A Select Start
+  // (keyboard: X Z Z X Shift Enter). See kamiInput / DEBUG_CODE.
 }
 
 function toggleDebug() {
