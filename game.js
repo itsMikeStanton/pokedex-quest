@@ -14,7 +14,6 @@ const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
 const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11 };
-const LAPRAS_ID = 131;   // catching Lapras lets the player cross water (surf)
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
@@ -32,13 +31,13 @@ const EXITS = WORLD.exits;
 const PORTALS = WORLD.portals || [];
 
 const BARRIERS = {
-  log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       cleared: '🔥 Your Fire Pokémon burns away the logs!',      sign: '🔥' },
-  rock:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to wash these rocks!',     cleared: '💧 Your Water Pokémon washes the rocks aside!',  sign: '💧' },
-  fence: { needsType: 'Electric', hint: 'Catch a ⚡ Electric Pokémon to short the fence!',   cleared: '⚡ Your Electric Pokémon shorts out the fence!', sign: '⚡' },
-  lava:  { needsType: 'Water',    hint: 'Catch a 💧 Water Pokémon to cool the lava flow!',   cleared: '💧 Your Water Pokémon cools the lava flow!',     sign: '💧' },
-  vine:  { needsType: 'Grass',    hint: 'Catch a 🌿 Grass Pokémon to cut through the vines!', cleared: '🌿 Your Grass Pokémon cuts through the vines!',  sign: '🌿' },
-  frost: { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to melt the ice wall!',     cleared: '🔥 Your Fire Pokémon melts the ice wall!',       sign: '🔥' },
-  sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', cleared: '🌍 Your Ground Pokémon clears the sand wall!',   sign: '🌍' },
+  log:   { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to burn these logs!',       cleared: '🔥 Your Fire buddy burns away the logs!',      sign: '🔥' },
+  rock:  { needsType: 'Water',    hint: 'Bring a 💧 Water Pokémon as your buddy to wash these rocks!',     cleared: '💧 Your Water buddy washes the rocks aside!',  sign: '💧' },
+  fence: { needsType: 'Electric', hint: 'Bring a ⚡ Electric Pokémon as your buddy to short the fence!',   cleared: '⚡ Your Electric buddy shorts out the fence!', sign: '⚡' },
+  lava:  { needsType: 'Water',    hint: 'Bring a 💧 Water Pokémon as your buddy to cool the lava flow!',   cleared: '💧 Your Water buddy cools the lava flow!',     sign: '💧' },
+  vine:  { needsType: 'Grass',    hint: 'Bring a 🌿 Grass Pokémon as your buddy to cut through the vines!', cleared: '🌿 Your Grass buddy cuts through the vines!',  sign: '🌿' },
+  frost: { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to melt the ice wall!',     cleared: '🔥 Your Fire buddy melts the ice wall!',       sign: '🔥' },
+  sand:  { needsType: 'Ground',   hint: 'Bring a 🌍 Ground Pokémon as your buddy to clear the sand wall!', cleared: '🌍 Your Ground buddy clears the sand wall!',   sign: '🌍' },
 };
 
 // World-map layout: schematic grid position + icon per zone, from world.js.
@@ -909,13 +908,19 @@ function isBarrierUnlocked(key) {
   return !key || unlockedBarriers.has(key);
 }
 
-// Whether the player currently has a caught Pokémon of the given type.
-function playerHasType(type) {
-  return POKEMON_DATA.some(p => p.type === type && caughtIds.has(p.id));
+// The Pokémon currently set as the active buddy (or null).
+function buddyPoke() {
+  return activePet == null ? null : POKEMON_DATA.find(p => p.id === activePet) || null;
+}
+// Whether the active BUDDY is of the given type. Barriers/surfing need the right
+// type out front, not merely caught somewhere in the box.
+function buddyHasType(type) {
+  const p = buddyPoke();
+  return !!p && p.type === type;
 }
 
-// Caught Lapras? Then the player can ride across water tiles.
-function canSurf() { return caughtIds.has(LAPRAS_ID); }
+// A Water-type buddy (Lapras, Squirtle, …) lets the player surf across water.
+function canSurf() { return buddyHasType('Water'); }
 
 // Does the current buddy glow brightly enough to light a cave? Fire types carry
 // a flame; a few others (marked light:true) also shine.
@@ -1000,7 +1005,7 @@ function move(dx, dy, ts) {
   if (barrierKey) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    if (playerHasType(BARRIERS[barrierKey].needsType)) {
+    if (buddyHasType(BARRIERS[barrierKey].needsType)) {
       unlockedBarriers.add(barrierKey);
       saveGame();
       beep(523, 0.1, 0.1);
@@ -1059,7 +1064,8 @@ function move(dx, dy, ts) {
   // First time surfing this session — let the player know what's happening.
   if (surfing && !surfNoted) {
     surfNoted = true;
-    showMessage('🌊 Lapras carries you across the water!');
+    const b = buddyPoke();
+    showMessage(`🌊 ${b ? b.name : 'Your buddy'} carries you across the water!`);
   }
 
   // Step onto a cave mouth (or other point-portal) → warp into the linked zone.
