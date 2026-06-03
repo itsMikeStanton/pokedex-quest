@@ -49,6 +49,7 @@
 <body>
 <header>
   <h1>🌍 LUKEYMON WORLD EDITOR</h1>
+  <button class="btn" id="mode-btn" style="background:#243a5a;border-color:#406088">🗺 Atlas</button>
   <div class="tabs" id="tabs"></div>
   <span class="status" id="zone-status"></span>
 </header>
@@ -125,6 +126,36 @@
     </div>
   </div>
 </main>
+
+<section id="atlas" style="display:none; padding:12px;">
+  <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+    <div class="canvas-wrap" id="atlas-wrap" style="flex:1; min-width:340px; max-height:82vh;">
+      <canvas id="atlas-canvas"></canvas>
+    </div>
+    <div class="col right">
+      <div class="panel">
+        <h2>Atlas — build real geometry</h2>
+        <p class="legend">
+          <b>Drag</b> a zone to position it on the true world grid. <b>Click a seam</b>
+          (green edge where two zones touch) to add/remove an aligned passage.
+        </p>
+        <div class="row" style="margin-top:8px">
+          <label>New passage barrier</label>
+          <select id="atlas-barrier"></select>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>Door width</label><input class="sm" id="atlas-width" value="3">
+          <button class="btn" id="atlas-zoomout">−</button><button class="btn" id="atlas-zoomin">+</button>
+        </div>
+        <p class="hint" style="margin-top:6px">Overlaps are outlined red. Connections drawn as lines.</p>
+      </div>
+      <div class="panel">
+        <h2>Consistency</h2>
+        <div id="atlas-report" class="legend"></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <script src="world.js"></script>
 <script>
@@ -434,9 +465,189 @@ window.addEventListener('keydown', e => {
   if (e.key === 'b') { tool='paint'; syncTools(); }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// ATLAS — true world geometry: place zones, find seams, make passages
+// ═══════════════════════════════════════════════════════════════
+let atlasMode = false, aScale = 5, aDrag = null;
+const aCanvas = document.getElementById('atlas-canvas'), aCtx = aCanvas.getContext('2d');
+
+// Give every zone a world position (wx,wy) if it lacks one — packed in rows.
+function ensureCoords() {
+  let cx = 0, cy = 0, rowH = 0; const MAXW = 90, PAD = 2;
+  world.zones.forEach(z => {
+    if (z.wx == null || z.wy == null) {
+      if (cx + z.cols > MAXW) { cx = 0; cy += rowH + PAD; rowH = 0; }
+      z.wx = cx; z.wy = cy; cx += z.cols + PAD; rowH = Math.max(rowH, z.rows);
+    }
+  });
+}
+const overlaps = (a, b) => a.wx < b.wx + b.cols && b.wx < a.wx + a.cols && a.wy < b.wy + b.rows && b.wy < a.wy + a.rows;
+
+// Shared-edge seam between two zones (touching, perpendicular ranges overlap).
+function seamBetween(a, b) {
+  if (a.wx + a.cols === b.wx || b.wx + b.cols === a.wx) {
+    const left = (a.wx + a.cols === b.wx) ? a : b, right = (left === a) ? b : a;
+    const lo = Math.max(a.wy, b.wy), hi = Math.min(a.wy + a.rows, b.wy + b.rows);
+    if (hi > lo) return { orient: 'v', left, right, lo, hi, at: right.wx };
+  }
+  if (a.wy + a.rows === b.wy || b.wy + b.rows === a.wy) {
+    const top = (a.wy + a.rows === b.wy) ? a : b, bot = (top === a) ? b : a;
+    const lo = Math.max(a.wx, b.wx), hi = Math.min(a.wx + a.cols, b.wx + b.cols);
+    if (hi > lo) return { orient: 'h', top, bot, lo, hi, at: bot.wy };
+  }
+  return null;
+}
+function allSeams() {
+  const out = [];
+  for (let i = 0; i < world.zones.length; i++)
+    for (let j = i + 1; j < world.zones.length; j++) {
+      const s = seamBetween(world.zones[i], world.zones[j]); if (s) out.push(s);
+    }
+  return out;
+}
+const passageExists = (a, b) => world.exits.some(e =>
+  (e.from === a.id && e.to === b.id) || (e.from === b.id && e.to === a.id));
+
+// Create an aligned exit pair across a seam (default narrow centred door).
+function makeDoorway(seam, barrier, width) {
+  if (seam.orient === 'v') {
+    const { left, right } = seam;
+    const lo = Math.max(seam.lo, left.wy + 1, right.wy + 1);
+    const hi = Math.min(seam.hi, left.wy + left.rows - 1, right.wy + right.rows - 1);
+    if (hi <= lo) return null;
+    const center = Math.floor((lo + hi) / 2), w = Math.min(width, hi - lo);
+    const start = Math.max(lo, center - Math.floor(w / 2));
+    const rows = []; for (let y = start; y < Math.min(hi, start + w); y++) rows.push(y);
+    const L = rows.map(y => y - left.wy), R = rows.map(y => y - right.wy);
+    const mL = L[Math.floor(L.length / 2)], mR = R[Math.floor(R.length / 2)];
+    return [
+      { from: left.id, dir: 'east', pos: L, to: right.id, entryX: 1, entryY: mR, barrier: barrier || null, seam: true },
+      { from: right.id, dir: 'west', pos: R, to: left.id, entryX: left.cols - 2, entryY: mL, barrier: null, seam: true },
+    ];
+  } else {
+    const { top, bot } = seam;
+    const lo = Math.max(seam.lo, top.wx + 1, bot.wx + 1);
+    const hi = Math.min(seam.hi, top.wx + top.cols - 1, bot.wx + bot.cols - 1);
+    if (hi <= lo) return null;
+    const center = Math.floor((lo + hi) / 2), w = Math.min(width, hi - lo);
+    const start = Math.max(lo, center - Math.floor(w / 2));
+    const cols = []; for (let x = start; x < Math.min(hi, start + w); x++) cols.push(x);
+    const Tc = cols.map(x => x - top.wx), Bc = cols.map(x => x - bot.wx);
+    const mT = Tc[Math.floor(Tc.length / 2)], mB = Bc[Math.floor(Bc.length / 2)];
+    return [
+      { from: top.id, dir: 'south', pos: Tc, to: bot.id, entryX: mB, entryY: 1, barrier: barrier || null, seam: true },
+      { from: bot.id, dir: 'north', pos: Bc, to: top.id, entryX: mT, entryY: top.rows - 2, barrier: null, seam: true },
+    ];
+  }
+}
+
+function worldBounds() {
+  let w = 1, h = 1;
+  world.zones.forEach(z => { w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
+  return { w: w + 4, h: h + 4 };
+}
+function renderAtlas() {
+  const B = worldBounds();
+  aCanvas.width = B.w * aScale; aCanvas.height = B.h * aScale;
+  aCtx.fillStyle = '#0c0c14'; aCtx.fillRect(0, 0, aCanvas.width, aCanvas.height);
+  // grid
+  aCtx.strokeStyle = 'rgba(255,255,255,.04)'; aCtx.lineWidth = 1;
+  for (let x = 0; x <= B.w; x += 5) { aCtx.beginPath(); aCtx.moveTo(x*aScale,0); aCtx.lineTo(x*aScale,B.h*aScale); aCtx.stroke(); }
+  for (let y = 0; y <= B.h; y += 5) { aCtx.beginPath(); aCtx.moveTo(0,y*aScale); aCtx.lineTo(B.w*aScale,y*aScale); aCtx.stroke(); }
+  // connection lines (zone centre to zone centre)
+  aCtx.strokeStyle = '#3a8a4a'; aCtx.lineWidth = 2;
+  const drawn = new Set();
+  world.exits.forEach(e => {
+    const k = Math.min(e.from,e.to)+'-'+Math.max(e.from,e.to); if (drawn.has(k)) return; drawn.add(k);
+    const a = world.zones[e.from], b = world.zones[e.to]; if(!a||!b) return;
+    aCtx.beginPath();
+    aCtx.moveTo((a.wx+a.cols/2)*aScale,(a.wy+a.rows/2)*aScale);
+    aCtx.lineTo((b.wx+b.cols/2)*aScale,(b.wy+b.rows/2)*aScale); aCtx.stroke();
+  });
+  // zones
+  world.zones.forEach(z => {
+    const x=z.wx*aScale, y=z.wy*aScale, w=z.cols*aScale, h=z.rows*aScale;
+    aCtx.fillStyle = (COLOR[z.base] || '#555') + 'cc'; aCtx.fillRect(x,y,w,h);
+    aCtx.strokeStyle = '#000'; aCtx.lineWidth = 1; aCtx.strokeRect(x+.5,y+.5,w,h);
+    aCtx.fillStyle = '#fff'; aCtx.font = '11px sans-serif'; aCtx.textAlign='center'; aCtx.textBaseline='middle';
+    aCtx.fillText(z.name, x+w/2, y+h/2);
+  });
+  // overlaps
+  aCtx.lineWidth = 2;
+  for (let i=0;i<world.zones.length;i++) for (let j=i+1;j<world.zones.length;j++){
+    const a=world.zones[i],b=world.zones[j];
+    if (overlaps(a,b)) { aCtx.strokeStyle='#ff3040';
+      [a,b].forEach(z=>aCtx.strokeRect(z.wx*aScale+1,z.wy*aScale+1,z.cols*aScale-2,z.rows*aScale-2)); }
+  }
+  // seams
+  allSeams().forEach(s => {
+    aCtx.lineWidth = 3;
+    const has = passageExists(s.left||s.top, s.right||s.bot);
+    aCtx.strokeStyle = has ? '#f8d030' : '#40e0a0';
+    aCtx.beginPath();
+    if (s.orient==='v') { aCtx.moveTo(s.at*aScale, s.lo*aScale); aCtx.lineTo(s.at*aScale, s.hi*aScale); }
+    else { aCtx.moveTo(s.lo*aScale, s.at*aScale); aCtx.lineTo(s.hi*aScale, s.at*aScale); }
+    aCtx.stroke();
+  });
+  renderReport();
+}
+function renderReport() {
+  const el = document.getElementById('atlas-report'); const issues = [];
+  for (let i=0;i<world.zones.length;i++) for (let j=i+1;j<world.zones.length;j++)
+    if (overlaps(world.zones[i],world.zones[j])) issues.push(`⚠ <b>${world.zones[i].name}</b> overlaps <b>${world.zones[j].name}</b>`);
+  world.exits.forEach(e => {
+    const rev = world.exits.some(r => r.from===e.to && r.to===e.from);
+    if (!rev) issues.push(`↩ <b>${world.zones[e.from]?.name}</b>→${world.zones[e.to]?.name} has no return exit`);
+  });
+  el.innerHTML = issues.length ? issues.join('<br>') : '✅ No overlaps; every exit has a return.';
+}
+// atlas interaction
+function aCell(ev){ const r=aCanvas.getBoundingClientRect(); return { x:(ev.clientX-r.left)/aScale, y:(ev.clientY-r.top)/aScale }; }
+function zoneAtPoint(p){ for(let i=world.zones.length-1;i>=0;i--){const z=world.zones[i]; if(p.x>=z.wx&&p.x<z.wx+z.cols&&p.y>=z.wy&&p.y<z.wy+z.rows) return z;} return null; }
+function seamAtPoint(p){ const TOL=1.2; for(const s of allSeams()){ if(s.orient==='v'){ if(Math.abs(p.x-s.at)<TOL && p.y>=s.lo && p.y<=s.hi) return s; } else { if(Math.abs(p.y-s.at)<TOL && p.x>=s.lo && p.x<=s.hi) return s; } } return null; }
+aCanvas.addEventListener('pointerdown', e => {
+  const p = aCell(e); const seam = seamAtPoint(p);
+  if (seam) { toggleSeam(seam); return; }
+  const z = zoneAtPoint(p); if (z) aDrag = { z, ox: p.x - z.wx, oy: p.y - z.wy };
+});
+aCanvas.addEventListener('pointermove', e => {
+  if (!aDrag) return; const p = aCell(e);
+  aDrag.z.wx = Math.max(0, Math.round(p.x - aDrag.ox));
+  aDrag.z.wy = Math.max(0, Math.round(p.y - aDrag.oy));
+  renderAtlas();
+});
+window.addEventListener('pointerup', () => { if (aDrag) { aDrag = null; save(); } });
+function toggleSeam(seam) {
+  const A = seam.left || seam.top, Bz = seam.right || seam.bot;
+  if (passageExists(A, Bz)) {
+    if (!confirm('Remove the passage between these zones?')) return;
+    world.exits = world.exits.filter(e => !((e.from===A.id&&e.to===Bz.id)||(e.from===Bz.id&&e.to===A.id)));
+  } else {
+    const bar = document.getElementById('atlas-barrier').value || null;
+    const w = Math.max(1, +document.getElementById('atlas-width').value || 3);
+    const pair = makeDoorway(seam, bar, w);
+    if (!pair) { alert('Seam too short for a door here — make the overlap bigger or move zones.'); return; }
+    world.exits.push(...pair);
+    // re-carve both zones so the openings are walkable
+    rewall(A, gridOf(A)); rewall(Bz, gridOf(Bz));
+  }
+  save(); renderAtlas();
+}
+function setMode(atlas) {
+  atlasMode = atlas;
+  document.querySelector('main').style.display = atlas ? 'none' : '';
+  document.getElementById('atlas').style.display = atlas ? '' : '';
+  document.getElementById('mode-btn').textContent = atlas ? '🧱 Zones' : '🗺 Atlas';
+  if (atlas) { ensureCoords(); const bs=document.getElementById('atlas-barrier'); bs.innerHTML=''; BARRIERS.forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b?`${b} (${BARRIER_ELEM[b]})`:'no barrier';bs.appendChild(o);}); renderAtlas(); save(); }
+  else refresh();
+}
+document.getElementById('mode-btn').onclick = () => setMode(!atlasMode);
+document.getElementById('atlas-zoomin').onclick = () => { aScale=Math.min(14,aScale+1); renderAtlas(); };
+document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aScale-1); renderAtlas(); };
+
 // ── boot ────────────────────────────────────────────────────────
 function refresh() { renderTabs(); renderZonePanel(); renderExits(); render(); }
-loadWorld(); renderPalette(); syncTools(); refresh();
+loadWorld(); ensureCoords(); renderPalette(); syncTools(); refresh();
 </script>
 </body>
 </html>
