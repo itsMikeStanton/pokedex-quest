@@ -2048,27 +2048,31 @@ function battleAttack(poke, onDone) {
     atk.style.top  = Math.round(startY) + 'px';
     const hitY = (mR.top - sR.top) + mR.height * 0.45 - aR.height / 2;
     const dy = hitY - startY;            // negative → moves up toward Mewtwo
+    const DUR = 1150;
     const anim = atk.animate([
-      { transform: 'translateY(46px) scale(0.5)',        opacity: 0 },
-      { transform: 'translateY(0) scale(1)',             opacity: 1, offset: 0.22 },
-      { transform: `translateY(${dy}px) scale(1.06)`,    opacity: 1, offset: 0.5 },
-      { transform: `translateY(${dy + 24}px) scale(1)`,  opacity: 1, offset: 0.64 },  // bump back
-      { transform: 'translateY(24px) scale(0.7)',        opacity: 0 },
-    ], { duration: 780, easing: 'ease-in-out' });
+      { transform: 'translateY(46px) scale(0.5)',       opacity: 0, offset: 0,    easing: 'ease-out' },
+      { transform: 'translateY(0) scale(1)',            opacity: 1, offset: 0.13 },                       // pops in…
+      { transform: 'translateY(0) scale(1)',            opacity: 1, offset: 0.48, easing: 'cubic-bezier(.6,0,.95,.35)' }, // …holds so you see it, then snaps
+      { transform: `translateY(${dy}px) scale(1.1)`,    opacity: 1, offset: 0.62 },  // SLAM into Mewtwo
+      { transform: `translateY(${dy + 22}px) scale(1)`, opacity: 1, offset: 0.71 },  // recoil back
+      { transform: 'translateY(24px) scale(0.7)',       opacity: 0, offset: 1 },
+    ], { duration: DUR, easing: 'linear' });
 
-    setTimeout(() => { mewtwoRecoil(mew); battleThud(stage, mR, sR); }, 250);
+    setTimeout(() => { mewtwoRecoil(mew); battleThud(stage, mR, sR); }, Math.round(DUR * 0.60));
     anim.onfinish = () => { atk.remove(); onDone && onDone(); };
   });
 }
 
 function mewtwoRecoil(mew) {
   if (!mew.animate) return;
+  // shake + a double white flash, like taking a hit
   mew.animate([
-    { transform: 'translate(0,0)' },
-    { transform: 'translate(-3px,-10px) rotate(-5deg)' },
-    { transform: 'translate(3px,-3px) rotate(4deg)' },
-    { transform: 'translate(0,0)' },
-  ], { duration: 340, easing: 'ease-out' });
+    { transform: 'translate(0,0)',                      filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 0 },
+    { transform: 'translate(-3px,-10px) rotate(-5deg)', filter: 'brightness(4) drop-shadow(0 0 18px #fff)',    offset: 0.16 },
+    { transform: 'translate(3px,-3px) rotate(4deg)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 0.34 },
+    { transform: 'translate(-2px,-4px) rotate(-2deg)',  filter: 'brightness(4) drop-shadow(0 0 18px #fff)',    offset: 0.5 },
+    { transform: 'translate(0,0)',                      filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 1 },
+  ], { duration: 440, easing: 'ease-out' });
 }
 
 function battleThud(stage, mR, sR) {
