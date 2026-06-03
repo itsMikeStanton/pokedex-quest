@@ -18,9 +18,9 @@ const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAV
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
-// Zone tile layouts are generated procedurally (organic, seeded) from
-// ZONE_SPECS below — see buildAllZones(). MAPS is populated after the
-// ZONE / EXIT / BARRIER data it depends on.
+// Zone tile layouts are hand-authored in editor.html and stored in maps.js
+// (CUSTOM_MAPS). MAPS is built from them below, after the ZONE / EXIT / BARRIER
+// data it depends on.
 
 // ═══════════════════════════════════════════════════
 // ZONE / EXIT / BARRIER DATA
@@ -89,212 +89,27 @@ const EDGE_ROUTES = {
 const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coin
 
 // ═══════════════════════════════════════════════════
-// PROCEDURAL ZONE LAYOUTS
+// ZONE MAPS
 // ═══════════════════════════════════════════════════
-// Each zone is grown organically from a base terrain plus scattered,
-// irregular clusters of obstacles/hazards and tall-grass spawn patches —
-// no mirrored rectangles. Generation is seeded (stable across reloads) and
-// validated for connectivity so every exit and grass patch stays reachable.
+// Tile ids per cell come from maps.js (CUSTOM_MAPS), authored in editor.html.
 const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 
-const ZONE_SPECS = [
-  // 0 Meadow — grassy fields, tree copses, a pond.
-  { base: T.PATH, shop: true, minGrass: 22,
-    features: [ { tile: T.TREE, blobs: 7, min: 3, max: 7 },
-                { tile: T.WATER, blobs: 2, min: 6, max: 12 } ],
-    grass: { blobs: 7, min: 4, max: 9 } },
-  // 1 Beach — sand around one big connected lake, with palm clumps.
-  { base: T.SAND, minGrass: 46, oneBody: T.WATER,
-    features: [ { tile: T.WATER, cluster: true, spread: 3, blobs: 7, min: 14, max: 24 },
-                { tile: T.TREE, blobs: 6, min: 3, max: 6 } ],
-    grass: { blobs: 14, min: 4, max: 9 } },
-  // 2 City — paved ground with scattered building/planter blocks.
-  { base: T.CITY, minGrass: 14,
-    features: [ { tile: T.TREE, blobs: 8, min: 3, max: 7 } ],
-    grass: { blobs: 5, min: 3, max: 6 } },
-  // 3 Highlands — rolling ground, rocky copses, a tarn.
-  { base: T.PATH, minGrass: 22,
-    features: [ { tile: T.TREE, blobs: 8, min: 3, max: 7 },
-                { tile: T.WATER, blobs: 1, min: 5, max: 9 } ],
-    grass: { blobs: 7, min: 4, max: 8 } },
-  // 4 Volcano — ground broken by lava flows and rock.
-  { base: T.PATH, minGrass: 28,
-    features: [ { tile: T.LAVA, blobs: 6, min: 4, max: 10 },
-                { tile: T.TREE, blobs: 6, min: 2, max: 5 } ],
-    grass: { blobs: 9, min: 3, max: 7 } },
-  // 5 Dark Forest — dense, irregular tree cover.
-  { base: T.PATH, minGrass: 36,
-    features: [ { tile: T.TREE, blobs: 18, min: 3, max: 8 } ],
-    grass: { blobs: 12, min: 4, max: 8 } },
-  // 6 Ice Cave — frozen ground slabs and rock.
-  { base: T.PATH, minGrass: 20,
-    features: [ { tile: T.ICE, blobs: 6, min: 4, max: 9 },
-                { tile: T.TREE, blobs: 4, min: 2, max: 5 } ],
-    grass: { blobs: 7, min: 3, max: 7 } },
-  // 7 Desert — open sand with rock outcrops.
-  { base: T.SAND, minGrass: 42,
-    features: [ { tile: T.TREE, blobs: 12, min: 2, max: 6 } ],
-    grass: { blobs: 14, min: 4, max: 8 } },
-];
-
-// Cells that must stay walkable & connected: border openings (+ the cell
-// just inside), player landing tiles, and (zone 0) the start + shop.
-function zoneAnchors(zoneId, cols, rows) {
-  const cells = [], inward = [];
-  EXITS.filter(e => e.from === zoneId).forEach(e => {
-    e.pos.forEach(p => {
-      if      (e.dir === 'south') { cells.push([p, rows - 1]); inward.push([p, rows - 2]); }
-      else if (e.dir === 'north') { cells.push([p, 0]);        inward.push([p, 1]); }
-      else if (e.dir === 'west')  { cells.push([0, p]);        inward.push([1, p]); }
-      else                        { cells.push([cols - 1, p]); inward.push([cols - 2, p]); }
-    });
-  });
-  EXITS.filter(e => e.to === zoneId).forEach(e => cells.push([e.entryX, e.entryY]));
-  if (zoneId === 0) { cells.push([10, 7]); cells.push([10, 5]); } // start + shop
-  return { cells, inward };
-}
-
-// Paint a rounded, slightly irregular cluster of `tile` over `base` cells,
-// centred on (cx,cy). `size` is the approximate area (cells), so blobs read
-// as compact groupings rather than thin tendrils.
-function paintBlob(grid, tile, cols, rows, cx, cy, size, rng, prot, base) {
-  const radius = Math.max(1, Math.sqrt(size / Math.PI));
-  const reach  = Math.ceil(radius + 1.5);
-  for (let dy = -reach; dy <= reach; dy++)
-    for (let dx = -reach; dx <= reach; dx++) {
-      const x = cx + dx, y = cy + dy;
-      if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue;
-      if (prot.has(y * cols + x) || grid[y][x] !== base) continue;
-      // Per-cell wobble on the edge keeps the outline organic, not a disc.
-      if (Math.hypot(dx, dy) <= radius * (0.72 + rng() * 0.5)) grid[y][x] = tile;
-    }
-}
-
-// Find a random interior cell still on the base terrain (and not protected).
-function pickCenter(grid, cols, rows, rng, prot, base) {
-  for (let t = 0; t < 60; t++) {
-    const x = 1 + Math.floor(rng() * (cols - 2));
-    const y = 1 + Math.floor(rng() * (rows - 2));
-    if (grid[y][x] === base && !prot.has(y * cols + x)) return [x, y];
-  }
-  return null;
-}
-
-// Scatter a feature as several rounded clusters. When `cluster` is set the
-// clusters share a jittered centre so they overlap into one larger body
-// (used for the Beach lake).
-function scatterFeature(grid, f, cols, rows, rng, prot, base) {
-  const sz = () => f.min + Math.floor(rng() * (f.max - f.min + 1));
-  if (f.cluster) {
-    const c = pickCenter(grid, cols, rows, rng, prot, base);
-    if (!c) return;
-    const spread = f.spread ?? 2;
-    for (let b = 0; b < f.blobs; b++) {
-      const x = Math.max(1, Math.min(cols - 2, c[0] + Math.round((rng() - 0.5) * 2 * spread)));
-      const y = Math.max(1, Math.min(rows - 2, c[1] + Math.round((rng() - 0.5) * 2 * spread)));
-      paintBlob(grid, f.tile, cols, rows, x, y, sz(), rng, prot, base);
-    }
-  } else {
-    for (let b = 0; b < f.blobs; b++) {
-      const c = pickCenter(grid, cols, rows, rng, prot, base);
-      if (c) paintBlob(grid, f.tile, cols, rows, c[0], c[1], sz(), rng, prot, base);
-    }
-  }
-}
-
-function generateZoneLayout(zoneId, seed) {
-  const rng = mulberry32(seed);
+// Fallback for a zone missing/mismatched in CUSTOM_MAPS: a blank walkable
+// field ringed by trees, with the exit openings carved out.
+function blankZone(zoneId) {
   const { cols, rows } = ZONE_INFO[zoneId];
-  const spec = ZONE_SPECS[zoneId];
-  const base = spec.base;
-  const grid = Array.from({ length: rows }, () => new Array(cols).fill(base));
-
-  // Border wall, openings carved by anchors below.
-  for (let c = 0; c < cols; c++) { grid[0][c] = T.TREE; grid[rows - 1][c] = T.TREE; }
-  for (let r = 0; r < rows; r++) { grid[r][0] = T.TREE; grid[r][cols - 1] = T.TREE; }
-
-  const prot = new Set();
-  const { cells, inward } = zoneAnchors(zoneId, cols, rows);
-  [...cells, ...inward].forEach(([x, y]) => { grid[y][x] = base; prot.add(y * cols + x); });
-
-  for (const f of spec.features) scatterFeature(grid, f, cols, rows, rng, prot, base);
-  scatterFeature(grid, { tile: T.GRASS, ...spec.grass }, cols, rows, rng, prot, base);
-
-  if (spec.shop) grid[5][10] = T.SHOP;
-  return grid;
-}
-
-function floodWalkable(grid, cols, rows, sx, sy) {
-  const seen = new Set([sy * cols + sx]);
-  const stack = [[sx, sy]];
-  while (stack.length) {
-    const [x, y] = stack.pop();
-    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-      const id = ny * cols + nx;
-      if (seen.has(id) || !isWalkableTile(grid[ny][nx])) continue;
-      seen.add(id);
-      stack.push([nx, ny]);
-    }
-  }
-  return seen;
-}
-
-// Count the connected components made of `tile` (4-connectivity).
-function tileComponents(grid, cols, rows, tile) {
-  const seen = new Set();
-  let comps = 0;
-  for (let y = 0; y < rows; y++)
-    for (let x = 0; x < cols; x++) {
-      if (grid[y][x] !== tile || seen.has(y * cols + x)) continue;
-      comps++;
-      const stack = [[x, y]];
-      seen.add(y * cols + x);
-      while (stack.length) {
-        const [a, b] = stack.pop();
-        for (const [na, nb] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) {
-          if (na < 0 || na >= cols || nb < 0 || nb >= rows) continue;
-          const id = nb * cols + na;
-          if (seen.has(id) || grid[nb][na] !== tile) continue;
-          seen.add(id);
-          stack.push([na, nb]);
-        }
-      }
-    }
-  return comps;
-}
-
-function zoneIsValid(grid, zoneId) {
-  const { cols, rows } = ZONE_INFO[zoneId];
-  const spec = ZONE_SPECS[zoneId];
-  const { cells } = zoneAnchors(zoneId, cols, rows);
-  const seen = floodWalkable(grid, cols, rows, cells[0][0], cells[0][1]);
-  for (const [x, y] of cells) if (!seen.has(y * cols + x)) return false;
-  let grass = 0;
-  for (let y = 0; y < rows; y++)
-    for (let x = 0; x < cols; x++)
-      if (grid[y][x] === T.GRASS) {
-        if (!seen.has(y * cols + x)) return false;
-        grass++;
-      }
-  if (grass < spec.minGrass) return false;
-  // A zone may require a feature to form a single body (e.g. the Beach lake).
-  if (spec.oneBody != null && tileComponents(grid, cols, rows, spec.oneBody) > 1) return false;
-  return true;
-}
-
-function buildAllZones() {
-  return ZONE_INFO.map((z, zoneId) => {
-    let last = null;
-    for (let attempt = 0; attempt < 250; attempt++) {
-      const seed = (0x5EED * (zoneId + 1) + attempt * 0x9E3779B1) >>> 0;
-      last = generateZoneLayout(zoneId, seed);
-      if (zoneIsValid(last, zoneId)) return last;
-    }
-    return last; // extremely unlikely; ship the best effort
-  });
+  const g = Array.from({ length: rows }, () => new Array(cols).fill(T.PATH));
+  for (let c = 0; c < cols; c++) { g[0][c] = T.TREE; g[rows - 1][c] = T.TREE; }
+  for (let r = 0; r < rows; r++) { g[r][0] = T.TREE; g[r][cols - 1] = T.TREE; }
+  EXITS.filter(e => e.from === zoneId).forEach(e => e.pos.forEach(p => {
+    if      (e.dir === 'south') g[rows - 1][p] = T.PATH;
+    else if (e.dir === 'north') g[0][p]        = T.PATH;
+    else if (e.dir === 'west')  g[p][0]        = T.PATH;
+    else                        g[p][cols - 1] = T.PATH;
+  }));
+  return g;
 }
 
 // Find the nearest walkable cell to (x,y) — used to rescue a saved player
@@ -313,19 +128,14 @@ function nearestWalkable(zone, x, y) {
   return [x, y];
 }
 
-const MAPS = buildAllZones();
-
-// Apply any hand-authored maps from editor.html (maps.js → CUSTOM_MAPS),
-// using a custom zone only when its dimensions match; procedural otherwise.
-if (typeof CUSTOM_MAPS !== 'undefined' && CUSTOM_MAPS) {
-  for (let z = 0; z < MAPS.length; z++) {
-    const cm = CUSTOM_MAPS[z];
-    const { cols, rows } = ZONE_INFO[z];
-    if (Array.isArray(cm) && cm.length === rows && Array.isArray(cm[0]) && cm[0].length === cols) {
-      MAPS[z] = cm.map(row => row.slice());
-    }
-  }
-}
+// Built straight from the authored layouts (maps.js → CUSTOM_MAPS); a zone is
+// used only when its dimensions match, otherwise it falls back to a blank zone.
+const MAPS = ZONE_INFO.map((z, zoneId) => {
+  const cm = (typeof CUSTOM_MAPS !== 'undefined' && CUSTOM_MAPS) ? CUSTOM_MAPS[zoneId] : null;
+  if (Array.isArray(cm) && cm.length === z.rows && Array.isArray(cm[0]) && cm[0].length === z.cols)
+    return cm.map(row => row.slice());
+  return blankZone(zoneId);
+});
 
 // ═══════════════════════════════════════════════════
 // COLLECTIBLES (badges) & NPCs
