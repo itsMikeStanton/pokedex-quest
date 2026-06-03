@@ -1220,7 +1220,9 @@ function clearWild() {
 }
 
 function spawnWild() {
-  if (gameState !== 'world') return;
+  // Not in the overworld (menu/encounter)? Try again later — never let the
+  // spawn loop die.
+  if (gameState !== 'world') { scheduleSpawn(); return; }
 
   clearWild();
 
@@ -1367,10 +1369,9 @@ function drawWild(ts) {
   // Blink in final 2.5 s — every 300 ms
   if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
 
-  // A red "!" alert floats above the rustling grass (classic encounter cue).
-  const bob = Math.sin(ts * 0.005) * 3;
+  // A red "!" alert sits centred ON the rustling grass tile.
   const cx = px + TILE_SIZE / 2;
-  const ty = py - 24 + bob;
+  const ty = py + 5;   // 22px-tall mark centred in the 32px tile
   // dark outline
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(cx - 4, ty - 1, 8, 15);
@@ -2021,6 +2022,7 @@ function buyMaster(cost) {
 // POKÉDEX
 // ═══════════════════════════════════════════════════
 function openPokedex() {
+  clearTimeout(spawnTimerId);
   renderPokedexGrid();
   document.getElementById('pokedex-detail').classList.add('hidden');
   document.getElementById('pokedex-grid').classList.remove('hidden');
@@ -2029,6 +2031,7 @@ function openPokedex() {
 
 function closePokedex() {
   showScreen('world');
+  scheduleSpawn();
 }
 
 function renderPokedexGrid() {
@@ -2112,12 +2115,14 @@ function reachableZones() {
 }
 
 function openMap() {
+  clearTimeout(spawnTimerId);
   renderMap();
   showScreen('map');
 }
 
 function closeMap() {
   showScreen('world');
+  scheduleSpawn();
 }
 
 function renderMap() {
