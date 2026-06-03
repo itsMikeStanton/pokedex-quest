@@ -785,9 +785,9 @@ body {
   line-height: 1.9;
 }
 #detail-buddy {
-  margin-top: 10px;
+  margin: 4px 0 2px;
   font-size: 7px;
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 #detail-buddy.is-buddy {
   background: #3a2c10;
