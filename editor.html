@@ -75,6 +75,7 @@
     <div class="panel">
       <h2>Zone</h2>
       <div class="tools">
+        <button class="btn" id="load-maps">↻ Load from maps.js</button>
         <button class="btn warn" id="reset-zone">Reset to base+exits</button>
       </div>
       <div class="legend" style="margin-top:8px">
@@ -112,9 +113,10 @@
   </div>
 </main>
 
+<script src="maps.js"></script>
 <script>
 // ── Embedded game data (keep in sync with game.js) ──────────────
-const T = { PATH:0, GRASS:1, TREE:2, WATER:3, SAND:4, CITY:5, SHOP:6, LAVA:7, ICE:8 };
+const T = { PATH:0, GRASS:1, TREE:2, WATER:3, SAND:4, CITY:5, SHOP:6, LAVA:7, ICE:8, BOULDER:9 };
 const ZONE_INFO = [
   { name:'Meadow', cols:20, rows:14 },
   { name:'Beach',  cols:20, rows:35 },
@@ -153,6 +155,7 @@ const TILES = [
   { id:T.SHOP,  name:'Shop',  color:'#d02060' },
   { id:T.LAVA,  name:'Lava',  color:'#d83810' },
   { id:T.ICE,   name:'Ice',   color:'#b8d8f0' },
+  { id:T.BOULDER, name:'Boulder', color:'#6a6a74' },
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
 const LS_KEY = 'lukeymon_editor_v1';
@@ -183,15 +186,29 @@ function freshZone(z) {
   return g;
 }
 
+// Pull a zone from the game's actual maps.js (CUSTOM_MAPS) if available.
+function fromCustom(z) {
+  if (typeof CUSTOM_MAPS === 'undefined' || !CUSTOM_MAPS) return null;
+  const g = CUSTOM_MAPS[z];
+  const { cols, rows } = ZONE_INFO[z];
+  return (Array.isArray(g) && g.length === rows && Array.isArray(g[0]) && g[0].length === cols)
+    ? g.map(r => r.slice()) : null;
+}
+// Priority: your in-progress editor work (localStorage) → the real maps.js → blank.
 function loadAll() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-    for (let z = 0; z < 8; z++) {
-      const { cols, rows } = ZONE_INFO[z];
-      const g = saved[z];
-      grids[z] = (Array.isArray(g) && g.length === rows && g[0].length === cols) ? g : freshZone(z);
-    }
-  } catch (_) { for (let z = 0; z < 8; z++) grids[z] = freshZone(z); }
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (_) {}
+  for (let z = 0; z < 8; z++) {
+    const { cols, rows } = ZONE_INFO[z];
+    const s = saved[z];
+    grids[z] = (Array.isArray(s) && s.length === rows && s[0].length === cols)
+      ? s : (fromCustom(z) || freshZone(z));
+  }
+}
+function loadFromMaps() {
+  if (!confirm('Reload all zones from the game’s maps.js? Unsaved editor changes are lost.')) return;
+  for (let z = 0; z < 8; z++) grids[z] = fromCustom(z) || freshZone(z);
+  saveAll(); render(); renderTabs(); exportJSON();
 }
 function saveAll() { localStorage.setItem(LS_KEY, JSON.stringify(grids)); }
 
@@ -321,6 +338,7 @@ document.querySelectorAll('[data-brush]').forEach(b => b.onclick = () => {
 document.getElementById('zoom-in').onclick  = () => { cell = Math.min(40, cell+4); render(); };
 document.getElementById('zoom-out').onclick = () => { cell = Math.max(8, cell-4); render(); };
 document.getElementById('ov').onchange = e => { overlays = e.target.checked; render(); };
+document.getElementById('load-maps').onclick = loadFromMaps;
 document.getElementById('reset-zone').onclick = () => {
   if (confirm('Reset ' + ZONE_INFO[zone].name + ' to a blank base with borders & exits?')) {
     grids[zone] = freshZone(zone); saveAll(); render();
@@ -330,7 +348,7 @@ document.getElementById('reset-zone').onclick = () => {
 // keyboard: number keys pick tiles, [ ] switch zones
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'TEXTAREA') return;
-  if (e.key >= '0' && e.key <= '8') { sel = +e.key; tool='paint'; syncTools(); renderPalette(); }
+  if (e.key >= '0' && e.key <= '9') { sel = +e.key; tool='paint'; syncTools(); renderPalette(); }
   if (e.key === '[') { zone = (zone+7)%8; renderTabs(); render(); }
   if (e.key === ']') { zone = (zone+1)%8; renderTabs(); render(); }
   if (e.key === 'f' || e.key === 'F') { tool='fill'; syncTools(); }

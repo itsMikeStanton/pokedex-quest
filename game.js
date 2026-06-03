@@ -13,7 +13,7 @@ const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9 };
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
@@ -92,7 +92,7 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
 // Tile ids per cell come from maps.js (CUSTOM_MAPS), authored in editor.html.
-const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE]);
+const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE, T.BOULDER]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 
@@ -406,6 +406,7 @@ function buildTileCache() {
   buildVariants(T.SHOP,  1, paintShop);
   buildVariants(T.LAVA,  4, paintLava);
   buildVariants(T.ICE,   4, paintIce);
+  buildVariants(T.BOULDER, 3, paintBoulder);
 }
 
 function makeTile() {
@@ -630,6 +631,22 @@ function paintIce(x, rng) {
   x.fillStyle = '#90c0e0';
   for (let i = 0; i < 3; i++) {
     x.fillRect(Math.floor(rng() * 26), Math.floor(rng() * 26), 6, 4 + Math.floor(rng() * 2));
+  }
+}
+
+// Boulder — solid impassable grey stones.
+function paintBoulder(x, rng) {
+  x.fillStyle = '#4c4c54';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  const rocks = [[9, 10, 16], [21, 20, 13], [22, 7, 11], [7, 23, 11]];
+  for (const [bx, by, d] of rocks) {
+    const cx = bx + (rng() - 0.5) * 3, cy = by + (rng() - 0.5) * 3;
+    x.fillStyle = '#74747e';
+    x.beginPath(); x.arc(cx, cy, d / 2, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#9a9aa6';   // highlight
+    x.beginPath(); x.arc(cx - d / 6, cy - d / 6, d / 4, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#34343c';   // shadow
+    x.beginPath(); x.arc(cx + d / 5, cy + d / 5, d / 6, 0, Math.PI * 2); x.fill();
   }
 }
 
