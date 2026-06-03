@@ -188,6 +188,79 @@ body {
   margin-top: 4px;
 }
 
+/* ─── SAVE SLOTS / NAME ENTRY ───────────────────────── */
+#slot-screen, #name-screen {
+  background: linear-gradient(160deg, #0a2a0a 0%, #184018 60%, #0a1a2a 100%);
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+}
+#slot-title, #name-title {
+  font-size: 11px;
+  color: #f8d030;
+  text-shadow: 2px 2px 0 #000;
+  margin-bottom: 4px;
+}
+#slot-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 280px; }
+.slot-card {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.slot-info {
+  flex: 1;
+  background: rgba(0,0,0,.4);
+  border: 2px solid #3a7a3a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background .1s, border-color .1s;
+}
+.slot-info:hover { background: rgba(40,90,40,.6); border-color: #58c858; }
+.slot-card.empty .slot-info { border-color: #406080; border-style: dashed; }
+.slot-name { font-size: 8px; color: #f8f8e8; }
+.slot-prog { font-size: 6px; color: #a0d8a0; margin-top: 5px; }
+.slot-card.empty .slot-prog { color: #6080a0; }
+.slot-erase {
+  position: relative;
+  width: 34px;
+  border: 2px solid #803030;
+  background: #2a1010;
+  color: #e08080;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.slot-erase::after {            /* hold-to-erase progress fill */
+  content: '';
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 100%; height: var(--p, 0%);
+  background: rgba(232,32,40,.55);
+  transition: height .05s linear;
+}
+.slot-erase.erasing { color: #fff; border-color: #e02020; }
+
+#name-input {
+  font-family: var(--font);
+  font-size: 12px;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 8px;
+  width: 100%;
+  max-width: 220px;
+  border: 2px solid #58c858;
+  border-radius: 6px;
+  background: #0a1a0a;
+  color: #f8f8e8;
+  outline: none;
+}
+#name-buttons { display: flex; gap: 12px; align-items: center; }
+
 /* ─── PIXEL BUTTONS ─────────────────────────────────── */
 .pixel-btn {
   font-family: var(--font);

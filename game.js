@@ -562,7 +562,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }, { passive: false });
 
   buildTileCache();
-  loadSave();
+  migrateLegacy();
   bindEvents();
   setupDebugMenu();
   requestAnimationFrame(loop);
@@ -818,6 +818,7 @@ function bindEvents() {
   // Keyboard
   const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start' };
   document.addEventListener('keydown', e => {
+    if (e.target && e.target.tagName === 'INPUT') return; // don't hijack text fields
     keys[e.key] = true;
     wakeAudio();
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
@@ -834,9 +835,14 @@ function bindEvents() {
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
-  // Title buttons
-  document.getElementById('start-btn').addEventListener('click', () => { wakeAudio(); startNewGame(); });
-  document.getElementById('continue-btn').addEventListener('click', () => { wakeAudio(); enterWorld(); });
+  // Title / save slots
+  document.getElementById('play-btn').addEventListener('click', () => { wakeAudio(); openSlots(); });
+  document.getElementById('slot-back').addEventListener('click', () => showScreen('title'));
+  document.getElementById('name-ok').addEventListener('click', () => { wakeAudio(); confirmName(); });
+  document.getElementById('name-cancel').addEventListener('click', () => openSlots());
+  document.getElementById('name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmName(); }
+  });
 
   // World HUD
   document.getElementById('pokedex-btn').addEventListener('click', openPokedex);
@@ -1938,7 +1944,7 @@ function nextBattleRound() {
     card.className = 'battle-opt';
     const ic = document.createElement('span');
     ic.className = 'battle-opt-emoji';
-    ic.textContent = poke.emoji;
+    ic.appendChild(pokeImg(poke, 30));
     const nm = document.createElement('span');
     nm.className = 'battle-opt-name';
     nm.textContent = poke.name;
@@ -2346,6 +2352,41 @@ function updateHud() {
 // ═══════════════════════════════════════════════════
 // GAME FLOW
 // ═══════════════════════════════════════════════════
+// ── Save slots ───────────────────────────────────────
+let currentSlot = 1;
+let saveName    = '';
+let pendingNewSlot = 1;
+function slotKey(n) { return SAVE_KEY + '_s' + n; }
+
+// Move a pre-slots single save into slot 1 the first time (preserve progress).
+function migrateLegacy() {
+  try {
+    const legacy = localStorage.getItem(SAVE_KEY);
+    if (legacy && !localStorage.getItem(slotKey(1))) {
+      const data = JSON.parse(legacy);
+      const obj = Array.isArray(data) ? { caught: data } : data;
+      obj.name = obj.name || 'SAVE 1';
+      localStorage.setItem(slotKey(1), JSON.stringify(obj));
+    }
+    localStorage.removeItem(SAVE_KEY);
+  } catch (_) {}
+}
+
+// Peek a slot for the select screen.
+function slotMeta(n) {
+  try {
+    const raw = localStorage.getItem(slotKey(n));
+    if (!raw) return { exists: false };
+    const d = JSON.parse(raw);
+    return {
+      exists: true,
+      name:   d.name || `SAVE ${n}`,
+      caught: (d.caught || []).length,
+      badges: (d.collected || []).length,
+    };
+  } catch (_) { return { exists: false }; }
+}
+
 function startNewGame() {
   caughtIds.clear();
   unlockedBarriers.clear();
@@ -2381,7 +2422,8 @@ function enterWorld() {
 // ═══════════════════════════════════════════════════
 function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
+    localStorage.setItem(slotKey(currentSlot), JSON.stringify({
+      name:      saveName,
       caught:    [...caughtIds],
       barriers:  [...unlockedBarriers],
       collected: [...collected],
@@ -2397,28 +2439,27 @@ function saveGame() {
   } catch (_) {}
 }
 
-function loadSave() {
+// Load slot n into the live game state. Returns true if data was present.
+function loadSlot(n) {
+  currentSlot = n;
+  let had = false;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey(n));
     if (raw) {
+      had = true;
       const data = JSON.parse(raw);
-      if (Array.isArray(data)) {
-        // Legacy v1 format: just an array of caught ids
-        caughtIds = new Set(data);
-      } else {
-        caughtIds        = new Set(data.caught || []);
-        unlockedBarriers = new Set(data.barriers || []);
-        collected        = new Set(data.collected || []);
-        metNPCs          = new Set(data.metNPCs || []);
-        loadedRoamers    = data.roamers || null;
-        currentZone    = data.zone  ?? 0;
-        playerX        = data.x    ?? 10;
-        playerY        = data.y    ?? 7;
-        balls = data.balls ?? 5;
-        masterBalls = data.masterBalls ?? 0;
-        coins = data.coins ?? 0;
-      }
-      // Clamp zone and rescue position if the layout changed under a save.
+      saveName         = data.name || `SAVE ${n}`;
+      caughtIds        = new Set(data.caught || []);
+      unlockedBarriers = new Set(data.barriers || []);
+      collected        = new Set(data.collected || []);
+      metNPCs          = new Set(data.metNPCs || []);
+      loadedRoamers    = data.roamers || null;
+      currentZone    = data.zone  ?? 0;
+      playerX        = data.x    ?? 10;
+      playerY        = data.y    ?? 7;
+      balls = data.balls ?? 12;
+      masterBalls = data.masterBalls ?? 0;
+      coins = data.coins ?? 0;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
       fromPx.x   = playerX * TILE_SIZE;
@@ -2427,14 +2468,101 @@ function loadSave() {
       bumpVec    = null;
     }
   } catch (_) {}
-
   initRoamers();
   updateHud();
+  return had;
+}
 
-  if (caughtIds.size > 0) {
-    document.getElementById('continue-btn').classList.remove('hidden');
-    document.getElementById('start-btn').textContent = '▶ NEW GAME';
+// ── Slot select / naming UI ──────────────────────────
+function openSlots() {
+  renderSlots();
+  showScreen('slot');
+}
+
+function renderSlots() {
+  const list = document.getElementById('slot-list');
+  list.innerHTML = '';
+  for (let n = 1; n <= 3; n++) {
+    const m = slotMeta(n);
+    const card = document.createElement('div');
+    card.className = 'slot-card' + (m.exists ? ' used' : ' empty');
+
+    const info = document.createElement('div');
+    info.className = 'slot-info';
+    if (m.exists) {
+      info.innerHTML = `<div class="slot-name">${m.name}</div>` +
+        `<div class="slot-prog">🎒 ${m.caught}/${POKEMON_DATA.length} &nbsp; 🏅 ${m.badges}/${COLLECTIBLES.length}</div>`;
+    } else {
+      info.innerHTML = `<div class="slot-name">SLOT ${n}</div><div class="slot-prog">— empty —</div>`;
+    }
+    info.addEventListener('click', () => selectSlot(n));
+    card.appendChild(info);
+
+    if (m.exists) {
+      const er = document.createElement('button');
+      er.className = 'slot-erase';
+      er.textContent = '⌫';
+      er.title = 'Hold to erase';
+      bindHoldErase(er, n);
+      card.appendChild(er);
+    }
+    list.appendChild(card);
   }
+}
+
+function selectSlot(n) {
+  wakeAudio();
+  if (slotMeta(n).exists) {
+    loadSlot(n);
+    enterWorld();
+  } else {
+    pendingNewSlot = n;
+    const inp = document.getElementById('name-input');
+    inp.value = '';
+    showScreen('name');
+    setTimeout(() => inp.focus(), 50);
+  }
+}
+
+function confirmName() {
+  const raw = document.getElementById('name-input').value.trim().toUpperCase();
+  saveName = (raw || `SAVE ${pendingNewSlot}`).slice(0, 10);
+  currentSlot = pendingNewSlot;
+  startNewGame();          // writes a fresh save to this slot
+}
+
+// Erase a slot only on a deliberate ~1.2s hold (buried so it can't happen by accident).
+function bindHoldErase(btn, n) {
+  let timer = null, raf = null, start = 0;
+  const HOLD = 1200;
+  const begin = e => {
+    e.preventDefault(); e.stopPropagation();
+    start = Date.now();
+    btn.classList.add('erasing');
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / HOLD, 1);
+      btn.style.setProperty('--p', (p * 100) + '%');
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    timer = setTimeout(() => {
+      localStorage.removeItem(slotKey(n));
+      beep(140, 0.2, 0.3, 'square');
+      cancel();
+      renderSlots();
+    }, HOLD);
+  };
+  const cancel = () => {
+    clearTimeout(timer); timer = null;
+    if (raf) cancelAnimationFrame(raf);
+    btn.classList.remove('erasing');
+    btn.style.setProperty('--p', '0%');
+  };
+  btn.addEventListener('pointerdown', begin);
+  btn.addEventListener('pointerup', cancel);
+  btn.addEventListener('pointerleave', cancel);
+  btn.addEventListener('pointercancel', cancel);
+  btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
 }
 
 // ═══════════════════════════════════════════════════
@@ -2593,7 +2721,7 @@ function setupDebugMenu() {
 
   section('SAVE');
   btn('Save',  () => saveGame());
-  btn('RESET game', () => { localStorage.removeItem(SAVE_KEY); startNewGame(); });
+  btn('RESET slot', () => { startNewGame(); });
   btn('Close',  () => toggleDebug());
 
   document.body.appendChild(p);

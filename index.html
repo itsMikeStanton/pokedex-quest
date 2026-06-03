@@ -21,9 +21,25 @@
           </div>
           <p class="title-tagline">Catch ʼem with kindness!</p>
           <div class="title-deco">🌿&nbsp;&nbsp;🔥&nbsp;&nbsp;💧&nbsp;&nbsp;⚡&nbsp;&nbsp;👻</div>
-          <button id="start-btn" class="pixel-btn green">▶ NEW GAME</button>
-          <button id="continue-btn" class="pixel-btn blue hidden">▶ CONTINUE</button>
+          <button id="play-btn" class="pixel-btn green">▶ PLAY</button>
           <p class="title-hint">Arrow keys or WASD to move</p>
+        </div>
+
+        <!-- SAVE SLOT SELECT -->
+        <div id="slot-screen" class="screen">
+          <div id="slot-title">SELECT SAVE</div>
+          <div id="slot-list"></div>
+          <button id="slot-back" class="pixel-btn small red">◀ BACK</button>
+        </div>
+
+        <!-- NAME ENTRY -->
+        <div id="name-screen" class="screen">
+          <div id="name-title">NAME YOUR SAVE</div>
+          <input id="name-input" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="TRAINER">
+          <div id="name-buttons">
+            <button id="name-cancel" class="pixel-btn small red">◀ BACK</button>
+            <button id="name-ok" class="pixel-btn green">START ▶</button>
+          </div>
         </div>
 
         <!-- WORLD SCREEN -->
@@ -173,7 +189,7 @@
 
         <!-- MEWTWO BATTLE SCREEN -->
         <div id="battle-screen" class="screen">
-          <div id="battle-header">🧬 MEWTWO</div>
+          <div id="battle-header">MEWTWO</div>
           <div id="battle-mewtwo">🧬</div>
           <div id="battle-round">Round 1 / 3</div>
           <div id="battle-demand">
@@ -264,7 +280,7 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.6.4</div>
+  <div id="version">v2.7.0</div>
 
   <script src="data.js"></script>
   <script src="game.js"></script>
