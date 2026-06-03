@@ -3,51 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lukeymon Level Editor</title>
+<title>Lukeymon World Editor</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #15151f; color: #d8d8e8; font: 13px/1.5 system-ui, sans-serif; }
-  header { background: #1d1d2e; padding: 8px 12px; border-bottom: 2px solid #303048; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header { background: #1d1d2e; padding: 8px 12px; border-bottom: 2px solid #303048; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   h1 { font-size: 15px; color: #f8d030; letter-spacing: 1px; }
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
   .tab { background: #2a2a40; border: 1px solid #404060; color: #b8b8d0; padding: 4px 9px; border-radius: 5px; cursor: pointer; font-size: 12px; }
   .tab.active { background: #f8d030; color: #1a1a28; border-color: #f8d030; font-weight: 600; }
-  .tab .dim { opacity: .6; font-size: 10px; }
+  .tab.add { background: #204020; border-color: #408040; color: #a0e0a0; }
   main { display: flex; gap: 12px; padding: 12px; align-items: flex-start; flex-wrap: wrap; }
-  .toolbar { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .col { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+  .col.left { width: 210px; } .col.right { width: 340px; }
   .panel { background: #1d1d2e; border: 1px solid #303048; border-radius: 7px; padding: 10px; }
   .panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8888a8; margin-bottom: 8px; }
   .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   .swatch { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: 2px solid #303048; border-radius: 5px; cursor: pointer; font-size: 11px; }
   .swatch.sel { border-color: #f8d030; box-shadow: 0 0 0 1px #f8d030; }
-  .swatch .chip { width: 18px; height: 18px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.4); }
+  .swatch .chip { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.4); }
   .swatch .k { margin-left: auto; opacity: .5; font-size: 10px; }
-  .tools, .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tools, .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   button.btn { background: #2a2a40; border: 1px solid #404060; color: #d8d8e8; padding: 5px 9px; border-radius: 5px; cursor: pointer; font-size: 12px; }
   button.btn:hover { background: #34344e; }
   button.btn.on { background: #3858c8; border-color: #6080e8; color: #fff; }
   button.btn.warn { background: #5a2020; border-color: #a04040; }
-  .canvas-wrap { flex: 1; min-width: 300px; overflow: auto; background: #0c0c14; border: 1px solid #303048; border-radius: 7px; max-height: 78vh; }
+  button.btn.go { background: #205020; border-color: #408040; }
+  input, select { background: #0c0c14; color: #d8e8d8; border: 1px solid #404060; border-radius: 4px; padding: 3px 5px; font: 12px monospace; }
+  input.sm { width: 42px; } input.pos { width: 84px; }
+  label { font-size: 11px; color: #98a8c8; }
+  .canvas-wrap { flex: 1; min-width: 280px; overflow: auto; background: #0c0c14; border: 1px solid #303048; border-radius: 7px; max-height: 80vh; }
   canvas { display: block; image-rendering: pixelated; }
-  .io { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
-  textarea { width: 100%; height: 180px; background: #0c0c14; color: #a8d8a8; border: 1px solid #303048; border-radius: 5px; font: 11px/1.4 monospace; padding: 8px; resize: vertical; }
+  textarea { width: 100%; height: 150px; background: #0c0c14; color: #a8d8a8; border: 1px solid #303048; border-radius: 5px; font: 11px/1.4 monospace; padding: 8px; resize: vertical; }
   .hint { font-size: 11px; color: #7888a8; }
   .status { font-size: 11px; color: #a0d8a0; }
-  label.ck { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
   .legend { font-size: 11px; color: #98a8c8; line-height: 1.7; }
   .legend b { color: #f8d030; }
+  .exit-row { border: 1px solid #303048; border-radius: 5px; padding: 6px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .exit-row .row { gap: 4px; }
+  .field { display: flex; flex-direction: column; gap: 2px; }
+  .field label { font-size: 9px; }
   kbd { background: #2a2a40; border: 1px solid #404060; border-radius: 3px; padding: 0 4px; font-size: 11px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🎨 LUKEYMON LEVEL EDITOR</h1>
+  <h1>🌍 LUKEYMON WORLD EDITOR</h1>
   <div class="tabs" id="tabs"></div>
   <span class="status" id="zone-status"></span>
 </header>
 
 <main>
-  <div class="toolbar">
+  <div class="col left">
     <div class="panel">
       <h2>Tiles</h2>
       <div class="palette" id="palette"></div>
@@ -59,275 +66,210 @@
         <button class="btn" id="t-fill">🪣 Fill</button>
         <button class="btn" id="t-pick">💉 Pick</button>
       </div>
-      <div class="row" style="margin-top:8px">
-        <span class="hint">Brush</span>
+      <div class="row" style="margin-top:8px"><span class="hint">Brush</span>
         <button class="btn" data-brush="1">1</button>
         <button class="btn on" data-brush="2">2</button>
         <button class="btn" data-brush="3">3</button>
       </div>
-      <div class="row" style="margin-top:8px">
-        <span class="hint">Zoom</span>
-        <button class="btn" id="zoom-out">−</button>
-        <button class="btn" id="zoom-in">+</button>
+      <div class="row" style="margin-top:8px"><span class="hint">Zoom</span>
+        <button class="btn" id="zoom-out">−</button><button class="btn" id="zoom-in">+</button>
+        <label style="margin-left:6px"><input type="checkbox" id="ov" checked> overlays</label>
       </div>
-      <label class="ck" style="margin-top:8px"><input type="checkbox" id="ov" checked> show exits/entries</label>
     </div>
     <div class="panel">
-      <h2>Zone</h2>
+      <h2>World file</h2>
       <div class="tools">
-        <button class="btn" id="load-maps">↻ Load from maps.js</button>
-        <button class="btn warn" id="reset-zone">Reset to base+exits</button>
+        <button class="btn go" id="copy-json">📋 Copy world.js</button>
+        <button class="btn" id="dl">💾 Download</button>
       </div>
-      <div class="legend" style="margin-top:8px">
-        <b>◻ yellow</b> = exit opening (keep walkable)<br>
-        <b>◻ cyan</b> = arrival tile<br>
-        <b>◻ lime</b> = player start<br>
-        Border is auto-walled; carve only the exits.
+      <div class="tools" style="margin-top:6px">
+        <button class="btn" id="reset-game">↻ Reload from game</button>
       </div>
+      <p class="hint" style="margin-top:6px">Autosaves to this browser. Paste the export into <b>world.js</b>.</p>
     </div>
   </div>
 
-  <div class="canvas-wrap" id="cwrap">
-    <canvas id="grid"></canvas>
-  </div>
+  <div class="canvas-wrap" id="cwrap"><canvas id="grid"></canvas></div>
 
-  <div class="io">
+  <div class="col right">
     <div class="panel">
-      <h2>Export</h2>
-      <div class="row" style="margin-bottom:6px">
-        <button class="btn" id="export-json">⬇ Refresh JSON</button>
-        <button class="btn" id="copy-json">📋 Copy</button>
-        <button class="btn" id="dl">💾 maps.js</button>
+      <h2>Zone settings</h2>
+      <div class="row"><label>Name</label><input id="z-name" style="flex:1"></div>
+      <div class="row" style="margin-top:5px"><label>Base</label><select id="z-base"></select></div>
+      <div class="row" style="margin-top:5px">
+        <label>Size</label><input class="sm" id="z-cols"> × <input class="sm" id="z-rows">
+        <button class="btn go" id="z-resize">Resize</button>
       </div>
-      <textarea id="out" readonly></textarea>
-      <p class="hint">All 8 zones. Drop into <b>maps.js</b> as <code>CUSTOM_MAPS</code>, or hand it to Claude.</p>
+      <div class="row" style="margin-top:5px">
+        <label>Map pos</label><input class="sm" id="z-mc" placeholder="col"> <input class="sm" id="z-mr" placeholder="row">
+        <input class="sm" id="z-icon" placeholder="icon" style="width:34px">
+      </div>
+      <div class="tools" style="margin-top:8px">
+        <button class="btn" id="z-reset">Re-wall + carve exits</button>
+        <button class="btn warn" id="z-del">Delete zone</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Exits from this zone</h2>
+      <div id="exit-list"></div>
+      <button class="btn go" id="exit-add">＋ Add exit</button>
+      <p class="legend" style="margin-top:8px">
+        <b>◻ yellow</b> exit opening · <b>◻ cyan</b> arrival here · <b>◻ lime</b> player start (zone 0).<br>
+        Each connection needs a matching <i>return</i> exit in the other zone — use ↩.
+      </p>
     </div>
     <div class="panel">
       <h2>Import</h2>
-      <textarea id="in" placeholder='Paste a CUSTOM_MAPS / JSON object here…'></textarea>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" id="import-json">⬆ Load into editor</button>
-      </div>
-      <p class="hint">Accepts the exported JSON, a <code>const CUSTOM_MAPS = {…}</code> snippet, or the game's debug "Copy maps" dump.</p>
+      <textarea id="in" placeholder="Paste a world.js / WORLD object…"></textarea>
+      <button class="btn" id="import-json" style="margin-top:6px">⬆ Load</button>
     </div>
   </div>
 </main>
 
-<script src="maps.js"></script>
+<script src="world.js"></script>
 <script>
-// ── Embedded game data (keep in sync with game.js) ──────────────
-const T = { PATH:0, GRASS:1, TREE:2, WATER:3, SAND:4, CITY:5, SHOP:6, LAVA:7, ICE:8, BOULDER:9 };
-const ZONE_INFO = [
-  { name:'Meadow', cols:20, rows:14 },
-  { name:'Beach',  cols:20, rows:35 },
-  { name:'City',   cols:20, rows:14 },
-  { name:'Highlands', cols:20, rows:14 },
-  { name:'Volcano', cols:20, rows:28 },
-  { name:'Dark Forest', cols:40, rows:14 },
-  { name:'Ice Cave', cols:20, rows:14 },
-  { name:'Desert', cols:40, rows:14 },
-];
-const BASE = [T.PATH, T.SAND, T.CITY, T.PATH, T.PATH, T.PATH, T.PATH, T.SAND];
-const EXITS = [
-  { from:0, dir:'south', pos:[9,10,11], to:1, entryX:10, entryY:1,  barrier:'log' },
-  { from:1, dir:'north', pos:[9,10,11], to:0, entryX:10, entryY:12, barrier:null },
-  { from:1, dir:'west',  pos:[5,6,7],   to:2, entryX:18, entryY:6,  barrier:'rock' },
-  { from:2, dir:'east',  pos:[5,6,7],   to:1, entryX:1,  entryY:6,  barrier:null },
-  { from:2, dir:'north', pos:[9,10,11], to:3, entryX:10, entryY:12, barrier:'fence' },
-  { from:3, dir:'south', pos:[9,10,11], to:2, entryX:10, entryY:1,  barrier:null },
-  { from:3, dir:'north', pos:[9,10,11], to:4, entryX:10, entryY:26, barrier:'lava' },
-  { from:4, dir:'south', pos:[9,10,11], to:3, entryX:10, entryY:1,  barrier:null },
-  { from:0, dir:'west',  pos:[5,6,7],   to:5, entryX:38, entryY:6,  barrier:'vine' },
-  { from:5, dir:'east',  pos:[5,6,7],   to:0, entryX:1,  entryY:6,  barrier:null },
-  { from:1, dir:'east',  pos:[5,6,7],   to:6, entryX:1,  entryY:6,  barrier:'frost' },
-  { from:6, dir:'west',  pos:[5,6,7],   to:1, entryX:18, entryY:6,  barrier:null },
-  { from:2, dir:'south', pos:[9,10,11], to:7, entryX:10, entryY:1,  barrier:'sand' },
-  { from:7, dir:'north', pos:[9,10,11], to:2, entryX:10, entryY:12, barrier:null },
-];
-const BARRIER_SIGN = { log:'🔥', rock:'💧', fence:'⚡', lava:'💧', vine:'🌿', frost:'🔥', sand:'🌍' };
 const TILES = [
-  { id:T.PATH,  name:'Path',  color:'#d0b068' },
-  { id:T.GRASS, name:'Grass', color:'#38b038' },
-  { id:T.TREE,  name:'Tree',  color:'#1f4a1f' },
-  { id:T.WATER, name:'Water', color:'#2868d8' },
-  { id:T.SAND,  name:'Sand',  color:'#e8c870' },
-  { id:T.CITY,  name:'City',  color:'#909098' },
-  { id:T.SHOP,  name:'Shop',  color:'#d02060' },
-  { id:T.LAVA,  name:'Lava',  color:'#d83810' },
-  { id:T.ICE,   name:'Ice',   color:'#b8d8f0' },
-  { id:T.BOULDER, name:'Boulder', color:'#6a6a74' },
+  { id:0, name:'Path',  color:'#d0b068' }, { id:1, name:'Grass', color:'#38b038' },
+  { id:2, name:'Tree',  color:'#1f4a1f' }, { id:3, name:'Water', color:'#2868d8' },
+  { id:4, name:'Sand',  color:'#e8c870' }, { id:5, name:'City',  color:'#909098' },
+  { id:6, name:'Shop',  color:'#d02060' }, { id:7, name:'Lava',  color:'#d83810' },
+  { id:8, name:'Ice',   color:'#b8d8f0' }, { id:9, name:'Boulder', color:'#6a6a74' },
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
-const LS_KEY = 'lukeymon_editor_v1';
+const TREE = 2;
+const BARRIERS = ['', 'log', 'rock', 'fence', 'lava', 'vine', 'frost', 'sand'];
+const BARRIER_ELEM = { log:'Fire', rock:'Water', fence:'Electric', lava:'Water', vine:'Grass', frost:'Fire', sand:'Ground' };
+const BARRIER_SIGN = { log:'🔥', rock:'💧', fence:'⚡', lava:'💧', vine:'🌿', frost:'🔥', sand:'🌍' };
+const DIRS = ['north', 'south', 'east', 'west'];
+const LS_KEY = 'lukeymon_world_v1';
 
-// ── State ───────────────────────────────────────────────────────
-let grids = {};          // zone -> 2D array
-let zone = 0;
-let sel = T.GRASS;
-let tool = 'paint';
-let brush = 2;
-let cell = 20;
-let overlays = true;
-let painting = false;
+let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = true, painting = false;
+const clone = o => JSON.parse(JSON.stringify(o));
 
-// ── Fresh zone: base fill + tree border + carved exit openings ──
-function freshZone(z) {
-  const { cols, rows } = ZONE_INFO[z];
-  const base = BASE[z];
-  const g = Array.from({ length: rows }, () => new Array(cols).fill(base));
-  for (let c = 0; c < cols; c++) { g[0][c] = T.TREE; g[rows-1][c] = T.TREE; }
-  for (let r = 0; r < rows; r++) { g[r][0] = T.TREE; g[r][cols-1] = T.TREE; }
-  EXITS.filter(e => e.from === z).forEach(e => e.pos.forEach(p => {
-    if (e.dir === 'south') g[rows-1][p] = base;
-    else if (e.dir === 'north') g[0][p] = base;
-    else if (e.dir === 'west') g[p][0] = base;
-    else g[p][cols-1] = base;
-  }));
-  return g;
+function loadWorld() {
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); return; } } catch (_) {}
+  world = clone(WORLD);
+}
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
+function zone() { return world.zones[zi]; }
+function gridOf(z) { return world.maps[z.id]; }
+
+// ── grid helpers ────────────────────────────────────────────────
+function freshGrid(z) {
+  const g = Array.from({ length: z.rows }, () => new Array(z.cols).fill(z.base));
+  rewall(z, g); return g;
+}
+function rewall(z, g) {
+  for (let c = 0; c < z.cols; c++) { g[0][c] = TREE; g[z.rows-1][c] = TREE; }
+  for (let r = 0; r < z.rows; r++) { g[r][0] = TREE; g[r][z.cols-1] = TREE; }
+  world.exits.filter(e => e.from === z.id).forEach(e => e.pos.forEach(p => carve(z, g, e.dir, p)));
+}
+function carve(z, g, dir, p) {
+  if (p < 0) return;
+  if (dir === 'south' && p < z.cols) g[z.rows-1][p] = z.base;
+  else if (dir === 'north' && p < z.cols) g[0][p] = z.base;
+  else if (dir === 'west' && p < z.rows) g[p][0] = z.base;
+  else if (dir === 'east' && p < z.rows) g[p][z.cols-1] = z.base;
 }
 
-// Pull a zone from the game's actual maps.js (CUSTOM_MAPS) if available.
-function fromCustom(z) {
-  if (typeof CUSTOM_MAPS === 'undefined' || !CUSTOM_MAPS) return null;
-  const g = CUSTOM_MAPS[z];
-  const { cols, rows } = ZONE_INFO[z];
-  return (Array.isArray(g) && g.length === rows && Array.isArray(g[0]) && g[0].length === cols)
-    ? g.map(r => r.slice()) : null;
-}
-// Priority: your in-progress editor work (localStorage) → the real maps.js → blank.
-function loadAll() {
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (_) {}
-  for (let z = 0; z < 8; z++) {
-    const { cols, rows } = ZONE_INFO[z];
-    const s = saved[z];
-    grids[z] = (Array.isArray(s) && s.length === rows && s[0].length === cols)
-      ? s : (fromCustom(z) || freshZone(z));
-  }
-}
-function loadFromMaps() {
-  if (!confirm('Reload all zones from the game’s maps.js? Unsaved editor changes are lost.')) return;
-  for (let z = 0; z < 8; z++) grids[z] = fromCustom(z) || freshZone(z);
-  saveAll(); render(); renderTabs(); exportJSON();
-}
-function saveAll() { localStorage.setItem(LS_KEY, JSON.stringify(grids)); }
-
-// ── Overlay lookups ─────────────────────────────────────────────
-function openingCells(z) {
-  const { cols, rows } = ZONE_INFO[z]; const m = new Map();
-  EXITS.filter(e => e.from === z).forEach(e => e.pos.forEach(p => {
+// ── overlay lookups ─────────────────────────────────────────────
+function openingCells() {
+  const z = zone(), m = new Map();
+  world.exits.filter(e => e.from === z.id).forEach(e => e.pos.forEach(p => {
     let x, y;
-    if (e.dir === 'south') { x = p; y = rows-1; }
+    if (e.dir === 'south') { x = p; y = z.rows-1; }
     else if (e.dir === 'north') { x = p; y = 0; }
     else if (e.dir === 'west') { x = 0; y = p; }
-    else { x = cols-1; y = p; }
+    else { x = z.cols-1; y = p; }
     m.set(x + ',' + y, e.barrier);
   }));
   return m;
 }
-function entryCells(z) {
-  const s = new Map();
-  EXITS.filter(e => e.to === z).forEach(e => s.set(e.entryX + ',' + e.entryY, true));
+function entryCells() {
+  const z = zone(), s = new Set();
+  world.exits.filter(e => e.to === z.id).forEach(e => s.add(e.entryX + ',' + e.entryY));
   return s;
 }
 
-// ── Rendering ───────────────────────────────────────────────────
-const canvas = document.getElementById('grid');
-const ctx = canvas.getContext('2d');
+// ── render ──────────────────────────────────────────────────────
+const canvas = document.getElementById('grid'), ctx = canvas.getContext('2d');
 function render() {
-  const { cols, rows } = ZONE_INFO[zone];
-  canvas.width = cols * cell; canvas.height = rows * cell;
-  const g = grids[zone];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    ctx.fillStyle = COLOR[g[r][c]] || '#000';
-    ctx.fillRect(c*cell, r*cell, cell, cell);
-    // simple motifs
+  const z = zone(), g = gridOf(z);
+  canvas.width = z.cols * cell; canvas.height = z.rows * cell;
+  for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
     const t = g[r][c];
-    if (t === T.TREE) { ctx.fillStyle = '#0f3010'; ctx.beginPath(); ctx.arc(c*cell+cell/2, r*cell+cell/2, cell*0.32, 0, 7); ctx.fill(); }
-    else if (t === T.GRASS) { ctx.fillStyle = '#2a8020'; ctx.fillRect(c*cell+cell*0.3, r*cell+cell*0.3, 2, cell*0.3); }
-    else if (t === T.WATER) { ctx.fillStyle = '#5090f0'; ctx.fillRect(c*cell+3, r*cell+cell*0.4, cell*0.5, 2); }
-    else if (t === T.LAVA) { ctx.fillStyle = '#ff8030'; ctx.fillRect(c*cell+3, r*cell+cell*0.4, cell*0.5, 2); }
-    else if (t === T.SHOP) { ctx.fillStyle = '#fff'; ctx.font = (cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏪', c*cell+cell/2, r*cell+cell/2); }
-    else if (t === T.ICE) { ctx.fillStyle = '#e8f4ff'; ctx.fillRect(c*cell+3, r*cell+3, cell*0.4, 2); }
+    ctx.fillStyle = COLOR[t] ?? '#000'; ctx.fillRect(c*cell, r*cell, cell, cell);
+    if (t === TREE) { ctx.fillStyle = '#0f3010'; ctx.beginPath(); ctx.arc(c*cell+cell/2, r*cell+cell/2, cell*0.32, 0, 7); ctx.fill(); }
+    else if (t === 6) { ctx.fillStyle='#fff'; ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏪', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === 9) { ctx.fillStyle='#9a9aa6'; ctx.beginPath(); ctx.arc(c*cell+cell*0.4, r*cell+cell*0.4, cell*0.18, 0, 7); ctx.fill(); }
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(c*cell+.5, r*cell+.5, cell, cell);
   }
   if (overlays) {
-    const op = openingCells(zone), en = entryCells(zone);
-    ctx.lineWidth = 2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = (cell*0.5)+'px serif';
-    op.forEach((barrier, key) => {
-      const [x,y] = key.split(',').map(Number);
-      ctx.strokeStyle = '#f8e030'; ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2);
-      if (barrier) ctx.fillText(BARRIER_SIGN[barrier], x*cell+cell/2, y*cell+cell/2);
-    });
-    en.forEach((_, key) => { const [x,y] = key.split(',').map(Number);
-      ctx.strokeStyle = '#30d0e0'; ctx.strokeRect(x*cell+2, y*cell+2, cell-4, cell-4); });
-    if (zone === 0) { ctx.strokeStyle='#60f060'; ctx.strokeRect(10*cell+2, 7*cell+2, cell-4, cell-4); }
+    ctx.lineWidth = 2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=(cell*0.5)+'px serif';
+    openingCells().forEach((b, key) => { const [x,y] = key.split(',').map(Number);
+      ctx.strokeStyle='#f8e030'; ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2);
+      if (b) ctx.fillText(BARRIER_SIGN[b]||'?', x*cell+cell/2, y*cell+cell/2); });
+    entryCells().forEach(key => { const [x,y] = key.split(',').map(Number);
+      ctx.strokeStyle='#30d0e0'; ctx.strokeRect(x*cell+2, y*cell+2, cell-4, cell-4); });
+    if (z.id === 0) { ctx.strokeStyle='#60f060'; ctx.strokeRect(10*cell+2, 7*cell+2, cell-4, cell-4); }
   }
-  document.getElementById('zone-status').textContent =
-    `${ZONE_INFO[zone].name}  ${ZONE_INFO[zone].cols}×${ZONE_INFO[zone].rows}  ·  grass:${countTile(zone,T.GRASS)}`;
+  document.getElementById('zone-status').textContent = `${z.name}  ${z.cols}×${z.rows}  ·  id ${z.id}`;
 }
-function countTile(z, t) { let n=0; grids[z].forEach(row => row.forEach(v => { if (v===t) n++; })); return n; }
 
-// ── Painting ────────────────────────────────────────────────────
+// ── painting ────────────────────────────────────────────────────
 function cellAt(ev) {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((ev.clientX - rect.left) / cell);
-  const y = Math.floor((ev.clientY - rect.top) / cell);
-  const { cols, rows } = ZONE_INFO[zone];
-  if (x < 0 || y < 0 || x >= cols || y >= rows) return null;
-  return { x, y };
+  const r = canvas.getBoundingClientRect(), z = zone();
+  const x = Math.floor((ev.clientX - r.left) / cell), y = Math.floor((ev.clientY - r.top) / cell);
+  return (x<0||y<0||x>=z.cols||y>=z.rows) ? null : { x, y };
 }
 function applyAt(x, y) {
-  const g = grids[zone];
+  const z = zone(), g = gridOf(z);
   if (tool === 'pick') { sel = g[y][x]; renderPalette(); return; }
   if (tool === 'fill') { flood(x, y, g[y][x], sel); return; }
   const off = Math.floor(brush/2);
-  const { cols, rows } = ZONE_INFO[zone];
-  for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) {
-    const nx = x - off + dx, ny = y - off + dy;
-    if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) g[ny][nx] = sel;
+  for (let dy=0; dy<brush; dy++) for (let dx=0; dx<brush; dx++) {
+    const nx=x-off+dx, ny=y-off+dy;
+    if (nx>=0&&ny>=0&&nx<z.cols&&ny<z.rows) g[ny][nx] = sel;
   }
 }
 function flood(x, y, from, to) {
   if (from === to) return;
-  const { cols, rows } = ZONE_INFO[zone]; const g = grids[zone];
-  const st = [[x,y]];
-  while (st.length) {
-    const [cx, cy] = st.pop();
-    if (cx<0||cy<0||cx>=cols||cy>=rows||g[cy][cx]!==from) continue;
-    g[cy][cx] = to;
-    st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  const z = zone(), g = gridOf(z), st = [[x,y]];
+  while (st.length) { const [cx,cy] = st.pop();
+    if (cx<0||cy<0||cx>=z.cols||cy>=z.rows||g[cy][cx]!==from) continue;
+    g[cy][cx] = to; st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
   }
 }
-canvas.addEventListener('pointerdown', e => { const c = cellAt(e); if (!c) return; painting = true; applyAt(c.x, c.y); render(); });
-canvas.addEventListener('pointermove', e => { if (!painting) return; const c = cellAt(e); if (!c) return; applyAt(c.x, c.y); render(); });
-window.addEventListener('pointerup', () => { if (painting) { painting = false; saveAll(); } });
+canvas.addEventListener('pointerdown', e => { const c=cellAt(e); if(!c) return; painting=true; applyAt(c.x,c.y); render(); });
+canvas.addEventListener('pointermove', e => { if(!painting) return; const c=cellAt(e); if(!c) return; applyAt(c.x,c.y); render(); });
+window.addEventListener('pointerup', () => { if (painting) { painting=false; save(); } });
 
-// ── UI build ────────────────────────────────────────────────────
+// ── UI: tabs, palette, tools ────────────────────────────────────
 function renderTabs() {
   const el = document.getElementById('tabs'); el.innerHTML = '';
-  ZONE_INFO.forEach((z, i) => {
+  world.zones.forEach((z, i) => {
     const b = document.createElement('button');
-    b.className = 'tab' + (i === zone ? ' active' : '');
-    b.innerHTML = `${z.name} <span class="dim">${z.cols}×${z.rows}</span>`;
-    b.onclick = () => { zone = i; renderTabs(); render(); };
+    b.className = 'tab' + (i===zi ? ' active' : '');
+    b.textContent = z.name;
+    b.onclick = () => { zi = i; refresh(); };
     el.appendChild(b);
   });
+  const add = document.createElement('button');
+  add.className = 'tab add'; add.textContent = '＋ Zone';
+  add.onclick = addZone; el.appendChild(add);
 }
 function renderPalette() {
   const el = document.getElementById('palette'); el.innerHTML = '';
   TILES.forEach(t => {
     const b = document.createElement('div');
-    b.className = 'swatch' + (t.id === sel ? ' sel' : '');
+    b.className = 'swatch' + (t.id===sel ? ' sel' : '');
     b.innerHTML = `<span class="chip" style="background:${t.color}"></span>${t.name}<span class="k">${t.id}</span>`;
-    b.onclick = () => { sel = t.id; tool = 'paint'; syncTools(); renderPalette(); };
+    b.onclick = () => { sel = t.id; tool='paint'; syncTools(); renderPalette(); };
     el.appendChild(b);
   });
 }
 function syncTools() {
-  document.getElementById('t-paint').classList.toggle('on', tool === 'paint');
-  document.getElementById('t-fill').classList.toggle('on', tool === 'fill');
-  document.getElementById('t-pick').classList.toggle('on', tool === 'pick');
+  ['paint','fill','pick'].forEach(t => document.getElementById('t-'+t).classList.toggle('on', tool===t));
 }
 document.getElementById('t-paint').onclick = () => { tool='paint'; syncTools(); };
 document.getElementById('t-fill').onclick  = () => { tool='fill'; syncTools(); };
@@ -335,65 +277,166 @@ document.getElementById('t-pick').onclick  = () => { tool='pick'; syncTools(); }
 document.querySelectorAll('[data-brush]').forEach(b => b.onclick = () => {
   brush = +b.dataset.brush; document.querySelectorAll('[data-brush]').forEach(x => x.classList.toggle('on', x===b));
 });
-document.getElementById('zoom-in').onclick  = () => { cell = Math.min(40, cell+4); render(); };
-document.getElementById('zoom-out').onclick = () => { cell = Math.max(8, cell-4); render(); };
-document.getElementById('ov').onchange = e => { overlays = e.target.checked; render(); };
-document.getElementById('load-maps').onclick = loadFromMaps;
-document.getElementById('reset-zone').onclick = () => {
-  if (confirm('Reset ' + ZONE_INFO[zone].name + ' to a blank base with borders & exits?')) {
-    grids[zone] = freshZone(zone); saveAll(); render();
-  }
+document.getElementById('zoom-in').onclick  = () => { cell=Math.min(40,cell+4); render(); };
+document.getElementById('zoom-out').onclick = () => { cell=Math.max(8,cell-4); render(); };
+document.getElementById('ov').onchange = e => { overlays=e.target.checked; render(); };
+
+// ── Zone settings panel ─────────────────────────────────────────
+function renderZonePanel() {
+  const z = zone();
+  document.getElementById('z-name').value = z.name;
+  document.getElementById('z-cols').value = z.cols;
+  document.getElementById('z-rows').value = z.rows;
+  document.getElementById('z-mc').value = z.mapCol ?? '';
+  document.getElementById('z-mr').value = z.mapRow ?? '';
+  document.getElementById('z-icon').value = z.icon ?? '';
+  const bsel = document.getElementById('z-base'); bsel.innerHTML = '';
+  TILES.forEach(t => { const o = document.createElement('option'); o.value=t.id; o.textContent=t.name; bsel.appendChild(o); });
+  bsel.value = z.base;
+}
+document.getElementById('z-name').oninput = e => { zone().name = e.target.value; renderTabs(); save(); };
+document.getElementById('z-base').onchange = e => { zone().base = +e.target.value; save(); };
+document.getElementById('z-mc').oninput = e => { zone().mapCol = e.target.value===''?null:+e.target.value; save(); };
+document.getElementById('z-mr').oninput = e => { zone().mapRow = e.target.value===''?null:+e.target.value; save(); };
+document.getElementById('z-icon').oninput = e => { zone().icon = e.target.value; save(); };
+document.getElementById('z-resize').onclick = () => {
+  const z = zone();
+  const nc = Math.max(6, Math.min(60, +document.getElementById('z-cols').value|0));
+  const nr = Math.max(6, Math.min(60, +document.getElementById('z-rows').value|0));
+  const old = gridOf(z);
+  const g = Array.from({ length: nr }, (_, r) => Array.from({ length: nc }, (_, c) =>
+    (r < z.rows && c < z.cols) ? old[r][c] : z.base));
+  z.cols = nc; z.rows = nr; world.maps[z.id] = g; rewall(z, g);
+  save(); refresh();
+};
+document.getElementById('z-reset').onclick = () => {
+  if (confirm('Re-wall borders and re-carve exits for this zone? (interior kept)')) { rewall(zone(), gridOf(zone())); save(); render(); }
+};
+document.getElementById('z-del').onclick = deleteZone;
+
+function addZone() {
+  const id = world.zones.length;
+  const z = { id, name: 'Zone ' + id, cols: 20, rows: 14, base: 0, mapCol: null, mapRow: null, icon: '🗺️' };
+  world.zones.push(z);
+  world.maps[id] = freshGrid(z);
+  zi = world.zones.length - 1;
+  save(); refresh();
+}
+function deleteZone() {
+  if (zone().id === 0) { alert('Zone 0 is the player start and cannot be deleted.'); return; }
+  if (!confirm('Delete "' + zone().name + '"? Exits to/from it are removed and zones renumbered.')) return;
+  const del = zone().id;
+  world.zones.splice(zi, 1);
+  world.exits = world.exits.filter(e => e.from !== del && e.to !== del);
+  delete world.maps[del];
+  // renumber zones to keep id === index, remap exits + maps keys
+  const remap = {}; world.zones.forEach((z, i) => { remap[z.id] = i; });
+  const newMaps = {};
+  world.zones.forEach((z, i) => { newMaps[i] = world.maps[z.id]; z.id = i; });
+  world.maps = newMaps;
+  world.exits.forEach(e => { e.from = remap[e.from]; e.to = remap[e.to]; });
+  zi = Math.min(zi, world.zones.length - 1);
+  save(); refresh();
+}
+
+// ── Exits panel ─────────────────────────────────────────────────
+function renderExits() {
+  const wrap = document.getElementById('exit-list'); wrap.innerHTML = '';
+  const z = zone();
+  world.exits.forEach((e, idx) => {
+    if (e.from !== z.id) return;
+    const row = document.createElement('div'); row.className = 'exit-row';
+    const dirSel = sel2(DIRS.map(d => [d, d]), e.dir, v => { e.dir = v; save(); render(); renderExits(); });
+    const toSel = sel2(world.zones.map(zz => [zz.id, zz.name]), e.to, v => { e.to = +v; save(); render(); });
+    const barSel = sel2(BARRIERS.map(b => [b, b ? `${b} (${BARRIER_ELEM[b]})` : 'no barrier']), e.barrier || '', v => { e.barrier = v || null; save(); render(); });
+    const posIn = inp(e.pos.join(','), 'pos', v => { e.pos = v.split(',').map(s => +s.trim()).filter(n => !isNaN(n)); save(); render(); });
+    const exIn = inp(e.entryX, 'sm', v => { e.entryX = +v|0; save(); render(); });
+    const eyIn = inp(e.entryY, 'sm', v => { e.entryY = +v|0; save(); render(); });
+    row.append(
+      lblRow('edge → to', wrapEls(dirSel, span('→'), toSel)),
+      lblRow('openings (cells)', posIn),
+      lblRow('barrier', barSel),
+      lblRow('arrival x,y in target', wrapEls(exIn, span(','), eyIn)),
+    );
+    const btns = document.createElement('div'); btns.className = 'row';
+    btns.append(
+      mkbtn('↩ add return', 'btn', () => addReturn(e)),
+      mkbtn('🗑', 'btn warn', () => { world.exits.splice(idx, 1); save(); render(); renderExits(); }),
+    );
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+}
+function addReturn(e) {
+  const opp = { north:'south', south:'north', east:'west', west:'east' }[e.dir];
+  // arrival back in THIS zone ≈ just inside the opening cell we left from
+  const z = zone(); const p0 = e.pos[Math.floor(e.pos.length/2)] ?? 1;
+  let ex, ey;
+  if (e.dir === 'south') { ex = p0; ey = z.rows - 2; }
+  else if (e.dir === 'north') { ex = p0; ey = 1; }
+  else if (e.dir === 'west') { ex = 1; ey = p0; }
+  else { ex = z.cols - 2; ey = p0; }
+  world.exits.push({ from: e.to, dir: opp, pos: e.pos.slice(), to: z.id, entryX: ex, entryY: ey, barrier: null });
+  save(); render();
+  alert('Return exit added in "' + world.zones[e.to].name + '". Switch to that zone to fine-tune it.');
+}
+document.getElementById('exit-add').onclick = () => {
+  const z = zone();
+  world.exits.push({ from: z.id, dir: 'south', pos: [Math.floor(z.cols/2)], to: (z.id+1)%world.zones.length, entryX: 1, entryY: 1, barrier: null });
+  save(); render(); renderExits();
 };
 
-// keyboard: number keys pick tiles, [ ] switch zones
-window.addEventListener('keydown', e => {
-  if (e.target.tagName === 'TEXTAREA') return;
-  if (e.key >= '0' && e.key <= '9') { sel = +e.key; tool='paint'; syncTools(); renderPalette(); }
-  if (e.key === '[') { zone = (zone+7)%8; renderTabs(); render(); }
-  if (e.key === ']') { zone = (zone+1)%8; renderTabs(); render(); }
-  if (e.key === 'f' || e.key === 'F') { tool='fill'; syncTools(); }
-  if (e.key === 'b' || e.key === 'B') { tool='paint'; syncTools(); }
-});
+// tiny DOM helpers
+function sel2(opts, val, on) { const s=document.createElement('select'); opts.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;s.appendChild(o);}); s.value=val; s.onchange=()=>on(s.value); return s; }
+function inp(val, cls, on) { const i=document.createElement('input'); i.className=cls; i.value=val; i.oninput=()=>on(i.value); return i; }
+function mkbtn(t, cls, on) { const b=document.createElement('button'); b.className=cls; b.textContent=t; b.onclick=on; return b; }
+function span(t) { const s=document.createElement('span'); s.textContent=t; s.style.opacity=.6; return s; }
+function wrapEls(...els) { const d=document.createElement('div'); d.className='row'; d.append(...els); return d; }
+function lblRow(label, el) { const f=document.createElement('div'); f.className='field'; const l=document.createElement('label'); l.textContent=label; f.append(l, el); return f; }
 
-// ── Import / Export ─────────────────────────────────────────────
-function exportJSON() {
-  const obj = {};
-  for (let z = 0; z < 8; z++) obj[z] = grids[z];
-  // compact rows on single lines for readability
-  let s = '{\n';
-  for (let z = 0; z < 8; z++) {
-    s += `  "${z}": [\n` + grids[z].map(r => '    [' + r.join(',') + ']').join(',\n') + '\n  ]' + (z < 7 ? ',' : '') + '\n';
-  }
-  s += '}';
-  document.getElementById('out').value = s;
+// ── export / import / reset ─────────────────────────────────────
+function exportText() {
+  let s = 'const WORLD = {\n  zones: [\n';
+  world.zones.forEach(z => s += '    ' + JSON.stringify(z) + ',\n');
+  s += '  ],\n  exits: [\n';
+  world.exits.forEach(e => s += '    ' + JSON.stringify(e) + ',\n');
+  s += '  ],\n  maps: {\n';
+  world.zones.forEach((z, i, arr) => {
+    s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
+  });
+  s += '  },\n};\n';
   return s;
 }
-document.getElementById('export-json').onclick = exportJSON;
-document.getElementById('copy-json').onclick = () => { navigator.clipboard.writeText(exportJSON()); flash('copy-json','Copied!'); };
+document.getElementById('copy-json').onclick = () => { navigator.clipboard.writeText(exportText()); flash('copy-json','Copied!'); };
 document.getElementById('dl').onclick = () => {
-  const blob = new Blob(['// Custom hand-authored maps for Lukeymon. Loaded by game.js if present.\nconst CUSTOM_MAPS = ' + exportJSON() + ';\n'], { type: 'text/javascript' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'maps.js'; a.click();
+  const blob = new Blob([exportText()], { type:'text/javascript' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'world.js'; a.click();
+};
+document.getElementById('reset-game').onclick = () => {
+  if (confirm('Discard editor changes and reload from the game’s world.js?')) { world = clone(WORLD); zi = 0; save(); refresh(); }
 };
 document.getElementById('import-json').onclick = () => {
-  let txt = document.getElementById('in').value.trim();
-  const i = txt.indexOf('{'), j = txt.lastIndexOf('}');
-  if (i >= 0 && j > i) txt = txt.slice(i, j+1);
-  try {
-    const obj = JSON.parse(txt);
-    let loaded = 0;
-    for (let z = 0; z < 8; z++) {
-      const { cols, rows } = ZONE_INFO[z];
-      const g = obj[z];
-      if (Array.isArray(g) && g.length === rows && g[0].length === cols) { grids[z] = g; loaded++; }
-    }
-    saveAll(); render(); renderTabs();
-    alert('Loaded ' + loaded + ' / 8 zones.');
-  } catch (err) { alert('Could not parse: ' + err.message); }
+  let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
+  if (i<0||j<i) return alert('No object found.');
+  try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
+    world = w; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+  } catch (err) { alert('Parse error: ' + err.message); }
 };
-function flash(id, msg) { const b = document.getElementById(id); const o = b.textContent; b.textContent = msg; setTimeout(() => b.textContent = o, 900); }
+function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }
 
-// ── Boot ────────────────────────────────────────────────────────
-loadAll(); renderTabs(); renderPalette(); syncTools(); render(); exportJSON();
+// keyboard
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key >= '0' && e.key <= '9') { sel=+e.key; tool='paint'; syncTools(); renderPalette(); }
+  if (e.key === '[') { zi=(zi+world.zones.length-1)%world.zones.length; refresh(); }
+  if (e.key === ']') { zi=(zi+1)%world.zones.length; refresh(); }
+  if (e.key === 'f') { tool='fill'; syncTools(); }
+  if (e.key === 'b') { tool='paint'; syncTools(); }
+});
+
+// ── boot ────────────────────────────────────────────────────────
+function refresh() { renderTabs(); renderZonePanel(); renderExits(); render(); }
+loadWorld(); renderPalette(); syncTools(); refresh();
 </script>
 </body>
 </html>

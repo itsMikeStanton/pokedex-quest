@@ -18,40 +18,15 @@ const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAV
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
-// Zone tile layouts are hand-authored in editor.html and stored in maps.js
-// (CUSTOM_MAPS). MAPS is built from them below, after the ZONE / EXIT / BARRIER
-// data it depends on.
+// Zones, connections and tile layouts are authored in editor.html and stored
+// in world.js (WORLD). ZONE_INFO/EXITS/MAPS are derived from it below.
 
 // ═══════════════════════════════════════════════════
 // ZONE / EXIT / BARRIER DATA
 // ═══════════════════════════════════════════════════
-const ZONE_INFO = [
-  { id: 0, name: 'Meadow',      cols: 20, rows: 14 },
-  { id: 1, name: 'Beach',       cols: 20, rows: 35 },
-  { id: 2, name: 'City',        cols: 20, rows: 14 },
-  { id: 3, name: 'Highlands',   cols: 20, rows: 14 },
-  { id: 4, name: 'Volcano',     cols: 20, rows: 28 },
-  { id: 5, name: 'Dark Forest', cols: 40, rows: 14 },
-  { id: 6, name: 'Ice Cave',    cols: 20, rows: 14 },
-  { id: 7, name: 'Desert',      cols: 40, rows: 14 },
-];
-
-const EXITS = [
-  { from: 0, dir: 'south', pos: [9,10,11], to: 1, entryX: 10, entryY:  1, barrier: 'log'   },
-  { from: 1, dir: 'north', pos: [9,10,11], to: 0, entryX: 10, entryY: 12, barrier: null    },
-  { from: 1, dir: 'west',  pos: [5,6,7],   to: 2, entryX: 18, entryY:  6, barrier: 'rock'  },
-  { from: 2, dir: 'east',  pos: [5,6,7],   to: 1, entryX:  1, entryY:  6, barrier: null    },
-  { from: 2, dir: 'north', pos: [9,10,11], to: 3, entryX: 10, entryY: 12, barrier: 'fence' },
-  { from: 3, dir: 'south', pos: [9,10,11], to: 2, entryX: 10, entryY:  1, barrier: null    },
-  { from: 3, dir: 'north', pos: [9,10,11], to: 4, entryX: 10, entryY: 26, barrier: 'lava'  },
-  { from: 4, dir: 'south', pos: [9,10,11], to: 3, entryX: 10, entryY:  1, barrier: null    },
-  { from: 0, dir: 'west',  pos: [5,6,7],   to: 5, entryX: 38, entryY:  6, barrier: 'vine'  },
-  { from: 5, dir: 'east',  pos: [5,6,7],   to: 0, entryX:  1, entryY:  6, barrier: null    },
-  { from: 1, dir: 'east',  pos: [5,6,7],   to: 6, entryX:  1, entryY:  6, barrier: 'frost' },
-  { from: 6, dir: 'west',  pos: [5,6,7],   to: 1, entryX: 18, entryY:  6, barrier: null    },
-  { from: 2, dir: 'south', pos: [9,10,11], to: 7, entryX: 10, entryY:  1, barrier: 'sand'  },
-  { from: 7, dir: 'north', pos: [9,10,11], to: 2, entryX: 10, entryY: 12, barrier: null    },
-];
+// Zones and connections are authored in editor.html and stored in world.js.
+const ZONE_INFO = WORLD.zones;
+const EXITS = WORLD.exits;
 
 const BARRIERS = {
   log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       cleared: '🔥 Your Fire Pokémon burns away the logs!',      sign: '🔥' },
@@ -63,18 +38,19 @@ const BARRIERS = {
   sand:  { needsType: 'Ground',   hint: 'Catch a 🌍 Ground Pokémon to clear the sand wall!', cleared: '🌍 Your Ground Pokémon clears the sand wall!',   sign: '🌍' },
 };
 
-// World-map layout: schematic grid position (col/row, 1-indexed in a 4×4)
-// plus a representative icon for each zone. Connections are drawn from EXITS.
-const ZONE_MAP = {
-  4: { col: 2, row: 1, icon: '🌋' }, // Volcano
-  5: { col: 1, row: 2, icon: '🌲' }, // Dark Forest
-  3: { col: 2, row: 2, icon: '⛰️' }, // Highlands
-  0: { col: 3, row: 2, icon: '🌳' }, // Meadow
-  2: { col: 2, row: 3, icon: '🏙️' }, // City
-  1: { col: 3, row: 3, icon: '🏖️' }, // Beach
-  6: { col: 4, row: 3, icon: '❄️' }, // Ice Cave
-  7: { col: 2, row: 4, icon: '🏜️' }, // Desert
-};
+// World-map layout: schematic grid position + icon per zone, from world.js.
+// Any zone without a position is auto-placed so new zones still appear.
+const ZONE_MAP = {};
+(() => {
+  let auto = 1;
+  WORLD.zones.forEach(z => {
+    if (z.mapCol != null && z.mapRow != null) {
+      ZONE_MAP[z.id] = { col: z.mapCol, row: z.mapRow, icon: z.icon || '🗺️' };
+    } else {
+      ZONE_MAP[z.id] = { col: auto++, row: 6, icon: z.icon || '🗺️' };
+    }
+  });
+})();
 
 // Most connections are straight lines between adjacent tiles. Meadow↔Dark
 // Forest is the exception: the two zones sit on the same row with Highlands
@@ -91,12 +67,12 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
-// Tile ids per cell come from maps.js (CUSTOM_MAPS), authored in editor.html.
+// Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
 const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE, T.BOULDER]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 
-// Fallback for a zone missing/mismatched in CUSTOM_MAPS: a blank walkable
+// Fallback for a zone missing/mismatched in WORLD.maps: a blank walkable
 // field ringed by trees, with the exit openings carved out.
 function blankZone(zoneId) {
   const { cols, rows } = ZONE_INFO[zoneId];
@@ -128,13 +104,13 @@ function nearestWalkable(zone, x, y) {
   return [x, y];
 }
 
-// Built straight from the authored layouts (maps.js → CUSTOM_MAPS); a zone is
-// used only when its dimensions match, otherwise it falls back to a blank zone.
-const MAPS = ZONE_INFO.map((z, zoneId) => {
-  const cm = (typeof CUSTOM_MAPS !== 'undefined' && CUSTOM_MAPS) ? CUSTOM_MAPS[zoneId] : null;
+// Built from the authored layouts (world.js → WORLD.maps); a zone's map is used
+// only when its dimensions match, otherwise it falls back to a blank zone.
+const MAPS = ZONE_INFO.map((z) => {
+  const cm = (WORLD.maps && WORLD.maps[z.id]) || null;
   if (Array.isArray(cm) && cm.length === z.rows && Array.isArray(cm[0]) && cm[0].length === z.cols)
     return cm.map(row => row.slice());
-  return blankZone(zoneId);
+  return blankZone(z.id);
 });
 
 // ═══════════════════════════════════════════════════
