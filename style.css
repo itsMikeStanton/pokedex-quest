@@ -784,6 +784,17 @@ body {
   color: #90d8a0;
   line-height: 1.9;
 }
+#detail-buddy {
+  margin-top: 10px;
+  font-size: 7px;
+  padding: 8px 10px;
+}
+#detail-buddy.is-buddy {
+  background: #3a2c10;
+  border-color: #c89030;
+  box-shadow: 0 3px 0 #6a4c10;
+  color: #ffe0a0;
+}
 
 /* ─── WORLD MAP SCREEN ──────────────────────────────── */
 #map-screen {

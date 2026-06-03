@@ -105,6 +105,9 @@
         <label>Map pos</label><input class="sm" id="z-mc" placeholder="col"> <input class="sm" id="z-mr" placeholder="row">
         <input class="sm" id="z-icon" placeholder="icon" style="width:34px">
       </div>
+      <div class="row" style="margin-top:5px">
+        <label style="flex:1"><input type="checkbox" id="z-cave"> Cave zone <span class="hint">(off the world map · rock walls · dim)</span></label>
+      </div>
       <div class="tools" style="margin-top:8px">
         <button class="btn" id="z-reset">Re-wall + carve exits</button>
         <button class="btn warn" id="z-del">Delete zone</button>
@@ -117,6 +120,15 @@
       <p class="legend" style="margin-top:8px">
         <b>◻ yellow</b> exit opening · <b>◻ cyan</b> arrival here · <b>◻ lime</b> player start (zone 0).<br>
         Each connection needs a matching <i>return</i> exit in the other zone — use ↩.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Cave portals from this zone</h2>
+      <div id="portal-list"></div>
+      <button class="btn go" id="portal-add">＋ Add portal</button>
+      <p class="legend" style="margin-top:8px">
+        Step onto a <b>Cave Door</b> tile at <b>(fx,fy)</b> → warp to <b>(tx,ty)</b> in the target zone.<br>
+        <b>◻ magenta</b> door leaving here · <b>◻ orange</b> arrival here. Pair two portals for a round trip.
       </p>
     </div>
     <div class="panel">
@@ -165,9 +177,10 @@ const TILES = [
   { id:4, name:'Sand',  color:'#e8c870' }, { id:5, name:'City',  color:'#909098' },
   { id:6, name:'Shop',  color:'#d02060' }, { id:7, name:'Lava',  color:'#d83810' },
   { id:8, name:'Ice',   color:'#b8d8f0' }, { id:9, name:'Boulder', color:'#6a6a74' },
+  { id:10, name:'Cave', color:'#34313f' }, { id:11, name:'Cave Door', color:'#15131f' },
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
-const TREE = 2;
+const TREE = 2, CAVE = 10, CAVE_DOOR = 11, BOULDER = 9;
 const BARRIERS = ['', 'log', 'rock', 'fence', 'lava', 'vine', 'frost', 'sand'];
 const BARRIER_ELEM = { log:'Fire', rock:'Water', fence:'Electric', lava:'Water', vine:'Grass', frost:'Fire', sand:'Ground' };
 const BARRIER_SIGN = { log:'🔥', rock:'💧', fence:'⚡', lava:'💧', vine:'🌿', frost:'🔥', sand:'🌍' };
@@ -178,8 +191,9 @@ let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = tru
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); return; } } catch (_) {}
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; return; } } catch (_) {}
   world = clone(WORLD);
+  if (!world.portals) world.portals = [];
 }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
 function zone() { return world.zones[zi]; }
@@ -191,8 +205,9 @@ function freshGrid(z) {
   rewall(z, g); return g;
 }
 function rewall(z, g) {
-  for (let c = 0; c < z.cols; c++) { g[0][c] = TREE; g[z.rows-1][c] = TREE; }
-  for (let r = 0; r < z.rows; r++) { g[r][0] = TREE; g[r][z.cols-1] = TREE; }
+  const wall = z.base === CAVE ? BOULDER : TREE;   // caves are walled with rock
+  for (let c = 0; c < z.cols; c++) { g[0][c] = wall; g[z.rows-1][c] = wall; }
+  for (let r = 0; r < z.rows; r++) { g[r][0] = wall; g[r][z.cols-1] = wall; }
   world.exits.filter(e => e.from === z.id).forEach(e => e.pos.forEach(p => carve(z, g, e.dir, p)));
 }
 function carve(z, g, dir, p) {
@@ -233,6 +248,8 @@ function render() {
     if (t === TREE) { ctx.fillStyle = '#0f3010'; ctx.beginPath(); ctx.arc(c*cell+cell/2, r*cell+cell/2, cell*0.32, 0, 7); ctx.fill(); }
     else if (t === 6) { ctx.fillStyle='#fff'; ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏪', c*cell+cell/2, r*cell+cell/2); }
     else if (t === 9) { ctx.fillStyle='#9a9aa6'; ctx.beginPath(); ctx.arc(c*cell+cell*0.4, r*cell+cell*0.4, cell*0.18, 0, 7); ctx.fill(); }
+    else if (t === CAVE_DOOR) { ctx.font=(cell*0.66)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🕳️', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === CAVE) { ctx.fillStyle='#52505e'; ctx.fillRect(c*cell+cell*0.3, r*cell+cell*0.55, 2, 2); ctx.fillRect(c*cell+cell*0.6, r*cell+cell*0.3, 2, 2); }
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(c*cell+.5, r*cell+.5, cell, cell);
   }
   if (overlays) {
@@ -242,6 +259,11 @@ function render() {
       if (b) ctx.fillText(BARRIER_SIGN[b]||'?', x*cell+cell/2, y*cell+cell/2); });
     entryCells().forEach(key => { const [x,y] = key.split(',').map(Number);
       ctx.strokeStyle='#30d0e0'; ctx.strokeRect(x*cell+2, y*cell+2, cell-4, cell-4); });
+    // portals: magenta = a door leaving this zone, orange dashed = an arrival in this zone
+    (world.portals||[]).forEach(p => {
+      if (p.from === z.id) { ctx.strokeStyle='#e060ff'; ctx.lineWidth=2; ctx.strokeRect(p.fx*cell+1, p.fy*cell+1, cell-2, cell-2); }
+      if (p.to === z.id)   { ctx.save(); ctx.setLineDash([4,3]); ctx.strokeStyle='#ffa030'; ctx.strokeRect(p.tx*cell+3, p.ty*cell+3, cell-6, cell-6); ctx.restore(); }
+    });
     if (z.id === 0) { ctx.strokeStyle='#60f060'; ctx.strokeRect(10*cell+2, 7*cell+2, cell-4, cell-4); }
   }
   document.getElementById('zone-status').textContent = `${z.name}  ${z.cols}×${z.rows}  ·  id ${z.id}`;
@@ -288,6 +310,9 @@ function renderTabs() {
   const add = document.createElement('button');
   add.className = 'tab add'; add.textContent = '＋ Zone';
   add.onclick = addZone; el.appendChild(add);
+  const addC = document.createElement('button');
+  addC.className = 'tab add'; addC.textContent = '＋ Cave';
+  addC.onclick = addCaveZone; el.appendChild(addC);
 }
 function renderPalette() {
   const el = document.getElementById('palette'); el.innerHTML = '';
@@ -324,9 +349,11 @@ function renderZonePanel() {
   const bsel = document.getElementById('z-base'); bsel.innerHTML = '';
   TILES.forEach(t => { const o = document.createElement('option'); o.value=t.id; o.textContent=t.name; bsel.appendChild(o); });
   bsel.value = z.base;
+  document.getElementById('z-cave').checked = !!z.cave;
 }
 document.getElementById('z-name').oninput = e => { zone().name = e.target.value; renderTabs(); save(); };
 document.getElementById('z-base').onchange = e => { zone().base = +e.target.value; save(); };
+document.getElementById('z-cave').onchange = e => { if (e.target.checked) zone().cave = true; else delete zone().cave; save(); refresh(); };
 document.getElementById('z-mc').oninput = e => { zone().mapCol = e.target.value===''?null:+e.target.value; save(); };
 document.getElementById('z-mr').oninput = e => { zone().mapRow = e.target.value===''?null:+e.target.value; save(); };
 document.getElementById('z-icon').oninput = e => { zone().icon = e.target.value; save(); };
@@ -353,6 +380,17 @@ function addZone() {
   zi = world.zones.length - 1;
   save(); refresh();
 }
+function addCaveZone() {
+  const id = world.zones.length;
+  const z = { id, name: 'Cave ' + id, cols: 14, rows: 10, base: CAVE, wx: 120, wy: 120 + id * 12,
+              mapCol: null, mapRow: null, icon: '🕳️', cave: true };
+  world.zones.push(z);
+  const g = freshGrid(z);          // rock walls (boulder) + cave floor
+  g[2][Math.floor(z.cols / 2)] = CAVE_DOOR;   // a starter exit-mouth, edit as needed
+  world.maps[id] = g;
+  zi = world.zones.length - 1;
+  save(); refresh();
+}
 function deleteZone() {
   if (zone().id === 0) { alert('Zone 0 is the player start and cannot be deleted.'); return; }
   if (!confirm('Delete "' + zone().name + '"? Exits to/from it are removed and zones renumbered.')) return;
@@ -361,11 +399,13 @@ function deleteZone() {
   world.exits = world.exits.filter(e => e.from !== del && e.to !== del);
   delete world.maps[del];
   // renumber zones to keep id === index, remap exits + maps keys
+  world.portals = (world.portals || []).filter(p => p.from !== del && p.to !== del);
   const remap = {}; world.zones.forEach((z, i) => { remap[z.id] = i; });
   const newMaps = {};
   world.zones.forEach((z, i) => { newMaps[i] = world.maps[z.id]; z.id = i; });
   world.maps = newMaps;
   world.exits.forEach(e => { e.from = remap[e.from]; e.to = remap[e.to]; });
+  world.portals.forEach(p => { p.from = remap[p.from]; p.to = remap[p.to]; });
   zi = Math.min(zi, world.zones.length - 1);
   save(); refresh();
 }
@@ -417,6 +457,46 @@ document.getElementById('exit-add').onclick = () => {
   save(); render(); renderExits();
 };
 
+// ── Cave portals panel ──────────────────────────────────────────
+function renderPortals() {
+  const wrap = document.getElementById('portal-list'); wrap.innerHTML = '';
+  const z = zone();
+  (world.portals || []).forEach((p, idx) => {
+    if (p.from !== z.id) return;
+    const row = document.createElement('div'); row.className = 'exit-row';
+    const fxIn = inp(p.fx, 'sm', v => { p.fx = +v|0; save(); render(); });
+    const fyIn = inp(p.fy, 'sm', v => { p.fy = +v|0; save(); render(); });
+    const toSel = sel2(world.zones.map(zz => [zz.id, zz.name]), p.to, v => { p.to = +v; save(); render(); });
+    const txIn = inp(p.tx, 'sm', v => { p.tx = +v|0; save(); render(); });
+    const tyIn = inp(p.ty, 'sm', v => { p.ty = +v|0; save(); render(); });
+    row.append(
+      lblRow('door tile (fx,fy)', wrapEls(fxIn, span(','), fyIn)),
+      lblRow('warp to zone', toSel),
+      lblRow('arrival (tx,ty)', wrapEls(txIn, span(','), tyIn)),
+    );
+    const btns = document.createElement('div'); btns.className = 'row';
+    btns.append(
+      mkbtn('↩ add return', 'btn', () => addPortalReturn(p)),
+      mkbtn('🗑', 'btn warn', () => { world.portals.splice(idx, 1); save(); render(); renderPortals(); }),
+    );
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+}
+function addPortalReturn(p) {
+  // a return portal in the target zone, warping back beside this door
+  world.portals.push({ from: p.to, fx: p.tx, fy: Math.max(1, p.ty - 1), to: p.from, tx: p.fx, ty: p.fy + 1 });
+  save(); render();
+  alert('Return portal added in "' + world.zones[p.to].name + '". Place its Cave Door tile and fine-tune coords there.');
+}
+document.getElementById('portal-add').onclick = () => {
+  const z = zone();
+  if (!world.portals) world.portals = [];
+  const target = world.zones.find(zz => zz.cave) || z;
+  world.portals.push({ from: z.id, fx: 1, fy: 1, to: target.id, tx: 1, ty: 1 });
+  save(); render(); renderPortals();
+};
+
 // tiny DOM helpers
 function sel2(opts, val, on) { const s=document.createElement('select'); opts.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;s.appendChild(o);}); s.value=val; s.onchange=()=>on(s.value); return s; }
 function inp(val, cls, on) { const i=document.createElement('input'); i.className=cls; i.value=val; i.oninput=()=>on(i.value); return i; }
@@ -431,6 +511,8 @@ function exportText() {
   world.zones.forEach(z => s += '    ' + JSON.stringify(z) + ',\n');
   s += '  ],\n  exits: [\n';
   world.exits.forEach(e => s += '    ' + JSON.stringify(e) + ',\n');
+  s += '  ],\n  portals: [\n';
+  (world.portals || []).forEach(p => s += '    ' + JSON.stringify(p) + ',\n');
   s += '  ],\n  maps: {\n';
   world.zones.forEach((z, i, arr) => {
     s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
@@ -450,7 +532,7 @@ document.getElementById('import-json').onclick = () => {
   let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
   if (i<0||j<i) return alert('No object found.');
   try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
-    world = w; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+    world = w; if (!world.portals) world.portals = []; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
   } catch (err) { alert('Parse error: ' + err.message); }
 };
 function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }
@@ -499,9 +581,10 @@ function seamBetween(a, b) {
 }
 function allSeams() {
   const out = [];
-  for (let i = 0; i < world.zones.length; i++)
-    for (let j = i + 1; j < world.zones.length; j++) {
-      const s = seamBetween(world.zones[i], world.zones[j]); if (s) out.push(s);
+  const zs = world.zones.filter(z => !z.cave);   // caves are portal-linked, not edge-adjacent
+  for (let i = 0; i < zs.length; i++)
+    for (let j = i + 1; j < zs.length; j++) {
+      const s = seamBetween(zs[i], zs[j]); if (s) out.push(s);
     }
   return out;
 }
@@ -543,7 +626,7 @@ function makeDoorway(seam, barrier, width) {
 
 function worldBounds() {
   let w = 1, h = 1;
-  world.zones.forEach(z => { w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
+  world.zones.forEach(z => { if (z.cave) return; w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
   return { w: w + 4, h: h + 4 };
 }
 function renderAtlas() {
@@ -564,8 +647,9 @@ function renderAtlas() {
     aCtx.moveTo((a.wx+a.cols/2)*aScale,(a.wy+a.rows/2)*aScale);
     aCtx.lineTo((b.wx+b.cols/2)*aScale,(b.wy+b.rows/2)*aScale); aCtx.stroke();
   });
-  // zones
+  // zones (caves are portal-linked and not shown on the geographic atlas)
   world.zones.forEach(z => {
+    if (z.cave) return;
     const x=z.wx*aScale, y=z.wy*aScale, w=z.cols*aScale, h=z.rows*aScale;
     aCtx.fillStyle = (COLOR[z.base] || '#555') + 'cc'; aCtx.fillRect(x,y,w,h);
     aCtx.strokeStyle = '#000'; aCtx.lineWidth = 1; aCtx.strokeRect(x+.5,y+.5,w,h);
@@ -574,8 +658,9 @@ function renderAtlas() {
   });
   // overlaps
   aCtx.lineWidth = 2;
-  for (let i=0;i<world.zones.length;i++) for (let j=i+1;j<world.zones.length;j++){
-    const a=world.zones[i],b=world.zones[j];
+  const ov = world.zones.filter(z => !z.cave);
+  for (let i=0;i<ov.length;i++) for (let j=i+1;j<ov.length;j++){
+    const a=ov[i],b=ov[j];
     if (overlaps(a,b)) { aCtx.strokeStyle='#ff3040';
       [a,b].forEach(z=>aCtx.strokeRect(z.wx*aScale+1,z.wy*aScale+1,z.cols*aScale-2,z.rows*aScale-2)); }
   }
@@ -646,7 +731,7 @@ document.getElementById('atlas-zoomin').onclick = () => { aScale=Math.min(14,aSc
 document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aScale-1); renderAtlas(); };
 
 // ── boot ────────────────────────────────────────────────────────
-function refresh() { renderTabs(); renderZonePanel(); renderExits(); render(); }
+function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); render(); }
 loadWorld(); ensureCoords(); renderPalette(); syncTools(); refresh();
 </script>
 </body>

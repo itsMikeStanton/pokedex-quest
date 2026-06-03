@@ -13,7 +13,8 @@ const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11 };
+const LAPRAS_ID = 131;   // catching Lapras lets the player cross water (surf)
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
@@ -27,6 +28,8 @@ const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAV
 // Zones and connections are authored in editor.html and stored in world.js.
 const ZONE_INFO = WORLD.zones;
 const EXITS = WORLD.exits;
+// Point-portals (cave mouths etc.): step onto (from, fx, fy) to warp to (to, tx, ty).
+const PORTALS = WORLD.portals || [];
 
 const BARRIERS = {
   log:   { needsType: 'Fire',     hint: 'Catch a 🔥 Fire Pokémon to burn these logs!',       cleared: '🔥 Your Fire Pokémon burns away the logs!',      sign: '🔥' },
@@ -44,6 +47,7 @@ const ZONE_MAP = {};
 (() => {
   let auto = 1;
   WORLD.zones.forEach(z => {
+    if (z.cave) return;   // caves are portal-linked; they don't appear on the world map
     if (z.mapCol != null && z.mapRow != null) {
       ZONE_MAP[z.id] = { col: z.mapCol, row: z.mapRow, icon: z.icon || '🗺️' };
     } else {
@@ -336,6 +340,15 @@ let bumpVec     = null;
 let bumpAnimTs  = -9999;
 let camX = 0, camY = 0;
 
+// ── Buddy / follower pet ─────────────────────────────
+let activePet   = null;   // pokeId of the Pokémon trailing the player (null = none)
+let petX        = 10;
+let petY        = 7;
+let petFromPx   = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
+let petMoveAnimTs = -9999;
+let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
+let surfNoted   = false;  // shown the "you can surf" hint this session yet?
+
 // Pre-cached tile canvases for performance
 const tileCache = {};
 
@@ -377,6 +390,8 @@ function buildTileCache() {
   buildVariants(T.LAVA,  4, paintLava);
   buildVariants(T.ICE,   4, paintIce);
   buildVariants(T.BOULDER, 3, paintBoulder);
+  buildVariants(T.CAVE,  4, paintCave);
+  buildVariants(T.CAVE_ENTRANCE, 1, paintCaveEntrance);
 }
 
 function makeTile() {
@@ -620,6 +635,47 @@ function paintBoulder(x, rng) {
   }
 }
 
+// Cave floor — dark rocky ground with faint cracks and pebbles.
+function paintCave(x, rng) {
+  x.fillStyle = '#34313f';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#3d3a4a';
+  for (let i = 0; i < 4; i++) {
+    x.fillRect(Math.floor(rng() * 26), Math.floor(rng() * 26), 4 + Math.floor(rng() * 6), 3 + Math.floor(rng() * 3));
+  }
+  x.strokeStyle = '#26242e';   // hairline cracks
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(rng() * TILE_SIZE, 0);
+  x.lineTo(rng() * TILE_SIZE, TILE_SIZE);
+  x.stroke();
+  x.fillStyle = '#52505e';     // a couple of light pebbles
+  for (let i = 0; i < 3; i++) x.fillRect(2 + Math.floor(rng() * 28), 2 + Math.floor(rng() * 28), 2, 2);
+}
+
+// Cave entrance / mouth — a dark archway in the rock you can step into.
+function paintCaveEntrance(x) {
+  x.fillStyle = '#5a5560';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // rocky frame
+  x.fillStyle = '#74707c';
+  x.fillRect(0, 0, TILE_SIZE, 6);
+  x.fillRect(0, 0, 5, TILE_SIZE);
+  x.fillRect(TILE_SIZE - 5, 0, 5, TILE_SIZE);
+  // dark mouth (rounded top)
+  x.fillStyle = '#0a0810';
+  x.beginPath();
+  x.moveTo(6, TILE_SIZE);
+  x.lineTo(6, 14);
+  x.arc(TILE_SIZE / 2, 14, TILE_SIZE / 2 - 6, Math.PI, 0);
+  x.lineTo(TILE_SIZE - 6, TILE_SIZE);
+  x.closePath();
+  x.fill();
+  // faint inner glow
+  x.fillStyle = 'rgba(120,110,160,0.18)';
+  x.beginPath(); x.arc(TILE_SIZE / 2, 20, 7, 0, Math.PI * 2); x.fill();
+}
+
 // ═══════════════════════════════════════════════════
 // EVENT BINDING
 // ═══════════════════════════════════════════════════
@@ -658,6 +714,7 @@ function bindEvents() {
   // Pokédex
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
+  document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
 
   // World map
   document.getElementById('map-back').addEventListener('click', closeMap);
@@ -797,6 +854,30 @@ function getRenderPos(ts) {
   return { x: destX, y: destY + bob };
 }
 
+// ── Buddy follower ───────────────────────────────────
+// Each step the buddy slides onto the tile the player just vacated.
+function petFollow(tx, ty, ts) {
+  if (activePet == null) return;
+  const cur = getPetRenderPos(ts);
+  petFromPx.x = cur.x;
+  petFromPx.y = cur.y;
+  petX = tx; petY = ty;
+  petMoveAnimTs = ts;
+}
+
+function getPetRenderPos(ts) {
+  const destX = petX * TILE_SIZE;
+  const destY = petY * TILE_SIZE;
+  const mt = Math.min((ts - petMoveAnimTs) / MOVE_ANIM_MS, 1);
+  if (mt < 1) {
+    const ease = 1 - Math.pow(1 - mt, 3);
+    return { x: petFromPx.x + (destX - petFromPx.x) * ease,
+             y: petFromPx.y + (destY - petFromPx.y) * ease };
+  }
+  const bob = Math.sin(ts * 0.003 + 1) * 2;
+  return { x: destX, y: destY + bob };
+}
+
 // ═══════════════════════════════════════════════════
 // GAME LOOP
 // ═══════════════════════════════════════════════════
@@ -828,6 +909,14 @@ function isBarrierUnlocked(key) {
 // Whether the player currently has a caught Pokémon of the given type.
 function playerHasType(type) {
   return POKEMON_DATA.some(p => p.type === type && caughtIds.has(p.id));
+}
+
+// Caught Lapras? Then the player can ride across water tiles.
+function canSurf() { return caughtIds.has(LAPRAS_ID); }
+
+// A point-portal (cave mouth) sitting on (x, y) of the given zone, if any.
+function portalAt(zone, x, y) {
+  return PORTALS.find(p => p.from === zone && p.fx === x && p.fy === y) || null;
 }
 
 // Returns barrier key if (nx, ny) is a locked border exit tile for the current zone.
@@ -931,9 +1020,11 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 4. Check tile impassable
+  // 4. Check tile impassable. Water is normally impassable, but once you've
+  //    caught Lapras you can surf straight across it.
   const tile = MAPS[currentZone][ny][nx];
-  if (isObstacleTile(tile)) {
+  const surfing = tile === T.WATER && canSurf();
+  if (isObstacleTile(tile) && !surfing) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     beep(160, 0.07, 0.1, 'square');
@@ -946,11 +1037,27 @@ function move(dx, dy, ts) {
   fromPx.y   = cur.y;
   moveAnimTs = ts;
 
+  const oldX = playerX, oldY = playerY;
   playerX   = nx;
   playerY   = ny;
   playerStep ^= 1;
+  petFollow(oldX, oldY, ts);   // buddy steps onto the tile you just left
 
   beep(220, 0.04, 0.04, 'square');
+
+  // First time surfing this session — let the player know what's happening.
+  if (surfing && !surfNoted) {
+    surfNoted = true;
+    showMessage('🌊 Lapras carries you across the water!');
+  }
+
+  // Step onto a cave mouth (or other point-portal) → warp into the linked zone.
+  const portal = portalAt(currentZone, playerX, playerY);
+  if (portal) {
+    beep(300, 0.08, 0.1);
+    setTimeout(() => warpTo(portal.to, portal.tx, portal.ty, 'down'), 110);
+    return;
+  }
 
   // Open shop when stepping onto shop tile
   if (MAPS[currentZone][playerY][playerX] === T.SHOP) {
@@ -1001,14 +1108,13 @@ function move(dx, dy, ts) {
 // ═══════════════════════════════════════════════════
 // ZONE TRANSITION
 // ═══════════════════════════════════════════════════
-function doTransition(exit, ts) {
-  currentZone = exit.to;
-  playerX     = exit.entryX;
-  playerY     = exit.entryY;
-
-  // Face correct direction upon entry
-  const dirMap = { south: 'down', north: 'up', west: 'left', east: 'right' };
-  playerDir = dirMap[exit.dir];
+// Move the player to (x, y) of another zone — used by both edge exits and
+// point-portals (cave mouths). The buddy is teleported along too.
+function warpTo(zone, x, y, dirKey) {
+  currentZone = zone;
+  playerX     = x;
+  playerY     = y;
+  playerDir   = dirKey || 'down';
 
   // Reset animation state — snap to position, no slide glitch
   fromPx.x   = playerX * TILE_SIZE;
@@ -1016,9 +1122,14 @@ function doTransition(exit, ts) {
   moveAnimTs = -9999;
   bumpVec    = null;
 
+  // Buddy comes through with you, landing on your tile.
+  petX = playerX; petY = playerY;
+  petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+  petMoveAnimTs = -9999;
+
   saveGame();
   updateHud();
-  showMessage('📍 ' + ZONE_INFO[exit.to].name);
+  showMessage('📍 ' + ZONE_INFO[zone].name);
 
   // Transition sound: two rising beeps
   beep(330, 0.1, 0.1);
@@ -1026,6 +1137,11 @@ function doTransition(exit, ts) {
 
   clearWild();
   scheduleSpawn();
+}
+
+function doTransition(exit, ts) {
+  const dirMap = { south: 'down', north: 'up', west: 'left', east: 'right' };
+  warpTo(exit.to, exit.entryX, exit.entryY, dirMap[exit.dir]);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1278,10 +1394,48 @@ function drawWorld(ts) {
     ctx.fillStyle = zoneTints[currentZone];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+  // Caves are dim — lay a dark wash over everything for atmosphere.
+  if (ZONE_INFO[currentZone].base === T.CAVE) {
+    ctx.fillStyle = 'rgba(8,6,24,0.42)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   drawBarriers(ts);
   drawEntities(ts);
   drawWild(ts);
+  // A ripple under the player while surfing on water.
+  if (MAPS[currentZone][playerY][playerX] === T.WATER && canSurf()) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(220,240,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(renderPos.x - camX + TILE_SIZE / 2, renderPos.y - camY + TILE_SIZE - 4,
+                TILE_SIZE * 0.42, TILE_SIZE * 0.16, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawPet(ts);
   drawPlayer(renderPos.x - camX, renderPos.y - camY);
+}
+
+// Draw the buddy Pokémon trailing the player (small sprite, idle bob).
+function drawPet(ts) {
+  if (activePet == null) return;
+  const poke = POKEMON_DATA.find(p => p.id === activePet);
+  if (!poke || !caughtIds.has(poke.id)) return;
+  const rp = getPetRenderPos(ts);
+  const px = rp.x - camX, py = rp.y - camY;
+  const img = canvasSprite(poke);
+  if (img.complete && img.naturalWidth) {
+    const h = 24, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    const prev = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, Math.round(px + (TILE_SIZE - w) / 2), Math.round(py + TILE_SIZE - h), w, h);
+    ctx.imageSmoothingEnabled = prev;
+  } else {
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(poke.emoji, px + TILE_SIZE / 2, py + TILE_SIZE - 4);
+  }
 }
 
 // ─── Barrier graphics ────────────────────────────────
@@ -1619,6 +1773,17 @@ function caught() {
   const legend = currentLegend;
   caughtIds.add(currentPoke.id);
   if (isNew) coins += NEW_CATCH_BOUNTY;   // reward discovering a new species
+
+  // Your very first catch automatically becomes your buddy, so the
+  // follow-me feature is discoverable. Swap buddies anytime in the Pokédex.
+  let becameBuddy = false;
+  if (activePet == null) {
+    activePet = currentPoke.id;
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+    petMoveAnimTs = -9999;
+    becameBuddy = true;
+  }
   if (legend) {                       // remove the captured roamer from the world
     roamers = roamers.filter(r => r !== legend);
     currentLegend = null;
@@ -1634,9 +1799,11 @@ function caught() {
                                                         : isNew  ? '✨ GOT IT! ✨'
                                                                  : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
-  document.getElementById('result-message').textContent = isNew
-    ? `Added to your PokéDex!  +${NEW_CATCH_BOUNTY} 💰`
-    : 'Already in your PokéDex — great job anyway!';
+  document.getElementById('result-message').textContent = becameBuddy
+    ? `${currentPoke.name} is now your buddy — it'll follow you around! 🐾  (Pick a different buddy anytime in the PokéDex.)`
+    : isNew
+      ? `Added to your PokéDex!  +${NEW_CATCH_BOUNTY} 💰`
+      : 'Already in your PokéDex — great job anyway!';
 
   const rs = document.getElementById('result-screen');
   rs.className = 'screen active success';
@@ -1946,6 +2113,32 @@ function showDetail(poke) {
 
   document.getElementById('detail-befriend-icon').textContent = poke.actionEmoji || '💚';
   document.getElementById('detail-befriend-text').textContent = poke.befriendTip || '';
+
+  detailPoke = poke;
+  const buddyBtn = document.getElementById('detail-buddy');
+  if (activePet === poke.id) {
+    buddyBtn.textContent = '🐾 Following you — tap to dismiss';
+    buddyBtn.classList.add('is-buddy');
+  } else {
+    buddyBtn.textContent = '🐾 Make this my buddy';
+    buddyBtn.classList.remove('is-buddy');
+  }
+}
+
+// Toggle the open Pokémon as the player's buddy.
+function toggleBuddy() {
+  if (!detailPoke) return;
+  if (activePet === detailPoke.id) {
+    activePet = null;
+  } else {
+    activePet = detailPoke.id;
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+    petMoveAnimTs = -9999;
+  }
+  saveGame();
+  beep(523, 0.08, 0.08);
+  showDetail(detailPoke);   // refresh the button label
 }
 
 function closeDetail() {
@@ -1985,7 +2178,7 @@ function closeMap() {
 function renderMap() {
   const open = reachableZones();
   document.getElementById('map-open-count').textContent = open.size;
-  document.getElementById('map-total').textContent = ZONE_INFO.length;
+  document.getElementById('map-total').textContent = Object.keys(ZONE_MAP).length;
 
   // Cell centres in the 400×400 SVG viewBox (4×4 grid → 100px cells).
   const cx = id => (ZONE_MAP[id].col - 0.5) * 100;
@@ -2223,6 +2416,11 @@ function startNewGame() {
   fromPx.y = 7 * TILE_SIZE;
   moveAnimTs = -9999;
   bumpVec = null;
+  activePet = null;
+  petX = 10; petY = 7;
+  petFromPx.x = 10 * TILE_SIZE; petFromPx.y = 7 * TILE_SIZE;
+  petMoveAnimTs = -9999;
+  surfNoted = false;
   saveGame();
   updateHud();
   enterWorld();
@@ -2250,6 +2448,7 @@ function saveGame() {
       zone:      currentZone,
       x:         playerX,
       y:         playerY,
+      activePet,
       balls,
       masterBalls,
       coins,
@@ -2278,12 +2477,17 @@ function loadSlot(n) {
       balls = data.balls ?? 12;
       masterBalls = data.masterBalls ?? 0;
       coins = data.coins ?? 0;
+      activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
       fromPx.x   = playerX * TILE_SIZE;
       fromPx.y   = playerY * TILE_SIZE;
       moveAnimTs = -9999;
       bumpVec    = null;
+      petX = playerX; petY = playerY;
+      petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+      petMoveAnimTs = -9999;
+      surfNoted = false;
     }
   } catch (_) {}
   initRoamers();
