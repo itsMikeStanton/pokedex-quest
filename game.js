@@ -2013,13 +2013,74 @@ function choosePokemon(poke, card) {
     card.classList.add('correct');
     beep(523, 0.12, 0.1);
     setTimeout(() => beep(659, 0.12, 0.15), 110);
-    if (battleRoundNum >= 3) setTimeout(battleWon, 600);
-    else setTimeout(nextBattleRound, 700);
+    // The chosen Lukeymon charges in full-size and bumps Mewtwo, then the
+    // battle moves on (next round, or the win once round 3 is cleared).
+    battleAttack(poke, () => {
+      if (battleRoundNum >= 3) battleWon();
+      else nextBattleRound();
+    });
   } else {
     card.classList.add('wrong');
     beep(160, 0.15, 0.2, 'square');
     setTimeout(battleLost, 800);
   }
+}
+
+// Show the picked Pokémon at full size, lunge it up into Mewtwo (who recoils),
+// then run onDone. Positions are measured so the impact lands on Mewtwo.
+function battleAttack(poke, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const mew   = document.getElementById('battle-mewtwo');
+  const atk = document.createElement('div');
+  atk.className = 'battle-attacker';
+  atk.appendChild(pokeImg(poke, 108));   // the actual selected Lukeymon, full size
+  stage.appendChild(atk);
+
+  if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
+
+  requestAnimationFrame(() => {
+    const sR = stage.getBoundingClientRect();
+    const mR = mew.getBoundingClientRect();
+    const aR = atk.getBoundingClientRect();
+    const startX = sR.width / 2 - aR.width / 2;
+    const startY = sR.height - aR.height - 16;
+    atk.style.left = Math.round(startX) + 'px';
+    atk.style.top  = Math.round(startY) + 'px';
+    const hitY = (mR.top - sR.top) + mR.height * 0.45 - aR.height / 2;
+    const dy = hitY - startY;            // negative → moves up toward Mewtwo
+    const anim = atk.animate([
+      { transform: 'translateY(46px) scale(0.5)',        opacity: 0 },
+      { transform: 'translateY(0) scale(1)',             opacity: 1, offset: 0.22 },
+      { transform: `translateY(${dy}px) scale(1.06)`,    opacity: 1, offset: 0.5 },
+      { transform: `translateY(${dy + 24}px) scale(1)`,  opacity: 1, offset: 0.64 },  // bump back
+      { transform: 'translateY(24px) scale(0.7)',        opacity: 0 },
+    ], { duration: 780, easing: 'ease-in-out' });
+
+    setTimeout(() => { mewtwoRecoil(mew); battleThud(stage, mR, sR); }, 250);
+    anim.onfinish = () => { atk.remove(); onDone && onDone(); };
+  });
+}
+
+function mewtwoRecoil(mew) {
+  if (!mew.animate) return;
+  mew.animate([
+    { transform: 'translate(0,0)' },
+    { transform: 'translate(-3px,-10px) rotate(-5deg)' },
+    { transform: 'translate(3px,-3px) rotate(4deg)' },
+    { transform: 'translate(0,0)' },
+  ], { duration: 340, easing: 'ease-out' });
+}
+
+function battleThud(stage, mR, sR) {
+  beep(110, 0.09, 0.26, 'square');
+  setTimeout(() => beep(880, 0.06, 0.12), 45);
+  const boom = document.createElement('div');
+  boom.className = 'battle-impact';
+  boom.textContent = '💥';
+  boom.style.left = Math.round((mR.left - sR.left) + mR.width / 2) + 'px';
+  boom.style.top  = Math.round((mR.top  - sR.top)  + mR.height / 2) + 'px';
+  stage.appendChild(boom);
+  setTimeout(() => boom.remove(), 460);
 }
 
 function battleWon() {
