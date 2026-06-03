@@ -624,6 +624,21 @@ body {
 #result-screen.success { background: linear-gradient(160deg, #102010, #205030); }
 #result-screen.fled    { background: linear-gradient(160deg, #201010, #302030); }
 
+/* Badge celebration confetti burst */
+.confetti-piece {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  pointer-events: none;
+  z-index: 5;
+  animation: confettiBurst 1.2s ease-out forwards;
+}
+@keyframes confettiBurst {
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(0deg); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot)); opacity: 0; }
+}
+
 #result-stars {
   font-size: 18px;
   animation: starpop .4s ease-out;

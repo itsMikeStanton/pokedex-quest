@@ -1091,16 +1091,13 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // Found a fixed collectible (badge) sitting on this tile?
+  // Found a fixed collectible (badge) sitting on this tile? Big celebration.
   const item = collectibleAt(currentZone, playerX, playerY);
   if (item && !collected.has(item.id)) {
     collected.add(item.id);
     saveGame();
     updateHud();
-    showMessage(`${item.emoji} You found the ${item.name}! (${collected.size}/${COLLECTIBLES.length})`);
-    beep(660, 0.12, 0.1);
-    setTimeout(() => beep(880, 0.12, 0.12), 110);
-    setTimeout(() => beep(1100, 0.16, 0.18), 230);
+    celebrateBadge(item);
     return;
   }
 
@@ -2679,6 +2676,54 @@ function playEncounterJingle() {
 function playCatchJingle() {
   const melody = [523, 659, 784, 1047];
   melody.forEach((f, i) => setTimeout(() => beep(f, 0.15, 0.18), i * 140));
+}
+
+// A grand fanfare for earning a badge — longer than a catch, with a flourish.
+function playBadgeJingle() {
+  const melody = [523, 659, 784, 1047, 880, 1047, 1319];
+  melody.forEach((f, i) => setTimeout(() => beep(f, 0.14, 0.2), i * 130));
+  setTimeout(() => beep(1568, 0.32, 0.32), melody.length * 130 + 60);
+}
+
+// ═══════════════════════════════════════════════════
+// BADGE CELEBRATION  (reuses the catch result screen)
+// ═══════════════════════════════════════════════════
+function celebrateBadge(item) {
+  clearWild();
+  clearTimeout(spawnTimerId);
+
+  document.getElementById('result-stars').classList.remove('hidden');
+  document.getElementById('result-icon').innerHTML =
+    `<span style="font-size:76px;display:inline-block;animation:trophypop .5s ease-out both">${item.emoji}</span>`;
+  document.getElementById('result-title').textContent   = '🏅 BADGE GET!';
+  document.getElementById('result-name').textContent    = item.name;
+  document.getElementById('result-message').textContent =
+    `Badge ${collected.size} of ${COLLECTIBLES.length} collected!`;
+
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active success';
+  showScreen('result');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// A burst of celebratory emoji that fly outward from the centre and fade.
+function badgeConfetti() {
+  const screen = document.getElementById('result-screen');
+  const pieces = ['✨', '🎉', '⭐', '🏅', '🎊', '💫'];
+  for (let i = 0; i < 20; i++) {
+    const s = document.createElement('span');
+    s.className = 'confetti-piece';
+    s.textContent = pieces[i % pieces.length];
+    const ang = Math.random() * Math.PI * 2, dist = 55 + Math.random() * 95;
+    s.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    s.style.setProperty('--dy', Math.sin(ang) * dist - 20 + 'px');
+    s.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+    s.style.animationDelay = (Math.random() * 0.15) + 's';
+    s.style.fontSize = (12 + Math.random() * 10) + 'px';
+    screen.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  }
 }
 
 function playFledSound() {
