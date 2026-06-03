@@ -56,6 +56,7 @@ const POKEMON_DATA = [
     type: 'Electric',
     description: 'When several of these Pokémon gather, their electricity can build up and cause lightning storms!',
     zones: [2],
+    light: true,   // its cheek sparks light up dark caves
   },
   {
     id: 35, name: 'Clefairy', sprite: 'sprites/035.png', emoji: '🌙',

@@ -917,6 +917,14 @@ function playerHasType(type) {
 // Caught Lapras? Then the player can ride across water tiles.
 function canSurf() { return caughtIds.has(LAPRAS_ID); }
 
+// Does the current buddy glow brightly enough to light a cave? Fire types carry
+// a flame; a few others (marked light:true) also shine.
+function buddyLightsCave() {
+  if (activePet == null) return false;
+  const p = POKEMON_DATA.find(x => x.id === activePet);
+  return !!p && (p.type === 'Fire' || p.light === true);
+}
+
 // A point-portal (cave mouth) sitting on (x, y) of the given zone, if any.
 function portalAt(zone, x, y) {
   return PORTALS.find(p => p.from === zone && p.fx === x && p.fy === y) || null;
@@ -1132,7 +1140,10 @@ function warpTo(zone, x, y, dirKey) {
 
   saveGame();
   updateHud();
-  showMessage('📍 ' + ZONE_INFO[zone].name);
+  if (ZONE_INFO[zone].base === T.CAVE && !buddyLightsCave())
+    showMessage("🕯️ It's pitch black! Bring a glowing buddy (a Fire-type, say) to light the way…");
+  else
+    showMessage('📍 ' + ZONE_INFO[zone].name);
 
   // Transition sound: two rising beeps
   beep(330, 0.1, 0.1);
@@ -1397,11 +1408,6 @@ function drawWorld(ts) {
     ctx.fillStyle = zoneTints[currentZone];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  // Caves are dim — lay a dark wash over everything for atmosphere.
-  if (ZONE_INFO[currentZone].base === T.CAVE) {
-    ctx.fillStyle = 'rgba(8,6,24,0.42)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
   drawBarriers(ts);
   drawEntities(ts);
   drawWild(ts);
@@ -1418,6 +1424,30 @@ function drawWorld(ts) {
   }
   drawPet(ts);
   drawPlayer(renderPos.x - camX, renderPos.y - camY);
+
+  // Cave darkness: everything is near-black except a circle of light around the
+  // player. The radius is large only if your buddy glows (Fire types, etc.);
+  // otherwise it's a tiny, can't-really-navigate sliver.
+  if (ZONE_INFO[currentZone].base === T.CAVE) {
+    const lit = buddyLightsCave();
+    const flick = 1 + Math.sin(ts * 0.013) * 0.04 + Math.sin(ts * 0.031) * 0.02; // torch flicker
+    const R = (lit ? 5.8 : 1.35) * TILE_SIZE * flick;
+    const cxp = renderPos.x - camX + TILE_SIZE / 2;
+    const cyp = renderPos.y - camY + TILE_SIZE / 2;
+    const dark = ctx.createRadialGradient(cxp, cyp, Math.max(4, R * 0.32), cxp, cyp, R);
+    dark.addColorStop(0,   'rgba(2,2,9,0)');
+    dark.addColorStop(0.7, 'rgba(2,2,9,0.5)');
+    dark.addColorStop(1,   'rgba(1,1,7,0.985)');
+    ctx.fillStyle = dark;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (lit) {   // warm torch glow tint
+      const warm = ctx.createRadialGradient(cxp, cyp, 0, cxp, cyp, R);
+      warm.addColorStop(0, 'rgba(255,170,70,0.12)');
+      warm.addColorStop(1, 'rgba(255,170,70,0)');
+      ctx.fillStyle = warm;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
 }
 
 // Draw the buddy Pokémon trailing the player (small sprite, idle bob).
@@ -1435,7 +1465,7 @@ function drawPet(ts) {
     const dy = Math.round(py + TILE_SIZE - h + 4);
     const prev = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    if (petFacing === -1) {           // flip horizontally to face left
+    if (petFacing === 1) {            // sprites face left by default → flip when moving right
       ctx.save();
       ctx.translate(dx + w, dy);
       ctx.scale(-1, 1);
@@ -1449,7 +1479,7 @@ function drawPet(ts) {
     ctx.font = '24px serif';
     ctx.textAlign = 'center';
     ctx.save();
-    if (petFacing === -1) {
+    if (petFacing === 1) {
       ctx.translate(px + TILE_SIZE, 0); ctx.scale(-1, 1);
       ctx.fillText(poke.emoji, TILE_SIZE / 2, py + TILE_SIZE - 2);
     } else {
