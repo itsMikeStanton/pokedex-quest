@@ -1367,11 +1367,18 @@ function drawWild(ts) {
   // Blink in final 2.5 s — every 300 ms
   if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
 
-  // Emoji floats above tile with gentle bob
+  // A red "!" alert floats above the rustling grass (classic encounter cue).
   const bob = Math.sin(ts * 0.005) * 3;
-  ctx.font = '17px serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(wildPoke.poke.emoji, px + TILE_SIZE / 2, py - 2 + bob);
+  const cx = px + TILE_SIZE / 2;
+  const ty = py - 24 + bob;
+  // dark outline
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(cx - 4, ty - 1, 8, 15);
+  ctx.fillRect(cx - 4, ty + 15, 8, 8);
+  // red fill
+  ctx.fillStyle = '#e81028';
+  ctx.fillRect(cx - 3, ty, 6, 13);
+  ctx.fillRect(cx - 3, ty + 16, 6, 6);
 }
 
 // ═══════════════════════════════════════════════════
