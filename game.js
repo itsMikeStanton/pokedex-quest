@@ -514,16 +514,53 @@ function buildTileCache() {
   buildVariants(T.WATER, 4, paintWater);
   buildVariants(T.SAND,  5, paintSand);
   buildVariants(T.CITY,  3, paintCity);
-  buildVariants(T.SHOP,  1, paintShop);
+  buildVariants(T.SHOP,  1, paintGrass);   // ground only — the building is drawn oversized
   buildVariants(T.LAVA,  4, paintLava);
   buildVariants(T.ICE,   4, paintIce);
   buildVariants(T.BOULDER, 3, paintBoulder);
   buildVariants(T.CAVE,  4, paintCave);
   buildVariants(T.CAVE_ENTRANCE, 1, paintCaveEntrance);
-  buildVariants(T.HOUSE, 1, paintHouse);
+  buildVariants(T.HOUSE, 1, paintGrass);   // ground only — the building is drawn oversized
   buildVariants(T.FLOOR, 3, paintFloor);
   buildVariants(T.WALL,  3, paintWall);
   buildVariants(T.DOOR,  1, paintDoor);
+  buildBuildingSprites();
+}
+
+// Oversized building sprites (transparent bg), drawn on top of their ground tile and
+// extending upward so a 1-tile entrance reads as a full-size building.
+const buildingSprites = {};
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+function buildBuildingSprites() {
+  { const [c, x] = makeCanvas(54, 58); paintHouseBig(x); buildingSprites[T.HOUSE] = c; }
+  { const [c, x] = makeCanvas(54, 58); paintShopBig(x);  buildingSprites[T.SHOP]  = c; }
+}
+function paintHouseBig(x) {
+  x.fillStyle = '#d8b48a'; x.fillRect(6, 26, 42, 30);                 // body
+  x.fillStyle = '#bf9b73'; x.fillRect(6, 26, 42, 4);                 // body shade
+  x.fillStyle = '#c0432f';                                           // roof
+  x.beginPath(); x.moveTo(1, 28); x.lineTo(27, 4); x.lineTo(53, 28); x.closePath(); x.fill();
+  x.fillStyle = '#8f3322'; x.beginPath(); x.moveTo(1, 28); x.lineTo(53, 28); x.lineTo(53, 31); x.lineTo(1, 31); x.closePath(); x.fill();
+  x.fillStyle = '#9fd8ff'; x.fillRect(12, 34, 9, 9); x.fillRect(33, 34, 9, 9);   // windows
+  x.fillStyle = '#5a7a96'; x.fillRect(12, 34, 9, 2); x.fillRect(33, 34, 9, 2);
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);              // door (bottom-centre)
+  x.fillStyle = '#5a3a1e'; x.fillRect(22, 40, 10, 2);
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);                // knob
+}
+function paintShopBig(x) {
+  x.fillStyle = '#e8d8b0'; x.fillRect(5, 24, 44, 32);              // body
+  x.fillStyle = '#d02060'; x.fillRect(2, 16, 50, 12);             // awning
+  x.fillStyle = '#f06090'; for (let i = 2; i < 52; i += 8) x.fillRect(i, 16, 4, 12);
+  x.fillStyle = '#b8901c'; x.fillRect(5, 24, 44, 3);             // awning shadow on body
+  x.fillStyle = '#9fd8ff'; x.fillRect(9, 32, 12, 10); x.fillRect(33, 32, 12, 10); // windows
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);          // door
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);
+  x.font = '11px serif'; x.textAlign = 'center'; x.fillText('🏪', 27, 14);  // sign above
+  x.textAlign = 'left';
 }
 
 function paintHouse(x) {
@@ -1634,6 +1671,17 @@ function drawWorld(ts) {
       const variants = tileCache[map[r][c]];
       const img = variants[tileVariant(currentZone, r, c, variants.length)];
       ctx.drawImage(img, c * TILE_SIZE - camX, r * TILE_SIZE - camY);
+    }
+  }
+  // Oversized buildings: drawn on top of their ground tile, anchored at the tile's
+  // bottom and extending upward so they feel like real structures.
+  for (let r = startR; r < Math.min(rows, endR + 2); r++) {
+    for (let c = startC; c < endC; c++) {
+      const spr = buildingSprites[map[r][c]];
+      if (!spr) continue;
+      const bx = c * TILE_SIZE - camX + TILE_SIZE / 2;
+      const by = r * TILE_SIZE - camY + TILE_SIZE;
+      ctx.drawImage(spr, Math.round(bx - spr.width / 2), Math.round(by - spr.height));
     }
   }
   const zoneTints = {
