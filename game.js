@@ -2201,6 +2201,15 @@ function startBossBattle(cfg) {
   const bossEl = document.getElementById('battle-mewtwo');
   if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }   // real Pokémon sprite
   else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; } // Team Rocket emoji
+  // The trainer sits in the corner once their Pokémon takes the field.
+  const foe = document.getElementById('battle-foe');
+  if (cfg.foeEmoji) {
+    document.getElementById('battle-foe-emoji').textContent = cfg.foeEmoji;
+    document.getElementById('battle-foe-badge').textContent = 'R · ' + (cfg.grunt || '');
+    foe.classList.remove('hidden');
+  } else {
+    foe.classList.add('hidden');
+  }
   document.getElementById('battle-win').classList.add('hidden');
   document.getElementById('battle-options').classList.remove('hidden');
   document.getElementById('battle-instruction').classList.remove('hidden');
@@ -2257,7 +2266,7 @@ function startRocketBattle(rkt) {
   clearTimeout(spawnTimerId);
   startBossBattle({
     title: `TEAM ROCKET: ${rkt.name}`, emoji: rkt.emoji, rounds: lineup.length, rule: 'beats',
-    grunt: rkt.name, lineup,
+    grunt: rkt.name, lineup, foeEmoji: rkt.emoji,
     motto: '“Prepare for trouble!”<br>“…and make it double!”<br>' +
            `<b>${rkt.name} of Team Rocket wants to battle!</b>`,
     intro: () => rocketIntro(),

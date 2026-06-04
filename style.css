@@ -1051,12 +1051,27 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 8px;
+  padding: 18px 8px 10px;
   gap: 6px;
   overflow-y: auto;
+  position: relative;
 }
-#battle-header { font-size: 10px; color: #c890f8; text-shadow: 0 0 8px #a040f0; margin-top: 2px; }
-#battle-mewtwo { font-size: 44px; line-height: 1; animation: detailpop .4s ease-out; filter: drop-shadow(0 0 10px #a040f0); }
+#battle-header { font-size: 10px; color: #c890f8; text-shadow: 0 0 8px #a040f0; margin-top: 0; }
+#battle-mewtwo { font-size: 44px; line-height: 1; margin-top: 2px; animation: detailpop .4s ease-out; filter: drop-shadow(0 0 10px #a040f0); }
+
+/* Team Rocket grunt tucked in the corner while their Pokémon is on the field */
+#battle-foe {
+  position: absolute;
+  top: 8px; right: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  z-index: 6; pointer-events: none;
+}
+#battle-foe-emoji { font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+#battle-foe-badge {
+  font-size: 5px; color: #fff; letter-spacing: 1px;
+  background: #e0202c; border: 1px solid #ff6068; border-radius: 4px;
+  padding: 1px 4px;
+}
 
 /* The picked Lukeymon lunging into Mewtwo */
 .battle-attacker {
