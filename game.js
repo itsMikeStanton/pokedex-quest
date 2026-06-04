@@ -780,6 +780,10 @@ function bindEvents() {
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
+  // Unlock/resume audio on the first real gesture anywhere (mobile needs this).
+  ['pointerdown', 'touchend', 'mousedown'].forEach(ev =>
+    document.addEventListener(ev, wakeAudio, { capture: true, passive: true }));
+
   // Title / save slots
   document.getElementById('play-btn').addEventListener('click', () => { wakeAudio(); openSlots(); });
   document.getElementById('slot-back').addEventListener('click', () => showScreen('title'));
@@ -3480,10 +3484,19 @@ function bindHoldErase(btn, n) {
 // AUDIO (Web Audio API chiptune)
 // ═══════════════════════════════════════════════════
 function wakeAudio() {
-  if (audioCtx) return;
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    restartMusic();   // kick off the loop now that audio is unlocked
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
+      restartMusic();   // kick off the loop now that audio is unlocked
+      return;
+    }
+    // Mobile (iOS/Android) starts the context suspended and can re-suspend after
+    // backgrounding — re-resume on every gesture (cheap & idempotent).
+    if (audioCtx.state === 'suspended' && audioCtx.resume) {
+      audioCtx.resume();
+      restartMusic();
+    }
   } catch (_) {}
 }
 
