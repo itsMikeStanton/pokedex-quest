@@ -528,6 +528,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
+const ART_V = '2';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -540,19 +541,19 @@ function tileArtImg(zone, tileId, variant) {
   const v = ((variant % cnt) + cnt) % cnt;
   const key = zone + '_' + tileId + '_' + v;
   let img = _tileArt[key];
-  if (!img) { img = new Image(); img.src = 'art/tiles/z' + key + '.png'; _tileArt[key] = img; }
+  if (!img) { img = new Image(); img.src = 'art/tiles/z' + key + '.png?v=' + ART_V; _tileArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
 const _treeArt = {};
 function treeArtImg(zone) {
   if (zone > 7) return null;                       // no trees in the hidden cave
   let img = _treeArt[zone];
-  if (!img) { img = new Image(); img.src = 'art/tree/z' + zone + '.png'; _treeArt[zone] = img; }
+  if (!img) { img = new Image(); img.src = 'art/tree/z' + zone + '.png?v=' + ART_V; _treeArt[zone] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
-const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png'; return i; })();
+const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png?v=' + ART_V; return i; })();
 function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _shopImg : null; }
-const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png'; return i; })();
+const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png?v=' + ART_V; return i; })();
 function houseArtImg() { return (_houseImg.complete && _houseImg.naturalWidth) ? _houseImg : null; }
 
 // Oversized building sprites (transparent bg), drawn on top of their ground tile and
@@ -1512,7 +1513,7 @@ function talkNPC(npc) {
   clearTimeout(spawnTimerId);
 
   const ne = document.getElementById('npc-emoji');
-  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/npc/' + npc.art + '.png" alt="">';
+  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/npc/' + npc.art + '.png?v=' + ART_V + '" alt="">';
   else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
   document.getElementById('npc-name').textContent  = npc.name;
 
@@ -1571,7 +1572,7 @@ const _npcArt = {};
 function npcArtImg(key) {
   if (!key) return null;
   let img = _npcArt[key];
-  if (!img) { img = new Image(); img.src = 'art/npc/' + key + '.png'; _npcArt[key] = img; }
+  if (!img) { img = new Image(); img.src = 'art/npc/' + key + '.png?v=' + ART_V; _npcArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
 // Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
@@ -2070,7 +2071,7 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
 const _playerArt = {};
 function playerArtImg(name) {
   let i = _playerArt[name];
-  if (!i) { i = new Image(); i.src = 'art/player/' + name + '.png'; _playerArt[name] = i; }
+  if (!i) { i = new Image(); i.src = 'art/player/' + name + '.png?v=' + ART_V; _playerArt[name] = i; }
   return (i.complete && i.naturalWidth) ? i : null;
 }
 function drawPlayer(px, py) {
@@ -2528,13 +2529,13 @@ function startBossBattle(cfg) {
   document.getElementById('battle-header').textContent = cfg.title;
   const bossEl = document.getElementById('battle-mewtwo');
   if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
-  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/npc/' + cfg.charArt + '.png" alt="">'; } // Team Rocket grunt sprite
+  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/npc/' + cfg.charArt + '.png?v=' + ART_V + '" alt="">'; } // Team Rocket grunt sprite
   else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; }                         // emoji fallback
   // The trainer sits in the corner once their Pokémon takes the field.
   const foe = document.getElementById('battle-foe');
   const foeEl = document.getElementById('battle-foe-emoji');
   if (cfg.foeArt || cfg.foeEmoji) {
-    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/npc/' + cfg.foeArt + '.png" alt="">';
+    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/npc/' + cfg.foeArt + '.png?v=' + ART_V + '" alt="">';
     else { foeEl.innerHTML = ''; foeEl.textContent = cfg.foeEmoji; }
     document.getElementById('battle-foe-badge').textContent = 'R · ' + (cfg.grunt || '');
     foe.classList.remove('hidden');
