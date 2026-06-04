@@ -1428,27 +1428,35 @@ function drawWorld(ts) {
   drawPet(ts);
   drawPlayer(renderPos.x - camX, renderPos.y - camY);
 
-  // Cave darkness: everything is near-black except a circle of light around the
-  // player. The radius is large only if your buddy glows (Fire types, etc.);
-  // otherwise it's a tiny, can't-really-navigate sliver.
+  // Cave darkness — old-school, lit block-by-block. Each tile gets one of a few
+  // discrete darkness levels by its distance from the player, making stepped
+  // concentric rings (no smooth gradient). The lit radius is large only with a
+  // glowing buddy (Fire types, etc.); otherwise it's a tiny sliver.
   if (ZONE_INFO[currentZone].base === T.CAVE) {
     const lit = buddyLightsCave();
-    const flick = 1 + Math.sin(ts * 0.013) * 0.04 + Math.sin(ts * 0.031) * 0.02; // torch flicker
-    const R = (lit ? 5.8 : 1.35) * TILE_SIZE * flick;
-    const cxp = renderPos.x - camX + TILE_SIZE / 2;
-    const cyp = renderPos.y - camY + TILE_SIZE / 2;
-    const dark = ctx.createRadialGradient(cxp, cyp, Math.max(4, R * 0.32), cxp, cyp, R);
-    dark.addColorStop(0,   'rgba(2,2,9,0)');
-    dark.addColorStop(0.7, 'rgba(2,2,9,0.5)');
-    dark.addColorStop(1,   'rgba(1,1,7,0.985)');
-    ctx.fillStyle = dark;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (lit) {   // warm torch glow tint
-      const warm = ctx.createRadialGradient(cxp, cyp, 0, cxp, cyp, R);
-      warm.addColorStop(0, 'rgba(255,170,70,0.12)');
-      warm.addColorStop(1, 'rgba(255,170,70,0)');
-      ctx.fillStyle = warm;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const flick = lit ? Math.sin(ts * 0.012) * 0.3 + Math.sin(ts * 0.027) * 0.18 : 0; // torch edge flicker
+    const R = (lit ? 5.2 : 1.6) + flick;   // lit radius, in tiles
+    const pcx = renderPos.x - camX + TILE_SIZE / 2;
+    const pcy = renderPos.y - camY + TILE_SIZE / 2;
+    for (let r = startR; r < endR; r++) {
+      for (let c = startC; c < endC; c++) {
+        const dxp = (c * TILE_SIZE - camX + TILE_SIZE / 2) - pcx;
+        const dyp = (r * TILE_SIZE - camY + TILE_SIZE / 2) - pcy;
+        const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R; // tiles past the lit edge
+        let a;
+        if      (edge <= 0)   a = 0;      // fully lit
+        else if (edge <= 0.9) a = 0.34;   // dim ring
+        else if (edge <= 1.9) a = 0.66;   // dark ring
+        else                  a = 0.94;   // near pitch black
+        const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
+        if (a > 0) {
+          ctx.fillStyle = `rgba(3,2,10,${a})`;
+          ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        } else if (lit) {                  // faint warm torch tint on fully-lit tiles
+          ctx.fillStyle = 'rgba(255,168,70,0.07)';
+          ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      }
     }
   }
 }
