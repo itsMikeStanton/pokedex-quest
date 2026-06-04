@@ -747,6 +747,9 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   line-height: 1;
   animation: detailpop .3s ease-out;
 }
+.char-portrait { height: 68px; image-rendering: pixelated; display: block; }
+.boss-char { height: 80px; image-rendering: pixelated; display: block; margin: 0 auto; }
+.foe-char  { height: 32px; image-rendering: pixelated; display: block; }
 #npc-name {
   font-size: 9px;
   color: #f8d060;

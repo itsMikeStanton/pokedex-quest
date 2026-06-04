@@ -552,6 +552,8 @@ function treeArtImg(zone) {
 }
 const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png'; return i; })();
 function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _shopImg : null; }
+const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png'; return i; })();
+function houseArtImg() { return (_houseImg.complete && _houseImg.naturalWidth) ? _houseImg : null; }
 
 // Oversized building sprites (transparent bg), drawn on top of their ground tile and
 // extending upward so a 1-tile entrance reads as a full-size building.
@@ -1509,7 +1511,9 @@ function talkNPC(npc) {
   npcLines = typeof npc.lines === 'function' ? npc.lines() : npc.lines;
   clearTimeout(spawnTimerId);
 
-  document.getElementById('npc-emoji').textContent = npc.emoji;
+  const ne = document.getElementById('npc-emoji');
+  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/npc/' + npc.art + '.png" alt="">';
+  else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
   document.getElementById('npc-name').textContent  = npc.name;
 
   // One-time gift the first time you meet this character.
@@ -1783,7 +1787,7 @@ function drawWorld(ts) {
   for (let r = startR; r < Math.min(rows, endR + 2); r++) {
     for (let c = startC; c < endC; c++) {
       const t = map[r][c];
-      if (t === T.HOUSE) pushStruct(sprites, buildingSprites[T.HOUSE], c, r, 58);
+      if (t === T.HOUSE) { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 62 : 58); }
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 62 : 58); }
       else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, 54); }
     }
@@ -2063,7 +2067,27 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
   }
 }
 
+const _playerArt = {};
+function playerArtImg(name) {
+  let i = _playerArt[name];
+  if (!i) { i = new Image(); i.src = 'art/player/' + name + '.png'; _playerArt[name] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
 function drawPlayer(px, py) {
+  // Explorer sprite (down/up + mirrored side); falls back to the pixel sprite.
+  const map = { down: ['down', false], up: ['up', false], left: ['side', false], right: ['side', true] };
+  const [name, flip] = map[playerDir] || map.down;
+  const img = playerArtImg(name);
+  if (img) {
+    const Hh = 38, w = Math.round(Hh * img.naturalWidth / img.naturalHeight);
+    const dx = Math.round(px + (TILE_SIZE - w) / 2);
+    const dy = Math.round(py + TILE_SIZE - Hh + 1 - (playerStep === 1 ? 1 : 0));
+    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+    if (flip) { ctx.save(); ctx.translate(dx + w, dy); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, w, Hh); ctx.restore(); }
+    else ctx.drawImage(img, dx, dy, w, Hh);
+    ctx.imageSmoothingEnabled = prev;
+    return;
+  }
   const rows   = PLAYER_SPRITE[playerDir];
   const scale  = 3;
   const pw     = 8 * scale;
@@ -2503,12 +2527,15 @@ function startBossBattle(cfg) {
   battleRoundNum = 0;
   document.getElementById('battle-header').textContent = cfg.title;
   const bossEl = document.getElementById('battle-mewtwo');
-  if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }   // real Pokémon sprite
-  else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; } // Team Rocket emoji
+  if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
+  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/npc/' + cfg.charArt + '.png" alt="">'; } // Team Rocket grunt sprite
+  else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; }                         // emoji fallback
   // The trainer sits in the corner once their Pokémon takes the field.
   const foe = document.getElementById('battle-foe');
-  if (cfg.foeEmoji) {
-    document.getElementById('battle-foe-emoji').textContent = cfg.foeEmoji;
+  const foeEl = document.getElementById('battle-foe-emoji');
+  if (cfg.foeArt || cfg.foeEmoji) {
+    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/npc/' + cfg.foeArt + '.png" alt="">';
+    else { foeEl.innerHTML = ''; foeEl.textContent = cfg.foeEmoji; }
     document.getElementById('battle-foe-badge').textContent = 'R · ' + (cfg.grunt || '');
     foe.classList.remove('hidden');
   } else {
@@ -2604,7 +2631,7 @@ function startRocketBattle(rkt) {
   clearTimeout(spawnTimerId);
   startBossBattle({
     title: `TEAM ROCKET: ${rkt.name}`, emoji: rkt.emoji, rounds: lineup.length, rule: 'beats',
-    grunt: rkt.name, lineup, foeEmoji: rkt.emoji,
+    grunt: rkt.name, lineup, foeEmoji: rkt.emoji, charArt: rkt.art, foeArt: rkt.art,
     motto: '“Prepare for trouble!”<br>“…and make it double!”<br>' +
            `<b>${rkt.name} of Team Rocket wants to battle!</b>`,
     intro: () => rocketIntro(),
