@@ -1709,21 +1709,11 @@ function drawWild(ts) {
   const px = wildPoke.x * TILE_SIZE - camX;
   const py = wildPoke.y * TILE_SIZE - camY;
 
-  // Wiggle the grass tile
-  const angle = Math.sin(ts * 0.012) * 0.18;
-  ctx.save();
-  ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2);
-  ctx.rotate(angle);
-  const grassVars = tileCache[T.GRASS];
-  ctx.drawImage(grassVars[tileVariant(currentZone, wildPoke.y, wildPoke.x, grassVars.length)],
-                -TILE_SIZE / 2, -TILE_SIZE / 2);
-  ctx.restore();
-
   // Blink in final 2.5 s — every 300 ms
   if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
 
-  // A red "!" alert, centred ON the rustling grass tile. It pops in on appear
-  // (scale overshoot + drop) then idles with a gentle bob.
+  // A red "!" alert over the spawn tile. It pops in on appear (scale overshoot +
+  // drop), then idles with a gentle bob and a side-to-side wiggle.
   const elapsed = WILD_TIMEOUT - remaining;
   const POP = 280;
   let scale, yoff;
@@ -1736,10 +1726,12 @@ function drawWild(ts) {
     scale = 1;
     yoff  = Math.sin(ts * 0.006) * 1.5;          // gentle idle bob
   }
+  const wiggle = Math.sin(ts * 0.012) * 0.22;    // side-to-side wiggle
 
   ctx.save();
   ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2 + yoff);
-  ctx.scale(scale, scale);
+  ctx.rotate(wiggle);
+  ctx.scale(scale * 1.5, scale * 1.5);           // 1.5× bigger
   // dark outline
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(-4, -12, 8, 15);
@@ -2570,28 +2562,31 @@ function rocketSendOut(mon) {
   const bossEl = document.getElementById('battle-mewtwo');
   const stage  = document.getElementById('battle-screen');
   setPokeDisplay(bossEl, mon, 80);
-  if (bossEl.animate) {
-    bossEl.animate([
-      { transform: 'translateY(-8px) scale(0.2)', opacity: 0, offset: 0 },
-      { transform: 'translateY(4px) scale(1.12)', opacity: 1, offset: 0.6 },
-      { transform: 'translateY(0) scale(1)',      opacity: 1, offset: 1 },
-    ], { duration: 430, easing: 'cubic-bezier(.3,1.4,.5,1)' });
-  }
+  bossEl.style.visibility = 'hidden';          // hold the spot, hidden until the ball lands
   const ball = document.createElement('div');
   ball.className = 'capture-ball';
   ball.style.cssText = 'left:50%;top:92px;margin-left:-13px;margin-top:-13px;width:26px;height:26px;';
   stage.appendChild(ball);
+  beep(300, 0.12, 0.1, 'square');
+  const reveal = () => {                        // ball has landed & burst — pop the Pokémon out
+    ball.remove();
+    bossEl.style.visibility = '';
+    if (bossEl.animate) bossEl.animate([
+      { transform: 'translateY(-8px) scale(0.2)', opacity: 0, offset: 0 },
+      { transform: 'translateY(4px) scale(1.12)', opacity: 1, offset: 0.6 },
+      { transform: 'translateY(0) scale(1)',      opacity: 1, offset: 1 },
+    ], { duration: 320, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+    beep(440, 0.1, 0.12);
+  };
   if (ball.animate) {
     const a = ball.animate([
       { transform: 'translate(120px,-60px) scale(0.4) rotate(0deg)',  opacity: 0, offset: 0 },
-      { transform: 'translate(45px,-22px) scale(0.9) rotate(240deg)', opacity: 1, offset: 0.5 },
-      { transform: 'translate(0,0) scale(1) rotate(360deg)',          opacity: 1, offset: 0.72 },
-      { transform: 'translate(0,0) scale(1.4)',                       opacity: 0, offset: 1 },
-    ], { duration: 430, easing: 'ease-out' });
-    a.onfinish = () => ball.remove();
-  } else { setTimeout(() => ball.remove(), 430); }
-  beep(300, 0.12, 0.1, 'square');
-  setTimeout(() => beep(440, 0.1, 0.12), 120);
+      { transform: 'translate(45px,-22px) scale(0.9) rotate(240deg)', opacity: 1, offset: 0.55 },
+      { transform: 'translate(0,0) scale(1) rotate(360deg)',          opacity: 1, offset: 0.82 },
+      { transform: 'translate(0,0) scale(1.5)',                       opacity: 0, offset: 1 },   // burst open
+    ], { duration: 480, easing: 'ease-out' });
+    a.onfinish = reveal;
+  } else { setTimeout(reveal, 480); }
 }
 
 // Mewtwo — match its exact type for 3 rounds, then a Master Ball.
@@ -2788,7 +2783,7 @@ function battleAttack(poke, onDone) {
   const mew   = document.getElementById('battle-mewtwo');
   const atk = document.createElement('div');
   atk.className = 'battle-attacker';
-  atk.appendChild(pokeImg(poke, 108));   // the actual selected Lukeymon, full size
+  atk.appendChild(pokeImg(poke, 150));   // the actual selected Lukeymon, full size
   stage.appendChild(atk);
 
   if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
@@ -2803,7 +2798,7 @@ function battleAttack(poke, onDone) {
     atk.style.top  = Math.round(startY) + 'px';
     const hitY = (mR.top - sR.top) + mR.height * 0.45 - aR.height / 2;
     const dy = hitY - startY;            // negative → moves up toward Mewtwo
-    const DUR = 1150;
+    const DUR = 1500;
     const anim = atk.animate([
       { transform: 'translateY(46px) scale(0.5)',       opacity: 0, offset: 0,    easing: 'ease-out' },
       { transform: 'translateY(0) scale(1)',            opacity: 1, offset: 0.13 },                       // pops in…
@@ -2849,7 +2844,7 @@ function battleBounce(poke, onDone) {
   const mew   = document.getElementById('battle-mewtwo');
   const atk = document.createElement('div');
   atk.className = 'battle-attacker';
-  atk.appendChild(pokeImg(poke, 108));
+  atk.appendChild(pokeImg(poke, 150));
   stage.appendChild(atk);
 
   if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
@@ -2864,7 +2859,7 @@ function battleBounce(poke, onDone) {
     atk.style.top  = Math.round(startY) + 'px';
     const hitY = (mR.top - sR.top) + mR.height * 0.5 - aR.height / 2;
     const dy = hitY - startY;            // negative → up toward Mewtwo
-    const DUR = 1150;
+    const DUR = 1500;
     const NORMAL = 'drop-shadow(0 5px 6px rgba(0,0,0,.55))';
     const REDLIT = 'brightness(1.9) drop-shadow(0 0 12px #ff5050)';
     const REDDIM = 'brightness(1) drop-shadow(0 0 6px #ff3030)';
