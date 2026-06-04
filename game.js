@@ -1513,7 +1513,7 @@ function talkNPC(npc) {
   clearTimeout(spawnTimerId);
 
   const ne = document.getElementById('npc-emoji');
-  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/npc/' + npc.art + '.png?v=' + ART_V + '" alt="">';
+  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/portrait/' + npc.art + '.png?v=' + ART_V + '" alt="" onerror="this.parentNode.textContent=\'' + npc.emoji + '\'">';
   else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
   document.getElementById('npc-name').textContent  = npc.name;
 
@@ -1575,6 +1575,23 @@ function npcArtImg(key) {
   if (!img) { img = new Image(); img.src = 'art/npc/' + key + '.png?v=' + ART_V; _npcArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
+// Character field sprites: art/walk/<key>.png = a vertical strip of 4 facings
+// (down, up, left, right). Portrait (shoulders-up) lives in art/portrait/<key>.png.
+const DIR_ROW = { down: 0, up: 1, left: 2, right: 3 };
+const _walkArt = {};
+function walkSheet(key) {
+  if (!key) return null;
+  let img = _walkArt[key];
+  if (!img) { img = new Image(); img.src = 'art/walk/' + key + '.png?v=' + ART_V; _walkArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _portraitArt = {};
+function portraitImg(key) {
+  if (!key) return null;
+  let img = _portraitArt[key];
+  if (!img) { img = new Image(); img.src = 'art/portrait/' + key + '.png?v=' + ART_V; _portraitArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
 // Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
 // py = tile top y, both already in screen space).
 function drawCharSprite(img, px, py, H) {
@@ -1582,6 +1599,24 @@ function drawCharSprite(img, px, py, H) {
   const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - H + 2), w, H);
   ctx.imageSmoothingEnabled = prev;
+}
+// Draw a character's overworld sprite for a facing. Prefers the 4-row walk sheet,
+// then a single sprite, then returns false so the caller can fall back to an emoji.
+function drawCharField(key, dir, cx, py, H) {
+  const sheet = walkSheet(key);
+  if (sheet) {
+    const cellW = sheet.naturalWidth, cellH = sheet.naturalHeight / 4;
+    const row = DIR_ROW[dir] || 0;
+    const w = Math.round(H * cellW / cellH);
+    const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + 1);
+    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sheet, 0, row * cellH, cellW, cellH, dx, dy, w, H);
+    ctx.imageSmoothingEnabled = prev;
+    return true;
+  }
+  const single = npcArtImg(key);
+  if (single) { drawCharSprite(single, cx, py, H); return true; }
+  return false;
 }
 function drawCollectibleE(c, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
@@ -1594,8 +1629,7 @@ function drawCollectibleE(c, ts) {
 function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = n.y * TILE_SIZE - camY;
-  const img = npcArtImg(n.art);
-  if (img) { drawCharSprite(img, px, py, 42); return; }
+  if (n.art && drawCharField(n.art, 'down', px, py, 42)) return;
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
 }
@@ -1615,16 +1649,11 @@ function drawRocketE(r, ts) {
       ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
       ctx.imageSmoothingEnabled = prev;
     } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
-  } else {
-    const img = npcArtImg(r.art);
-    if (img) {                       // sprite already wears the Team Rocket "R"
-      drawCharSprite(img, px, py, 44);
-    } else {
-      ctx.font = '22px serif';
-      ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
-      ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('R', px + 9, py + 9);
-    }
+  } else if (!(r.art && drawCharField(r.art, 'down', px, py, 44))) {   // sprite already wears the "R"
+    ctx.font = '22px serif';
+    ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
+    ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('R', px + 9, py + 9);
   }
 }
 function drawRoamerE(r, ts) {
@@ -2068,27 +2097,9 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
   }
 }
 
-const _playerArt = {};
-function playerArtImg(name) {
-  let i = _playerArt[name];
-  if (!i) { i = new Image(); i.src = 'art/player/' + name + '.png?v=' + ART_V; _playerArt[name] = i; }
-  return (i.complete && i.naturalWidth) ? i : null;
-}
 function drawPlayer(px, py) {
-  // Explorer sprite (down/up + mirrored side); falls back to the pixel sprite.
-  const map = { down: ['down', false], up: ['up', false], left: ['side', false], right: ['side', true] };
-  const [name, flip] = map[playerDir] || map.down;
-  const img = playerArtImg(name);
-  if (img) {
-    const Hh = 38, w = Math.round(Hh * img.naturalWidth / img.naturalHeight);
-    const dx = Math.round(px + (TILE_SIZE - w) / 2);
-    const dy = Math.round(py + TILE_SIZE - Hh + 1 - (playerStep === 1 ? 1 : 0));
-    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-    if (flip) { ctx.save(); ctx.translate(dx + w, dy); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, w, Hh); ctx.restore(); }
-    else ctx.drawImage(img, dx, dy, w, Hh);
-    ctx.imageSmoothingEnabled = prev;
-    return;
-  }
+  // Explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
+  if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 38)) return;
   const rows   = PLAYER_SPRITE[playerDir];
   const scale  = 3;
   const pw     = 8 * scale;
@@ -2529,13 +2540,13 @@ function startBossBattle(cfg) {
   document.getElementById('battle-header').textContent = cfg.title;
   const bossEl = document.getElementById('battle-mewtwo');
   if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
-  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/npc/' + cfg.charArt + '.png?v=' + ART_V + '" alt="">'; } // Team Rocket grunt sprite
+  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/portrait/' + cfg.charArt + '.png?v=' + ART_V + '" alt="">'; } // Team Rocket grunt portrait
   else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; }                         // emoji fallback
   // The trainer sits in the corner once their Pokémon takes the field.
   const foe = document.getElementById('battle-foe');
   const foeEl = document.getElementById('battle-foe-emoji');
   if (cfg.foeArt || cfg.foeEmoji) {
-    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/npc/' + cfg.foeArt + '.png?v=' + ART_V + '" alt="">';
+    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/portrait/' + cfg.foeArt + '.png?v=' + ART_V + '" alt="">';
     else { foeEl.innerHTML = ''; foeEl.textContent = cfg.foeEmoji; }
     document.getElementById('battle-foe-badge').textContent = 'R · ' + (cfg.grunt || '');
     foe.classList.remove('hidden');
