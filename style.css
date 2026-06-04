@@ -120,6 +120,24 @@ body {
   white-space: nowrap;
 }
 
+/* ─── HUD buddy chip ────────────────────────────────── */
+#hud-buddy {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid #6080a0;
+  border-radius: 5px;
+  padding: 1px 3px;
+  cursor: pointer;
+}
+#hud-buddy-icon { display: flex; align-items: center; }
+#hud-buddy-icon img { width: 18px; height: 18px; image-rendering: pixelated; display: block; }
+#hud-buddy-type {
+  font-size: 5px; color: #fff; letter-spacing: .5px;
+  padding: 1px 3px; border-radius: 3px; border: 1px solid rgba(0,0,0,.4);
+}
+
 /* ─── HUD ZONE NAME ─────────────────────────────────── */
 #zone-name { font-size: 6px; color: #a0d8a0; }
 
@@ -441,6 +459,56 @@ body {
   font-size: 5px; color: #9a9a9a; letter-spacing: 1px;
 }
 #complete-screen.parading > :not(#parade-stage) { opacity: 0; }
+
+/* ─── Pokédex "seen" silhouette ─────────────────────── */
+.dex-card.seen { opacity: .92; }
+.dex-card.seen .dex-card-name { color: #9aa0b0; font-style: italic; }
+img.dex-silhouette { filter: brightness(0) opacity(0.55); }
+
+/* ─── Map fast-travel + objective ───────────────────── */
+.map-zone.travelable { cursor: pointer; }
+.map-zone.travelable .map-zone-icon { transition: transform .12s ease; }
+.map-zone.travelable:hover .map-zone-icon { transform: scale(1.15); }
+.map-zone.travelable::after {
+  content: '▶';
+  position: absolute; top: 1px; right: 2px;
+  font-size: 5px; color: #ffe24d;
+}
+#map-objective {
+  font-size: 6px; color: #ffe8a0; text-align: center;
+  padding: 2px 6px; margin: 2px 6px 0;
+  background: rgba(0,0,0,.35); border-radius: 5px;
+}
+#map-help { padding: 2px 5px; }
+
+/* ─── Help / guide screen ───────────────────────────── */
+#help-screen {
+  background: linear-gradient(160deg, #0c1426, #141a2e);
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px;
+  gap: 8px;
+  overflow-y: auto;
+}
+#help-topbar { display: flex; align-items: center; justify-content: space-between; }
+#help-title { font-size: 9px; color: #80c0e0; text-shadow: 0 0 8px #40a8f8; }
+.help-spacer { width: 40px; }
+#help-body { display: flex; flex-direction: column; gap: 10px; }
+.help-section { background: rgba(0,0,0,.3); border: 2px solid #2a3a5a; border-radius: 6px; padding: 7px 8px; }
+.help-head { font-size: 7px; color: #ffe24d; margin-bottom: 5px; }
+.help-controls { display: flex; flex-direction: column; gap: 3px; font-size: 6px; color: #d0dcf0; line-height: 1.5; }
+#help-types { display: flex; flex-direction: column; gap: 4px; }
+.help-type-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.help-type-tag {
+  font-size: 6px; color: #fff; padding: 2px 6px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,.4); min-width: 44px; text-align: center;
+}
+.help-type-arrow { font-size: 7px; color: #889; }
+.help-type-counters { display: flex; gap: 3px; flex-wrap: wrap; }
+.help-type-chip {
+  font-size: 5px; color: #fff; padding: 1px 4px; border-radius: 3px;
+  border: 1px solid rgba(0,0,0,.4);
+}
 
 /* ─── D-pad / A-B focus cursor ─────────────────────── */
 .nav-focus {

@@ -46,10 +46,12 @@
         <div id="world-screen" class="screen">
           <canvas id="game-canvas" width="640" height="448"></canvas>
           <div id="hud">
+            <button id="hud-buddy" title="Switch buddy (Select)"><span id="hud-buddy-icon">➕</span><span id="hud-buddy-type" class="hidden"></span></button>
             <span id="hud-balls"><span class="pb"></span><span id="ball-count">5</span></span>
             <span id="hud-master" class="hidden">🟣<span id="master-count">0</span></span>
             <span id="hud-coins">💰<span id="coin-count">0</span></span>
             <span id="hud-count">🎒<span id="caught-count">0</span>/<span id="total-count">90</span></span>
+            <button id="mute-btn" class="pixel-btn small blue" title="Mute / unmute">🔊</button>
             <button id="map-btn" class="pixel-btn small blue">🗺️</button>
             <button id="pokedex-btn" class="pixel-btn small blue">📖</button>
           </div>
@@ -155,13 +157,40 @@
           </div>
         </div>
 
+        <!-- HELP / GUIDE SCREEN -->
+        <div id="help-screen" class="screen">
+          <div id="help-topbar">
+            <button id="help-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="help-title">GUIDE</span>
+            <span class="help-spacer"></span>
+          </div>
+          <div id="help-body">
+            <div class="help-section">
+              <div class="help-head">🎮 CONTROLS</div>
+              <div class="help-controls">
+                <span>✛ D-pad — move / choose</span>
+                <span>Ⓐ — select / confirm</span>
+                <span>Ⓑ — back / cancel</span>
+                <span>Select — switch buddy</span>
+                <span>In the world: Ⓐ Pokédex · Ⓑ Map</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-head">⚔️ TYPE MATCHUPS — to beat it, send…</div>
+              <div id="help-types"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- MAP SCREEN -->
         <div id="map-screen" class="screen">
           <div id="map-topbar">
             <button id="map-back" class="pixel-btn small red">◀ BACK</button>
             <span id="map-title">WORLD MAP</span>
+            <button id="map-help" class="pixel-btn small blue" title="Type chart & controls">❔</button>
             <span id="map-counter"><span id="map-open-count">1</span>/<span id="map-total">8</span></span>
           </div>
+          <div id="map-objective"></div>
           <div id="map-board">
             <svg id="map-lines" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden="true"></svg>
             <div id="map-zones"></div>
@@ -300,10 +329,10 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.21.0</div>
+  <div id="version">v2.22.0</div>
 
-  <script src="world.js?v=2.21.0"></script>
-  <script src="data.js?v=2.21.0"></script>
-  <script src="game.js?v=2.21.0"></script>
+  <script src="world.js?v=2.22.0"></script>
+  <script src="data.js?v=2.22.0"></script>
+  <script src="game.js?v=2.22.0"></script>
 </body>
 </html>

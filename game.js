@@ -358,6 +358,7 @@ let lastMoveTs  = 0;
 let keys        = {};
 let kamiBuffer  = [];
 let caughtIds      = new Set();
+let seenIds        = new Set();    // species encountered (shown as a silhouette in the dex)
 let balls          = 5;
 let masterBalls    = 0;        // for capturing Mew / Mewtwo only
 let coins          = 0;
@@ -374,6 +375,7 @@ let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
+let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
@@ -428,6 +430,8 @@ window.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   setupDebugMenu();
   setupNav('title');           // the title screen is active by default
+  try { muted = localStorage.getItem('lukeymon_muted') === '1'; } catch (_) {}
+  updateMuteBtn();
   requestAnimationFrame(loop);
 });
 
@@ -750,6 +754,7 @@ function bindEvents() {
     }
     if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
     if (!e.repeat && kbNavMap[e.key]) uiPress(kbNavMap[e.key]);   // menu navigation
+    if (e.key === 'Shift' && !e.repeat && gameState === 'world') cycleBuddy();
     // 'M' toggles the world map from the world screen.
     if (e.key === 'm' || e.key === 'M') {
       if (gameState === 'world') openMap();
@@ -770,6 +775,8 @@ function bindEvents() {
   // World HUD
   document.getElementById('pokedex-btn').addEventListener('click', openPokedex);
   document.getElementById('map-btn').addEventListener('click', openMap);
+  document.getElementById('mute-btn').addEventListener('click', () => { wakeAudio(); toggleMute(); });
+  document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); cycleBuddy(); });
 
   // Pokédex
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
@@ -778,6 +785,8 @@ function bindEvents() {
 
   // World map
   document.getElementById('map-back').addEventListener('click', closeMap);
+  document.getElementById('map-help').addEventListener('click', openHelp);
+  document.getElementById('help-back').addEventListener('click', closeHelp);
 
   // Badge case
   document.getElementById('map-badges').addEventListener('click', openBadgeCase);
@@ -846,8 +855,20 @@ function bindEvents() {
   startEl.addEventListener('touchstart',  e => { kamiInput('start'); }, { passive: false });
 
   const selectEl = document.getElementById('ss-select');
-  selectEl.addEventListener('pointerdown', e => { kamiInput('select'); });
-  selectEl.addEventListener('touchstart',  e => { kamiInput('select'); }, { passive: false });
+  selectEl.addEventListener('pointerdown', e => { pressSelect(); });
+  selectEl.addEventListener('touchstart',  e => { pressSelect(); }, { passive: false });
+}
+
+// Select button: feeds the secret-code buffer, and quick-swaps your buddy in-world.
+let _selLast = 0;
+function pressSelect() {
+  kamiInput('select');                    // has its own touch/pointer de-dupe
+  if (gameState !== 'world') return;
+  const now = Date.now();
+  if (now - _selLast < 250) return;
+  _selLast = now;
+  wakeAudio();
+  cycleBuddy();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1814,6 +1835,7 @@ function beginEncounter(poke, roamer = null) {
   currentPoke = poke;
   currentLegend = roamer;
   gameState   = 'encounter';
+  seenIds.add(poke.id);
 
   clearWild();
   clearTimeout(spawnTimerId);
@@ -2063,6 +2085,7 @@ function caught() {
   const isNew  = !caughtIds.has(currentPoke.id);
   const legend = currentLegend;
   caughtIds.add(currentPoke.id);
+  seenIds.add(currentPoke.id);
   if (isNew) coins += NEW_CATCH_BOUNTY;   // reward discovering a new species
 
   // Your very first catch automatically becomes your buddy, so the
@@ -2227,6 +2250,7 @@ function startBossBattle(cfg) {
 function startMewtwoBattle(roamer) {
   currentLegend = roamer;
   const mew = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  seenIds.add(mew.id);
   startBossBattle({
     title: 'MEWTWO', art: mew, rounds: 3, rule: 'match',
     pickDemand: (pool) => { const t = [...new Set(pool.map(p => p.type))]; return t[Math.floor(Math.random() * t.length)]; },
@@ -2245,6 +2269,7 @@ const BIRD_DEMANDS = {
 function startBirdBattle(birdId) {
   const bird = POKEMON_DATA.find(p => p.id === birdId);
   currentLegend = null;
+  seenIds.add(birdId);
   const demands = BIRD_DEMANDS[birdId];
   startBossBattle({
     title: bird.name.toUpperCase(), art: bird, rounds: 3, rule: 'beats',
@@ -2654,19 +2679,22 @@ function renderPokedexGrid() {
   POKEMON_DATA.forEach(poke => {
     const card = document.createElement('div');
     const caught = caughtIds.has(poke.id);
-    card.className = 'dex-card' + (caught ? ' caught' : ' dex-card-unknown');
+    const seen   = !caught && seenIds.has(poke.id);   // encountered but not yet caught
+    card.className = 'dex-card' + (caught ? ' caught' : seen ? ' seen' : ' dex-card-unknown');
 
     const emojiDiv = document.createElement('div');
     emojiDiv.className = 'dex-card-emoji';
-    if (caught) {
-      emojiDiv.appendChild(pokeImg(poke, 40));
+    if (caught || seen) {
+      const img = pokeImg(poke, 40);
+      if (seen) img.classList.add('dex-silhouette');   // dark silhouette for "seen"
+      emojiDiv.appendChild(img);
     } else {
       emojiDiv.textContent = '?';
     }
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'dex-card-name';
-    nameDiv.textContent = caught ? poke.name : '?????????';
+    nameDiv.textContent = caught ? poke.name : seen ? poke.name : '?????????';
 
     card.appendChild(emojiDiv);
     card.appendChild(nameDiv);
@@ -2764,6 +2792,65 @@ function closeMap() {
   scheduleSpawn();
 }
 
+// The tile you arrive on when entering a zone (an edge entry, or a portal target).
+function zoneLanding(zone) {
+  const e = EXITS.find(x => x.to === zone);
+  if (e) return [e.entryX, e.entryY];
+  const p = PORTALS.find(x => x.to === zone);
+  if (p) return [p.tx, p.ty];
+  return null;
+}
+
+function fastTravel(zone) {
+  if (zone === currentZone) return;
+  const land = zoneLanding(zone);
+  if (!land) return;
+  const [x, y] = land;
+  warpTo(zone, x, y);            // handles save, HUD, spawn, message, sound
+  showScreen('world');
+}
+
+// ─── Guide / type-chart screen ───────────────────────
+function openHelp() {
+  renderHelp();
+  showScreen('help');
+}
+function closeHelp() {
+  renderMap();
+  showScreen('map');
+}
+function renderHelp() {
+  const box = document.getElementById('help-types');
+  if (!box || box.childElementCount) return;   // build once
+  // Order types by how common they are in the roster, skipping any with no counter.
+  const order = ['Fire','Water','Grass','Electric','Ground','Rock','Ice','Flying',
+                 'Poison','Psychic','Bug','Normal','Fighting','Ghost','Dragon','Fairy'];
+  order.forEach(t => {
+    const counters = BEATEN_BY[t];
+    if (!counters) return;
+    const row = document.createElement('div');
+    row.className = 'help-type-row';
+    const tag = document.createElement('span');
+    tag.className = 'help-type-tag';
+    tag.textContent = t;
+    tag.style.background = typeColor(t);
+    const arrow = document.createElement('span');
+    arrow.className = 'help-type-arrow';
+    arrow.textContent = '→';
+    const list = document.createElement('span');
+    list.className = 'help-type-counters';
+    counters.forEach(c => {
+      const chip = document.createElement('span');
+      chip.className = 'help-type-chip';
+      chip.textContent = c;
+      chip.style.background = typeColor(c);
+      list.appendChild(chip);
+    });
+    row.append(tag, arrow, list);
+    box.appendChild(row);
+  });
+}
+
 function renderMap() {
   const open = reachableZones();
   document.getElementById('map-open-count').textContent = open.size;
@@ -2829,6 +2916,12 @@ function renderMap() {
     tile.appendChild(icon);
     tile.appendChild(name);
 
+    // Fast-travel: tap an open zone you're not standing in to warp there.
+    if (isOpen && !here && zoneLanding(z.id)) {
+      tile.classList.add('travelable');
+      tile.addEventListener('click', () => fastTravel(z.id));
+    }
+
     if (here) {
       const you = document.createElement('div');
       you.className = 'map-zone-tag you';
@@ -2845,6 +2938,15 @@ function renderMap() {
     }
     zones.appendChild(tile);
   });
+
+  // Next-objective line.
+  const obj = document.getElementById('map-objective');
+  if (obj) {
+    const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
+    if (!wonGame)                                  obj.textContent = `🎯 Earn the 4 Gym Badges  (${landDone}/4)`;
+    else if (caughtIds.size < POKEMON_DATA.length) obj.textContent = `🎯 Complete the Pokédex  (${caughtIds.size}/${POKEMON_DATA.length})`;
+    else                                           obj.textContent = '🏆 You’ve done it all — Champion & Master!';
+  }
 
   // Badge tray.
   document.getElementById('badge-count').textContent = collected.size;
@@ -3048,7 +3150,8 @@ function setupNav(id) {
     case 'slot':      setNav(all('#slot-list .slot-info'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
-    case 'map':       setNav([$('map-badges'), $('map-back')], { onBack: closeMap }); break;
+    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-help'), $('map-badges'), $('map-back')], { onBack: closeMap }); break;
+    case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
     case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
     case 'shop':      setNav([...all('#shop-screen .shop-buy-btn'), $('shop-close')], { onBack: closeShop }); break;
     case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
@@ -3090,6 +3193,25 @@ function updateHud() {
   }
   const zoneEl = document.getElementById('zone-name');
   if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
+
+  // Current buddy chip (sprite + type), tap to cycle.
+  const buddy = POKEMON_DATA.find(p => p.id === activePet);
+  const bi = document.getElementById('hud-buddy-icon');
+  const bt = document.getElementById('hud-buddy-type');
+  if (bi) {
+    bi.innerHTML = '';
+    if (buddy) bi.appendChild(pokeImg(buddy, 18));
+    else bi.textContent = '➕';
+  }
+  if (bt) {
+    if (buddy) {
+      bt.textContent = buddy.type.slice(0, 3).toUpperCase();
+      bt.style.background = typeColor(buddy.type);
+      bt.classList.remove('hidden');
+    } else {
+      bt.classList.add('hidden');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -3132,6 +3254,7 @@ function slotMeta(n) {
 
 function startNewGame() {
   caughtIds.clear();
+  seenIds.clear();
   unlockedBarriers.clear();
   collected.clear();
   metNPCs.clear();
@@ -3176,6 +3299,7 @@ function saveGame() {
     localStorage.setItem(slotKey(currentSlot), JSON.stringify({
       name:      saveName,
       caught:    [...caughtIds],
+      seen:      [...seenIds],
       barriers:  [...unlockedBarriers],
       collected: [...collected],
       metNPCs:   [...metNPCs],
@@ -3204,6 +3328,7 @@ function loadSlot(n) {
       const data = JSON.parse(raw);
       saveName         = data.name || `SAVE ${n}`;
       caughtIds        = new Set(data.caught || []);
+      seenIds          = new Set([...(data.seen || []), ...caughtIds]);   // caught ⇒ seen
       unlockedBarriers = new Set(data.barriers || []);
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
@@ -3338,8 +3463,38 @@ function wakeAudio() {
   } catch (_) {}
 }
 
+function updateMuteBtn() {
+  const b = document.getElementById('mute-btn');
+  if (b) b.textContent = muted ? '🔇' : '🔊';
+}
+function toggleMute() {
+  muted = !muted;
+  try { localStorage.setItem('lukeymon_muted', muted ? '1' : '0'); } catch (_) {}
+  updateMuteBtn();
+  if (!muted) { wakeAudio(); beep(660, 0.08, 0.08); }   // little confirmation blip
+}
+
+// Cycle the active buddy through your caught Lukeymon (and a "no buddy" slot).
+function cycleBuddy() {
+  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
+  if (!team.length) { showMessage('Catch a Lukeymon first to choose a buddy!'); return; }
+  let idx = team.findIndex(p => p.id === activePet);
+  idx = (idx + 1) % (team.length + 1);            // last slot = no buddy
+  activePet = idx === team.length ? null : team[idx].id;
+  if (activePet != null) {
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+    petMoveAnimTs = -9999;
+  }
+  saveGame();
+  updateHud();
+  beep(523, 0.06, 0.07);
+  const cur = POKEMON_DATA.find(p => p.id === activePet);
+  showMessage(cur ? `🐾 Buddy: ${cur.name} (${cur.type})` : '🐾 No buddy following');
+}
+
 function beep(freq, vol, dur, type = 'square') {
-  if (!audioCtx) return;
+  if (!audioCtx || muted) return;
   try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
