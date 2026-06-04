@@ -391,7 +391,8 @@ let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
-let audioUnlocked = false;   // audio pool primed inside a user gesture (iOS)
+let audioCtx    = null;
+let audioUnlocked = false;   // iOS needs a silent buffer played inside a gesture
 let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
@@ -3481,22 +3482,26 @@ function bindHoldErase(btn, n) {
 }
 
 // ═══════════════════════════════════════════════════
-// AUDIO  (rendered WAV clips through <audio> — reliable on iOS, unlike WebAudio)
+// AUDIO (Web Audio API chiptune)
 // ═══════════════════════════════════════════════════
 function wakeAudio() {
-  if (audioUnlocked) { updateBgm(); return; }   // later gestures: resume music if needed
-  audioUnlocked = true;
   try {
-    // Prime a pool of <audio> elements *inside* this gesture so iOS lets them play.
-    const silent = pcmToWavURI(new Float32Array(1), 8000);
-    for (let i = 0; i < 6; i++) {
-      const a = new Audio(silent);
-      a.volume = 0;
-      const p = a.play(); if (p && p.catch) p.catch(() => {});
-      sfxPool.push(a);
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
+    if (!audioUnlocked) {
+      // iOS/WebKit: actually play a 1-sample silent buffer *inside the gesture*
+      // to fully unlock the context (resume() alone is not enough on iOS).
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+      audioUnlocked = true;
+    }
+    if (!muted && !musicTimer && curMusic) restartMusic();   // (re)start loop once audio is live
   } catch (_) {}
-  updateBgm();   // start the music (its .play() also happens inside the gesture)
 }
 
 function updateMuteBtn() {
@@ -3565,27 +3570,23 @@ const MUSIC = {
 };
 
 let curMusic = null;        // desired track name (survives mute)
+let musicTimer = null;
+let musicStep = 0;
 
-// ── WAV synthesis helpers ──────────────────────────────
-function audioWave(type, f, t) {
-  const p = (t * f) % 1;
-  if (type === 'sine')     return Math.sin(2 * Math.PI * f * t);
-  if (type === 'triangle') return 4 * Math.abs(p - 0.5) - 1;
-  if (type === 'sawtooth') return 2 * p - 1;
-  return p < 0.5 ? 1 : -1;   // square
-}
-function pcmToWavURI(samples, rate) {
-  const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
-  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  ws(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  ws(36, 'data'); v.setUint32(40, n * 2, true);
-  let o = 44;
-  for (let i = 0; i < n; i++) { let x = Math.max(-1, Math.min(1, samples[i])); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true); o += 2; }
-  const bytes = new Uint8Array(buf); let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return 'data:audio/wav;base64,' + btoa(bin);
+function musicNote(freq, dur, type, vol) {
+  if (!audioCtx || muted || !freq) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch (_) {}
 }
 
 // Brief full-screen flash — used as a "battle start" sting.
@@ -3599,74 +3600,52 @@ function flashScreen(color) {
   setTimeout(() => f.remove(), 340);
 }
 
-// ── Background music: render each loop to a WAV once, play via <audio loop> ──
-const trackURI = {};
-function renderTrack(name) {
-  if (trackURI[name]) return trackURI[name];
-  const tr = MUSIC[name], rate = 22050;
-  const stepN = Math.floor(60 / tr.tempo / 2 * rate);
-  const steps = tr.melody.length;
-  const out = new Float32Array(stepN * steps);
-  for (let i = 0; i < steps; i++) {
-    const mf = NOTE[tr.melody[i]], bf = NOTE[tr.bass[i % tr.bass.length]];
-    for (let s = 0; s < stepN; s++) {
-      const env = s < stepN * 0.04 ? s / (stepN * 0.04)
-                : s > stepN * 0.75 ? Math.max(0, (stepN - s) / (stepN * 0.25)) : 1;
-      let val = 0;
-      const t = s / rate;
-      if (mf) val += 0.16 * env * audioWave('square', mf, t);
-      if (bf) val += 0.13 * env * audioWave('triangle', bf, t);
-      out[i * stepN + s] = val;
-    }
-  }
-  return trackURI[name] = pcmToWavURI(out, rate);
+function stopMusic() { clearTimeout(musicTimer); musicTimer = null; }
+
+function restartMusic() {
+  stopMusic();
+  musicStep = 0;
+  if (!curMusic || !audioCtx || muted) return;
+  musicTick();
 }
-let bgmEl = null;
-function updateBgm() {
-  try {
-    if (!bgmEl) { bgmEl = new Audio(); bgmEl.loop = true; bgmEl.volume = 0.4; }
-    if (!curMusic || muted) { bgmEl.pause(); return; }
-    if (bgmEl.dataset.track !== curMusic) { bgmEl.src = renderTrack(curMusic); bgmEl.dataset.track = curMusic; }
-    const p = bgmEl.play(); if (p && p.catch) p.catch(() => {});
-  } catch (_) {}
+
+function musicTick() {
+  const tr = MUSIC[curMusic];
+  if (!tr) return;
+  const stepMs = 60000 / tr.tempo / 2;          // eighth-note grid
+  const mf = NOTE[tr.melody[musicStep % tr.melody.length]];
+  const bf = NOTE[tr.bass[musicStep % tr.bass.length]];
+  musicNote(mf, stepMs / 1000 * 0.85, 'square',   0.045);
+  musicNote(bf, stepMs / 1000 * 0.95, 'triangle', 0.05);
+  musicStep++;
+  musicTimer = setTimeout(musicTick, stepMs);
 }
-function stopMusic()    { try { if (bgmEl) bgmEl.pause(); } catch (_) {} }
-function restartMusic() { updateBgm(); }
+
 function trackForScreen(id) {
-  if (id === 'title' || id === 'slot' || id === 'name')          return 'title';
-  if (id === 'encounter' || id === 'battle')                    return 'battle';
+  if (id === 'title' || id === 'slot' || id === 'name')    return 'title';
+  if (id === 'encounter' || id === 'battle')               return 'battle';
   if (id === 'result' || id === 'complete' || id === 'champion') return null; // let jingles ring
   return 'world';
 }
 function setMusic(track) {
   if (curMusic === track) return;
   curMusic = track;
-  updateBgm();
-}
-
-// ── Sound effects: short WAV blips through a small <audio> pool ──
-const sfxURI = {};
-const sfxPool = [];
-let sfxIdx = 0;
-function renderSfx(freq, dur, type) {
-  const key = (freq | 0) + '_' + Math.round(dur * 100) + '_' + type;
-  if (sfxURI[key]) return sfxURI[key];
-  const rate = 22050, n = Math.max(1, Math.floor(dur * rate));
-  const s = new Float32Array(n);
-  for (let i = 0; i < n; i++) { const env = Math.pow(1 - i / n, 1.5); s[i] = 0.7 * env * audioWave(type, freq, i / rate); }
-  return sfxURI[key] = pcmToWavURI(s, rate);
+  restartMusic();
 }
 
 function beep(freq, vol, dur, type = 'square') {
-  if (muted || !freq) return;
+  if (!audioCtx || muted) return;
   try {
-    const uri = renderSfx(freq, dur, type);
-    if (!sfxPool.length) for (let i = 0; i < 6; i++) sfxPool.push(new Audio());
-    const el = sfxPool[sfxIdx++ % sfxPool.length];
-    el.src = uri;
-    el.volume = Math.max(0, Math.min(1, vol * 3));
-    try { el.currentTime = 0; } catch (_) {}
-    const p = el.play(); if (p && p.catch) p.catch(() => {});
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = type;
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + dur + 0.01);
   } catch (_) {}
 }
 
