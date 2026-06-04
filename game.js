@@ -40,6 +40,27 @@ const BARRIERS = {
   sand:  { needsType: 'Ground',   hint: 'Bring a 🌍 Ground Pokémon as your buddy to clear the sand wall!', cleared: '🌍 Your Ground buddy clears the sand wall!',   sign: '🌍' },
 };
 
+// Type effectiveness — for a demanded type, which attacking types are super-effective
+// against it (used by the legendary/Team-Rocket "send a counter" battles).
+const BEATEN_BY = {
+  Normal:   ['Fighting'],
+  Fire:     ['Water', 'Ground', 'Rock'],
+  Water:    ['Electric', 'Grass'],
+  Electric: ['Ground'],
+  Grass:    ['Fire', 'Ice', 'Poison', 'Flying', 'Bug'],
+  Ice:      ['Fire', 'Fighting', 'Rock'],
+  Fighting: ['Flying', 'Psychic', 'Fairy'],
+  Poison:   ['Ground', 'Psychic'],
+  Ground:   ['Water', 'Grass', 'Ice'],
+  Flying:   ['Electric', 'Ice', 'Rock'],
+  Psychic:  ['Bug', 'Ghost'],
+  Bug:      ['Fire', 'Flying', 'Rock'],
+  Rock:     ['Water', 'Grass', 'Fighting', 'Ground'],
+  Ghost:    ['Ghost'],
+  Dragon:   ['Ice', 'Dragon', 'Fairy'],
+  Fairy:    ['Poison'],
+};
+
 // World-map layout: schematic grid position + icon per zone, from world.js.
 // Any zone without a position is auto-placed so new zones still appear.
 const ZONE_MAP = {};
@@ -145,7 +166,35 @@ const NPCS = [
     '...you wandered this deep into the forest? Impressive.',
     'Collect every badge AND every Lukeymon, and you will be a true master.',
   ] },
+  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, lines: [
+    "Hey! I'm Ash — gonna befriend 'em all!",
+    'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
+    'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.',
+  ] },
+  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, lines: [
+    "I'm Misty, the Water-type ace!",
+    'A Water buddy lets you surf across deep water. 🌊',
+    'Moltres throwing Fire? Douse it with Water, Rock or Ground!',
+  ] },
+  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, lines: [
+    'Brock here — I keep the team well fed.',
+    "Zapdos hurls Electricity... only GROUND just shrugs it off.",
+    "Articuno's Ice melts before Fire, Fighting or Rock.",
+  ] },
 ];
+
+// Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
+// until its bird is caught. Bump into one → Rocket mini-boss battle → bird battle.
+const ROCKETS = [
+  { zone: 6, x: 10, y: 6, name: 'Jessie', emoji: '👩‍🎤', bird: 144 }, // Ice Cave → Articuno
+  { zone: 3, x: 10, y: 7, name: 'James',  emoji: '👨‍🎤', bird: 145 }, // Highlands → Zapdos
+  { zone: 4, x: 10, y: 9, name: 'Meowth', emoji: '😼',   bird: 146 }, // Volcano → Moltres
+];
+// A legendary lair tile (still active until its bird is caught). Before the
+// guard is beaten it shows Team Rocket; after, the bird itself awaits a rematch.
+function lairAt(zone, x, y) {
+  return ROCKETS.find(r => r.zone === zone && r.x === x && r.y === y && !caughtIds.has(r.bird)) || null;
+}
 
 // Snap each entity to a reachable tile. Collectibles just need a walkable tile;
 // NPCs prefer an "open" tile (3+ walkable neighbours) so they don't wall a path.
@@ -329,6 +378,7 @@ let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
+let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
 let currentNPC = null;             // NPC whose dialog is open
 let npcLineIdx = 0;
 
@@ -727,7 +777,7 @@ function bindEvents() {
   document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
 
   // Mewtwo battle
-  document.getElementById('battle-throw').addEventListener('click', () => { wakeAudio(); throwMasterAtMewtwo(); });
+  // (battle-throw's handler is assigned per-battle in showBattleWin)
 
   // NPC dialog
   document.getElementById('npc-advance').addEventListener('click', () => { wakeAudio(); advanceNPC(); });
@@ -1030,7 +1080,18 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 3b. Talk to an NPC standing on the destination tile (they block it).
+  // 3b. A legendary lair: fight Team Rocket first, then (or directly, on a
+  //     rematch) the legendary bird itself.
+  const lair = lairAt(currentZone, nx, ny);
+  if (lair) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    if (rocketDefeated.has(lair.bird)) startBirdBattle(lair.bird);
+    else startRocketBattle(lair);
+    return;
+  }
+
+  // 3c. Talk to an NPC standing on the destination tile (they block it).
   const npc = npcAt(currentZone, nx, ny);
   if (npc) {
     bumpVec    = { dx, dy };
@@ -1187,7 +1248,7 @@ function spawnWild() {
   clearWild();
 
   // Pick a random uncaught Pokémon for the current zone
-  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id));
+  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id) && !p.boss && !p.legend);
   if (pool.length === 0) { scheduleSpawn(); return; }
   const poke = pool[Math.floor(Math.random() * pool.length)];
 
@@ -1300,6 +1361,29 @@ function drawEntities(ts) {
     const py = n.y * TILE_SIZE - camY;
     ctx.font = '22px serif';
     ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+  }
+  // Legendary lairs: Team Rocket grunt (red "R") until beaten, then the bird itself.
+  for (const r of ROCKETS) {
+    if (r.zone !== currentZone || caughtIds.has(r.bird)) continue;
+    const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+    const py = r.y * TILE_SIZE - camY;
+    if (rocketDefeated.has(r.bird)) {
+      const bird = POKEMON_DATA.find(p => p.id === r.bird);
+      ctx.font = '13px serif'; ctx.textAlign = 'center';
+      ctx.fillText('✨', px - 13, py + 6 + bob); ctx.fillText('✨', px + 13, py - bob);
+      const img = canvasSprite(bird);
+      if (img.complete && img.naturalWidth) {
+        const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+        const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
+        ctx.imageSmoothingEnabled = prev;
+      } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
+    } else {
+      ctx.font = '22px serif'; ctx.textAlign = 'center';
+      ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
+      ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('R', px + 9, py + 9);
+    }
   }
   // Roaming legendaries — drawn with their real sprite, with an aura of sparkles.
   for (const r of roamers) {
@@ -1978,49 +2062,109 @@ function engageRoamer(roamer) {
 }
 
 // ═══════════════════════════════════════════════════
-// MEWTWO BATTLE  (no timer; match Mewtwo's type 3 rounds, then Master Ball)
+// BOSS BATTLES  (Mewtwo, the legendary birds, Team Rocket)
+// No timer; over N rounds pick the right Lukeymon, then resolve via cfg.onWin/onLose.
 // ═══════════════════════════════════════════════════
 let battleRoundNum = 0;
 let battleType     = null;
+let currentBoss    = null;   // active boss config
 
-function startMewtwoBattle(roamer) {
-  currentLegend = roamer;
-  currentPoke   = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+function startBossBattle(cfg) {
+  currentBoss = cfg;
   clearWild();
   clearTimeout(spawnTimerId);
   battleRoundNum = 0;
+  document.getElementById('battle-header').textContent = cfg.title;
+  const bossEl = document.getElementById('battle-mewtwo');
+  if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }   // real Pokémon sprite
+  else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; } // Team Rocket emoji
   document.getElementById('battle-win').classList.add('hidden');
   document.getElementById('battle-options').classList.remove('hidden');
   document.getElementById('battle-instruction').classList.remove('hidden');
-  setPokeDisplay(document.getElementById('battle-mewtwo'), currentPoke, 80); // real art
   showScreen('battle');
   playEncounterJingle();
   nextBattleRound();
 }
 
+// Mewtwo — match its exact type for 3 rounds, then a Master Ball.
+function startMewtwoBattle(roamer) {
+  currentLegend = roamer;
+  const mew = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  startBossBattle({
+    title: 'MEWTWO', art: mew, rounds: 3, rule: 'match',
+    pickDemand: (pool) => { const t = [...new Set(pool.map(p => p.type))]; return t[Math.floor(Math.random() * t.length)]; },
+    demandPre: 'Mewtwo unleashes a ', demandPost: ' surge!',
+    onWin: () => { currentPoke = mew; showBattleWin('✨ Mewtwo is calmed!', '🟣 Throw Master Ball!', masterBalls > 0, throwMasterAtMewtwo); },
+    onLose: () => legendaryEscaped(),
+  });
+}
+
+// Legendary birds — send a type that BEATS what it hurls (3 rounds), then a Poké Ball.
+const BIRD_DEMANDS = {
+  144: ['Ice', 'Flying', 'Water'],      // Articuno
+  145: ['Electric', 'Flying', 'Water'], // Zapdos
+  146: ['Fire', 'Flying', 'Rock'],      // Moltres
+};
+function startBirdBattle(birdId) {
+  const bird = POKEMON_DATA.find(p => p.id === birdId);
+  currentLegend = null;
+  const demands = BIRD_DEMANDS[birdId];
+  startBossBattle({
+    title: bird.name.toUpperCase(), art: bird, rounds: 3, rule: 'beats',
+    pickDemand: () => demands[Math.floor(Math.random() * demands.length)],
+    demandPre: `${bird.name} hurls a `, demandPost: ' blast — counter it!',
+    onWin: () => { currentPoke = bird; showBattleWin(`✨ ${bird.name} is worn out!`, '⚪ Throw Poké Ball!', balls > 0, () => throwBallAtBird(birdId)); },
+    onLose: () => bossFlee(bird, 'IT FLEW OFF!', 'It retreats to its nest. Heal up and challenge it again!'),
+  });
+}
+
+// Team Rocket grunt — short 2-round counter battle guarding a bird's lair.
+function startRocketBattle(rkt) {
+  const bird = POKEMON_DATA.find(p => p.id === rkt.bird);
+  currentLegend = null;
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: 'TEAM ROCKET', emoji: rkt.emoji, rounds: 2, rule: 'beats',
+    pickDemand: () => ['Poison', 'Ground'][Math.floor(Math.random() * 2)],
+    demandPre: `${rkt.name}'s Lukeymon strikes with `, demandPost: ' — counter it!',
+    onWin: () => { rocketDefeated.add(rkt.bird); saveGame(); showBattleWin('💥 Team Rocket blasts off again!', `Face ${bird.name} ▶`, true, () => startBirdBattle(rkt.bird)); },
+    onLose: () => bossFlee({ name: rkt.name }, 'TEAM ROCKET WINS!', '“Better luck next time, twerp!” Come back when you are ready.'),
+  });
+}
+
 function nextBattleRound() {
+  const cfg = currentBoss;
   battleRoundNum++;
-  document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / 3`;
+  document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / ${cfg.rounds}`;
 
-  // Draw options from your caught Lukeymon. Normally that's the whole roster
-  // (Mewtwo only appears once everything else is caught); fall back to the full
-  // roster if you somehow have too few (e.g. summoned via the debug menu).
-  let pool = POKEMON_DATA.filter(p => p.legend !== 'mewtwo' && caughtIds.has(p.id));
-  if (pool.length < 6) pool = POKEMON_DATA.filter(p => p.legend !== 'mewtwo');
+  // Options drawn from your caught roster; fall back to the full roster if too few.
+  let pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && caughtIds.has(p.id));
+  if (pool.length < 6) pool = POKEMON_DATA.filter(p => !p.legend && !p.boss);
 
-  const types = [...new Set(pool.map(p => p.type))];
-  battleType = types[Math.floor(Math.random() * types.length)];
+  battleType = cfg.pickDemand(pool);
+  // Which types count as a correct answer: the exact type (Mewtwo) or any type
+  // that is super-effective against the demanded one (birds / Team Rocket).
+  const correctTypes = cfg.rule === 'beats' ? (BEATEN_BY[battleType] || [battleType]) : [battleType];
 
+  document.getElementById('battle-demand-pre').textContent  = cfg.demandPre;
+  document.getElementById('battle-demand-post').textContent = cfg.demandPost;
   const tEl = document.getElementById('battle-type');
   tEl.textContent = battleType;
   tEl.style.background = typeColor(battleType);
+  document.getElementById('battle-instruction').textContent =
+    cfg.rule === 'beats' ? "Send a Lukeymon that's STRONG against it!" : 'Send out a Lukeymon of that type!';
   beep(150, 0.18, 0.3, 'square');
 
-  // Six options: guaranteed at least one of the demanded type, rest mixed.
-  const correct = pool.filter(p => p.type === battleType);
-  const others  = shuffle(pool.filter(p => p.type !== battleType));
-  const opts = shuffle([ correct[Math.floor(Math.random() * correct.length)], ...others.slice(0, 5) ])
-                 .filter(Boolean);
+  // Six options, guaranteeing at least one correct answer (solvable even if you
+  // haven't caught a counter yet — it's pulled from the full roster as a fallback).
+  const correctPool = pool.filter(p => correctTypes.includes(p.type));
+  let lead = correctPool[Math.floor(Math.random() * correctPool.length)];
+  if (!lead) {
+    const any = POKEMON_DATA.filter(p => !p.legend && !p.boss && correctTypes.includes(p.type));
+    lead = any[Math.floor(Math.random() * any.length)];
+  }
+  const others = shuffle(pool.filter(p => p !== lead && !correctTypes.includes(p.type)));
+  const opts = shuffle([lead, ...others.slice(0, 5)]).filter(Boolean);
 
   const grid = document.getElementById('battle-options');
   grid.innerHTML = '';
@@ -2038,7 +2182,7 @@ function nextBattleRound() {
     tp.textContent = poke.type;
     tp.style.background = typeColor(poke.type);
     card.append(ic, nm, tp);
-    card.addEventListener('click', () => choosePokemon(poke, card));
+    card.addEventListener('click', () => chooseBattlePoke(poke, card, correctTypes));
     grid.appendChild(card);
   });
 }
@@ -2052,25 +2196,25 @@ function shuffle(arr) {
   return a;
 }
 
-function choosePokemon(poke, card) {
+function chooseBattlePoke(poke, card, correctTypes) {
   if (gameState !== 'battle') return;
   document.querySelectorAll('.battle-opt').forEach(b => b.disabled = true);
 
-  if (poke.type === battleType) {
+  if (correctTypes.includes(poke.type)) {
     card.classList.add('correct');
     beep(523, 0.12, 0.1);
     setTimeout(() => beep(659, 0.12, 0.15), 110);
-    // The chosen Lukeymon charges in full-size and bumps Mewtwo, then the
-    // battle moves on (next round, or the win once round 3 is cleared).
+    // The chosen Lukeymon charges in full-size and bumps the boss, then the
+    // battle moves on (next round, or the win once the last round is cleared).
     battleAttack(poke, () => {
-      if (battleRoundNum >= 3) battleWon();
+      if (battleRoundNum >= currentBoss.rounds) currentBoss.onWin();
       else nextBattleRound();
     });
   } else {
     card.classList.add('wrong');
     beep(160, 0.15, 0.2, 'square');
-    // Wrong type — it charges in but bounces off Mewtwo, flashing, then Mewtwo escapes.
-    battleBounce(poke, battleLost);
+    // Wrong choice — it charges in but bounces off, flashing, then the boss wins.
+    battleBounce(poke, () => currentBoss.onLose());
   }
 }
 
@@ -2193,11 +2337,16 @@ function battleRepelSound() {
   setTimeout(() => beep(85,  0.16, 0.32, 'square'), 260);
 }
 
-function battleWon() {
+// Show the win panel with a custom message + action button (capture / continue).
+function showBattleWin(msg, btnLabel, btnEnabled, onBtn) {
   document.getElementById('battle-options').classList.add('hidden');
   document.getElementById('battle-instruction').classList.add('hidden');
   document.getElementById('battle-win').classList.remove('hidden');
-  document.getElementById('battle-throw').disabled = masterBalls <= 0;
+  document.getElementById('battle-win-msg').textContent = msg;
+  const btn = document.getElementById('battle-throw');
+  btn.textContent = btnLabel;
+  btn.disabled = !btnEnabled;
+  btn.onclick = () => { wakeAudio(); onBtn(); };
   beep(523, 0.12, 0.12);
   setTimeout(() => beep(659, 0.12, 0.12), 130);
   setTimeout(() => beep(784, 0.18, 0.2), 260);
@@ -2211,8 +2360,27 @@ function throwMasterAtMewtwo() {
   caught();  // handles roamer removal, result screen, and dex completion
 }
 
-function battleLost() {
-  legendaryEscaped();  // Mewtwo vanishes to another faraway land
+function throwBallAtBird(birdId) {
+  if (balls <= 0) return;
+  balls--;
+  updateHud();
+  saveGame();
+  currentPoke = POKEMON_DATA.find(p => p.id === birdId);
+  currentLegend = null;
+  caught();  // adds to dex, awards the Trio Badge once all three are caught
+}
+
+// A boss/Rocket you didn't beat — show a "fled" result; the lair stays so you can retry.
+function bossFlee(who, title, message) {
+  document.getElementById('result-stars').classList.add('hidden');
+  document.getElementById('result-icon').innerHTML = '<span style="font-size:64px">💨</span>';
+  document.getElementById('result-title').textContent   = title;
+  document.getElementById('result-name').textContent    = who.name || '';
+  document.getElementById('result-message').textContent = message;
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active fled';
+  showScreen('result');
+  playFledSound();
 }
 
 // ═══════════════════════════════════════════════════
@@ -2628,6 +2796,7 @@ function startNewGame() {
   unlockedBarriers.clear();
   collected.clear();
   metNPCs.clear();
+  rocketDefeated.clear();
   balls = 12;
   masterBalls = 0;
   coins = 0;
@@ -2669,6 +2838,7 @@ function saveGame() {
       barriers:  [...unlockedBarriers],
       collected: [...collected],
       metNPCs:   [...metNPCs],
+      rocketDefeated: [...rocketDefeated],
       roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
       zone:      currentZone,
       x:         playerX,
@@ -2695,6 +2865,7 @@ function loadSlot(n) {
       unlockedBarriers = new Set(data.barriers || []);
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
+      rocketDefeated   = new Set(data.rocketDefeated || []);
       loadedRoamers    = data.roamers || null;
       currentZone    = data.zone  ?? 0;
       playerX        = data.x    ?? 10;

@@ -490,7 +490,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Fire',
     description: 'A legendary bird Pokémon that is said to bring the spring. Its flaming wings set the air ablaze as it soars!',
-    zones: [4],
+    zones: [4], boss: true,
   },
 
   // ── Zone 5: Dark Forest ──────────────────────────────────────────────────
@@ -654,7 +654,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Ice',
     description: 'A legendary bird Pokémon that can control ice. It chills moisture in the air to make snow fall as it flies!',
-    zones: [6],
+    zones: [6], boss: true,
   },
 
   // ── Zone 7: Desert ───────────────────────────────────────────────────────
@@ -746,7 +746,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'A legendary bird said to appear when the sky turns dark and lightning storms rage in the highlands.',
-    zones: [3],
+    zones: [3], boss: true,
   },
 
   // ── Master-Ball legendaries (roam the faraway lands; never hide in grass) ──
