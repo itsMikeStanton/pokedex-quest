@@ -181,24 +181,24 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, lines: () => [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, lines: () => [
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', lines: () => [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, lines: () => [
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', lines: () => [
     `Waves are perfect today, ${saveName}!`,
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, lines: () => [
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', lines: () => [
     `...you wandered this deep into the forest, ${saveName}? Impressive.`,
     `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
   ] },
-  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, lines: () => {
+  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, art: 'ash', lines: () => {
     const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
     if (caughtIds.size === POKEMON_DATA.length)
       return [`You caught them ALL, ${saveName}?! You're a true Lukeymon Master! 🌟`];
@@ -213,7 +213,7 @@ const NPCS = [
             'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
             'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.'];
   } },
-  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, lines: () => {
+  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, art: 'misty', lines: () => {
     const birds = [144, 145, 146].filter(id => caughtIds.has(id)).length;
     if (birds === 3)
       return [`You tamed all three legendary birds, ${saveName}?! Amazing!`,
@@ -222,7 +222,7 @@ const NPCS = [
             'A Water buddy lets you surf across deep water. 🌊',
             'Moltres throwing Fire? Douse it with Water, Rock or Ground!'];
   } },
-  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, lines: () => {
+  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, art: 'brock', lines: () => {
     if (wonGame)
       return [`Champion already, ${saveName}? Let me cook your team a victory feast! 🍳`,
               'Remember — only GROUND truly shrugs off Zapdos\'s Electric.'];
@@ -232,7 +232,7 @@ const NPCS = [
   } },
 
   // ── Inside your home (zone 9) ──
-  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, lines: () => {
+  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', lines: () => {
     if (wonGame) return [`My little Champion, ${saveName}! So proud of you. 🏆`, 'Rest up any time, sweetie.'];
     return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
@@ -243,7 +243,7 @@ const NPCS = [
   { zone: 9, x: 9, y: 6, emoji: '🪴', name: 'Plant', gift: 0, lines: ['A leafy little houseplant.'] },
 
   // ── Inside the Poké Mart (zone 10) ──
-  { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, lines: ['Welcome to the Poké Mart!'] },
+  { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Poké Mart!'] },
   { zone: 10, x: 2, y: 2, emoji: '🧴', name: 'Shelf',  gift: 0, lines: ['Shelves stocked with Potions and gear.'] },
   { zone: 10, x: 8, y: 2, emoji: '🎒', name: 'Rack',   gift: 0, lines: ['Bags and balls, neatly racked.'] },
 ];
@@ -251,8 +251,8 @@ const NPCS = [
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
 // until its bird is caught. Bump into one → Rocket mini-boss battle → bird battle.
 const ROCKETS = [
-  { zone: 6, x: 10, y: 6, name: 'Jessie', emoji: '👩‍🎤', bird: 144 }, // Ice Cave → Articuno
-  { zone: 3, x: 10, y: 7, name: 'James',  emoji: '👨‍🎤', bird: 145 }, // Highlands → Zapdos
+  { zone: 6, x: 10, y: 6, name: 'Jessie', emoji: '👩‍🎤', art: 'rocket_f', bird: 144 }, // Ice Cave → Articuno
+  { zone: 3, x: 10, y: 7, name: 'James',  emoji: '👨‍🎤', art: 'rocket_m', bird: 145 }, // Highlands → Zapdos
   { zone: 4, x: 10, y: 9, name: 'Meowth', emoji: '😼',   bird: 146 }, // Volcano → Moltres
 ];
 // A legendary lair tile (still active until its bird is caught). Before the
@@ -1536,6 +1536,22 @@ function canvasSprite(poke) {
 
 // Draw fixed collectibles (bobbing) and NPCs for the current zone.
 // ── Per-entity draws (collected into a y-sorted pass by drawWorld) ──
+// NPC/character art (real sprites where available; emoji otherwise).
+const _npcArt = {};
+function npcArtImg(key) {
+  if (!key) return null;
+  let img = _npcArt[key];
+  if (!img) { img = new Image(); img.src = 'art/npc/' + key + '.png'; _npcArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+// Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
+// py = tile top y, both already in screen space).
+function drawCharSprite(img, px, py, H) {
+  const w = Math.round(H * img.naturalWidth / img.naturalHeight);
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - H + 2), w, H);
+  ctx.imageSmoothingEnabled = prev;
+}
 function drawCollectibleE(c, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
   const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
@@ -1547,6 +1563,8 @@ function drawCollectibleE(c, ts) {
 function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = n.y * TILE_SIZE - camY;
+  const img = npcArtImg(n.art);
+  if (img) { drawCharSprite(img, px, py, 42); return; }
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
 }
@@ -1567,10 +1585,15 @@ function drawRocketE(r, ts) {
       ctx.imageSmoothingEnabled = prev;
     } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
   } else {
-    ctx.font = '22px serif';
-    ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
-    ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
-    ctx.fillText('R', px + 9, py + 9);
+    const img = npcArtImg(r.art);
+    if (img) {                       // sprite already wears the Team Rocket "R"
+      drawCharSprite(img, px, py, 44);
+    } else {
+      ctx.font = '22px serif';
+      ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
+      ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('R', px + 9, py + 9);
+    }
   }
 }
 function drawRoamerE(r, ts) {

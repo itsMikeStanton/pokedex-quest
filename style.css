@@ -215,7 +215,7 @@ body {
   gap: 10px;
   padding: 16px;
 }
-#prof-portrait, #prof-portrait2 { font-size: 56px; animation: profbob 2.4s ease-in-out infinite; }
+#prof-portrait, #prof-portrait2 { width: 84px; height: auto; image-rendering: pixelated; animation: profbob 2.4s ease-in-out infinite; }
 @keyframes profbob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 #prof-greeting, #intro-text {
   font-size: 8px; color: #eaf6ea; line-height: 1.7; text-align: center;
