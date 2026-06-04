@@ -379,6 +379,10 @@ let unlockedBarriers = new Set();  // barrier keys the player has physically cle
 let collected = new Set();         // ids of badges/collectibles found
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
 let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
+let wonGame = false;               // Champion victory (4 land badges) already celebrated
+let pendingChampion = false;       // queue the Champion screen after the BADGE GET screen
+const LAND_BADGES = ['badge_volcano', 'badge_forest', 'badge_ice', 'badge_desert'];
+function landBadgesDone() { return LAND_BADGES.every(id => collected.has(id)); }
 let currentNPC = null;             // NPC whose dialog is open
 let npcLineIdx = 0;
 
@@ -792,6 +796,7 @@ function bindEvents() {
 
   // Result continue
   document.getElementById('result-continue').addEventListener('click', returnToWorld);
+  document.getElementById('champion-continue').addEventListener('click', returnToWorld);
 
   // Complete restart
   document.getElementById('complete-restart').addEventListener('click', startNewGame);
@@ -1159,6 +1164,7 @@ function move(dx, dy, ts) {
   const item = collectibleAt(currentZone, playerX, playerY);
   if (item && !collected.has(item.id)) {
     collected.add(item.id);
+    if (!wonGame && landBadgesDone()) pendingChampion = true;  // 4 land badges → Champion
     saveGame();
     updateHud();
     celebrateBadge(item);
@@ -2024,9 +2030,30 @@ function fled() {
 }
 
 function returnToWorld() {
+  // The 4th land badge was just collected — segue from BADGE GET into the Champion screen.
+  if (pendingChampion) { pendingChampion = false; showChampion(); return; }
   showScreen('world');
   scheduleSpawn();
   if (pendingMsg) { showMessage(pendingMsg); pendingMsg = null; }
+}
+
+// Initial victory: all four land badges earned. A "you won!" beat that leaves the
+// legendaries, Mew/Mewtwo, the caves and the full dex as optional post-game.
+function showChampion() {
+  wonGame = true;
+  saveGame();
+  const row = document.getElementById('champion-row');
+  row.innerHTML = '';
+  LAND_BADGES.forEach(id => {
+    const c = COLLECTIBLES.find(b => b.id === id);
+    const s = document.createElement('span');
+    s.textContent = c ? c.emoji : '🏅';
+    s.style.margin = '0 2px';
+    row.appendChild(s);
+  });
+  showScreen('champion');
+  playBadgeJingle();
+  badgeConfetti();
 }
 
 // A legendary you failed to capture vanishes and reappears elsewhere.
@@ -2797,6 +2824,8 @@ function startNewGame() {
   collected.clear();
   metNPCs.clear();
   rocketDefeated.clear();
+  wonGame = false;
+  pendingChampion = false;
   balls = 12;
   masterBalls = 0;
   coins = 0;
@@ -2839,6 +2868,7 @@ function saveGame() {
       collected: [...collected],
       metNPCs:   [...metNPCs],
       rocketDefeated: [...rocketDefeated],
+      wonGame,
       roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
       zone:      currentZone,
       x:         playerX,
@@ -2866,6 +2896,9 @@ function loadSlot(n) {
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
       rocketDefeated   = new Set(data.rocketDefeated || []);
+      // Legacy saves that already had all 4 land badges count as won (don't re-fire).
+      wonGame          = !!data.wonGame || landBadgesDone();
+      pendingChampion  = false;
       loadedRoamers    = data.roamers || null;
       currentZone    = data.zone  ?? 0;
       playerX        = data.x    ?? 10;

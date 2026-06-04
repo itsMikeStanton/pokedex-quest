@@ -1072,6 +1072,38 @@ body {
 #complete-row { font-size: 14px; letter-spacing: 3px; }
 #complete-praise { font-size: 6px; color: #a0d0a0; }
 
+/* ─── CHAMPION SCREEN (initial victory) ─────────────── */
+#champion-screen {
+  background: linear-gradient(160deg, #001a30, #07223c, #1a0824);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  text-align: center;
+}
+#champion-trophy { font-size: 52px; animation: trophypop 1s ease-out; }
+#champion-title {
+  font-size: 15px;
+  color: #f8d030;
+  text-shadow: 2px 2px 0 #a06000, 4px 4px 0 #000;
+}
+#champion-sub   { font-size: 7px; color: #e8e8c0; }
+#champion-row   { font-size: 22px; letter-spacing: 4px; }
+#champion-praise { font-size: 6px; color: #a0d0a0; line-height: 1.7; max-width: 240px; }
+#champion-next {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 6px;
+  line-height: 1.7;
+  color: #f0e8b0;
+  background: rgba(0, 0, 0, 0.28);
+  border: 2px solid #2a4a6a;
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+#champion-next .champion-next-head { color: #9fc4e8; margin-bottom: 2px; }
+
 /* ─── CONTROLS ROW ──────────────────────────────────── */
 #controls-row {
   display: flex;
