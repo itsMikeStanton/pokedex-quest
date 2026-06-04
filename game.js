@@ -348,6 +348,9 @@ let petMoveAnimTs = -9999;
 let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
 let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
 let surfNoted   = false;  // shown the "you can surf" hint this session yet?
+const JIGGLYPUFF_ID = 39; // a Jigglypuff buddy sings floating music notes
+let noteParticles = [];   // active floating ♪ from a singing buddy
+let lastNoteTs  = 0;
 
 // Pre-cached tile canvases for performance
 const tileCache = {};
@@ -1140,6 +1143,7 @@ function warpTo(zone, x, y, dirKey) {
   petX = playerX; petY = playerY;
   petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
   petMoveAnimTs = -9999;
+  noteParticles = [];
 
   saveGame();
   updateHud();
@@ -1427,6 +1431,7 @@ function drawWorld(ts) {
   }
   drawPet(ts);
   drawPlayer(renderPos.x - camX, renderPos.y - camY);
+  drawBuddyNotes(ts);
 
   // Cave darkness — old-school, lit block-by-block. Each tile gets one of a few
   // discrete darkness levels by its distance from the player, making stepped
@@ -1446,10 +1451,10 @@ function drawWorld(ts) {
         let a;
         if      (edge <= 0)   a = 0;      // fully lit
         else if (edge <= 1.0) a = 0.55;   // one dim ring
-        else                  a = 0.92;   // near pitch black
+        else                  a = 1;      // pitch black
         const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
         if (a > 0) {
-          ctx.fillStyle = `rgba(3,2,10,${a})`;
+          ctx.fillStyle = a >= 1 ? '#000' : `rgba(4,3,14,${a})`;
           ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
         } else if (lit) {                  // faint warm torch tint on fully-lit tiles
           ctx.fillStyle = 'rgba(255,168,70,0.07)';
@@ -1458,6 +1463,41 @@ function drawWorld(ts) {
       }
     }
   }
+}
+
+// A Jigglypuff buddy sings — emit little music notes that drift up and fade.
+function drawBuddyNotes(ts) {
+  if (activePet === JIGGLYPUFF_ID && caughtIds.has(JIGGLYPUFF_ID)) {
+    if (ts - lastNoteTs > 460) {
+      lastNoteTs = ts;
+      const rp = getPetRenderPos(ts);
+      const chars = ['🎵', '🎶', '♪', '♫'];
+      noteParticles.push({
+        x: rp.x + TILE_SIZE / 2 + (Math.random() * 12 - 6),
+        y: rp.y + 2,
+        born: ts,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        sway: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  if (!noteParticles.length) return;
+  const LIFE = 1500;
+  noteParticles = noteParticles.filter(n => ts - n.born < LIFE);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const n of noteParticles) {
+    const t = (ts - n.born) / LIFE;
+    const sx = n.x + Math.sin(n.sway + t * 5) * 7 - camX;
+    const sy = n.y - t * 38 - camY;
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.font = Math.round(13 + t * 5) + 'px serif';
+    ctx.fillStyle = '#ffc8ec';   // (emoji notes keep their own colour)
+    ctx.fillText(n.char, sx, sy);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 // Draw the buddy Pokémon trailing the player (small sprite, idle bob).
