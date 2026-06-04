@@ -458,7 +458,7 @@ let npcLineIdx = 0;
 let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let moveAnimTs  = -9999;
 let moveAnimDur = MOVE_ANIM_MS;   // per-move slide duration (longer for ice slides)
-let slideBounce = null;           // {dx,dy} to bounce back when a slide hits a wall
+let bounceAnim  = null;           // ice slide that hit a wall: glide in, bounce back to start
 let bumpVec     = null;
 let bumpAnimTs  = -9999;
 let camX = 0, camY = 0;
@@ -1101,6 +1101,22 @@ function getRenderPos(ts) {
     bumpVec = null;
   }
 
+  // Ice slide into a wall: glide forward into it, then bounce all the way back to start.
+  if (bounceAnim) {
+    const t = ts - bounceAnim.startTs;
+    const ease = p => 1 - Math.pow(1 - p, 3);
+    if (t < bounceAnim.fwdDur) {
+      const p = ease(t / bounceAnim.fwdDur);
+      return { x: bounceAnim.fromX + (bounceAnim.wallX - bounceAnim.fromX) * p,
+               y: bounceAnim.fromY + (bounceAnim.wallY - bounceAnim.fromY) * p };
+    } else if (t < bounceAnim.fwdDur + bounceAnim.backDur) {
+      const p = ease((t - bounceAnim.fwdDur) / bounceAnim.backDur);
+      return { x: bounceAnim.wallX + (bounceAnim.fromX - bounceAnim.wallX) * p,
+               y: bounceAnim.wallY + (bounceAnim.fromY - bounceAnim.wallY) * p };
+    }
+    bounceAnim = null;
+  }
+
   // Tile-to-tile slide with a tiny vertical hop arc
   const mt = Math.min((ts - moveAnimTs) / moveAnimDur, 1);
   if (mt < 1) {
@@ -1110,11 +1126,6 @@ function getRenderPos(ts) {
       x: fromPx.x + (destX - fromPx.x) * ease,
       y: fromPx.y + (destY - fromPx.y) * ease + hopY,
     };
-  }
-
-  // A slide that ran into a wall: bounce back the moment it lands.
-  if (slideBounce) {
-    bumpVec = slideBounce; bumpAnimTs = ts; slideBounce = null;
   }
 
   // Idle gentle bob
@@ -1237,6 +1248,9 @@ function findActiveExit(x, y, dx, dy) {
 // MOVEMENT
 // ═══════════════════════════════════════════════════
 function move(dx, dy, ts) {
+  // Locked out while bouncing back off an ice wall.
+  if (bounceAnim && (ts - bounceAnim.startTs) < bounceAnim.fwdDur + bounceAnim.backDur) return;
+
   // 1. Set direction
   playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
 
@@ -1342,7 +1356,6 @@ function move(dx, dy, ts) {
 
   // 4b. Ice is slippery! With no Ice-type buddy you slide straight across it
   //     until you reach solid ground (or a wall). An Ice buddy keeps your footing.
-  let wallBounce = null;
   if (tile === T.ICE && !buddyHasType('Ice')) {
     while (MAPS[currentZone][ny][nx] === T.ICE) {
       const ux = nx + dx, uy = ny + dy;
@@ -1354,21 +1367,27 @@ function move(dx, dy, ts) {
     }
     beep(900, 0.05, 0.2, 'sine');                       // slide whoosh
     if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); }
-    // Stopped while still on ice → you hit a wall: bounce back when the slide lands.
+    // Stopped while still on ice → you hit a wall: glide into it, then bounce
+    // all the way back to where you started (you stay put — it's purely visual).
     if (MAPS[currentZone][ny][nx] === T.ICE) {
-      wallBounce = { dx, dy };
-      setTimeout(() => beep(150, 0.08, 0.16, 'square'), (Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS);
+      const fwd = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;
+      bounceAnim = {
+        fromX: playerX * TILE_SIZE, fromY: playerY * TILE_SIZE,
+        wallX: nx * TILE_SIZE,       wallY: ny * TILE_SIZE,
+        startTs: ts, fwdDur: fwd, backDur: fwd,
+      };
+      setTimeout(() => beep(150, 0.08, 0.16, 'square'), fwd);   // bonk at the wall
+      playerStep ^= 1;
+      return;
     }
   }
 
   // 5. Normal move
-  slideBounce = null;   // don't let the pre-move render consume a stale bounce
   moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;  // slides glide slower
   const cur = getRenderPos(ts);
   fromPx.x   = cur.x;
   fromPx.y   = cur.y;
   moveAnimTs = ts;
-  slideBounce = wallBounce;   // arm the bounce for when the slide finishes
 
   const oldX = playerX, oldY = playerY;
   playerX   = nx;
