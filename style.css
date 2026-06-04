@@ -374,6 +374,74 @@ body {
   100% { transform: scale(0)    rotate(25deg); opacity: 0; filter: brightness(4); }
 }
 
+/* ─── Capture ball: traditional 2× wiggle, shared by every catch ── */
+.capture-ball {
+  position: absolute;
+  left: 50%;
+  margin-left: -21px;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #e83030 0%, #e83030 46%, #1c1c1c 46%, #1c1c1c 54%, #f4f4f4 54%);
+  border: 3px solid #0c0c0c;
+  box-shadow: 0 5px 9px rgba(0,0,0,.5), inset -4px -4px 6px rgba(0,0,0,.28), inset 3px 3px 5px rgba(255,255,255,.4);
+  transform-origin: 50% 80%;
+  z-index: 40;
+  pointer-events: none;
+}
+.capture-ball.master {
+  background: linear-gradient(180deg, #8a4fc4 0%, #8a4fc4 46%, #1c1c1c 46%, #1c1c1c 54%, #ecdcf8 54%);
+  box-shadow: 0 5px 9px rgba(0,0,0,.5), 0 0 12px #a040f0, inset -4px -4px 6px rgba(0,0,0,.28), inset 3px 3px 5px rgba(255,255,255,.4);
+}
+.capture-ball::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #0c0c0c;
+}
+.capture-ball.master::after { background: #f3b6ff; }
+@keyframes ball-toss {
+  0%   { transform: translateY(34px) scale(0.45) rotate(-200deg); opacity: 0; }
+  55%  { transform: translateY(-6px) scale(1.08) rotate(0deg);    opacity: 1; }
+  75%  { transform: translateY(3px)  scale(0.97) rotate(0deg); }
+  100% { transform: translateY(0)    scale(1)    rotate(0deg);    opacity: 1; }
+}
+@keyframes ball-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: translateX(-5px) rotate(-25deg); }
+  45% { transform: translateX(0)    rotate(0deg); }
+  70% { transform: translateX(5px)  rotate(25deg); }
+  92% { transform: rotate(-4deg); }
+}
+
+/* ─── All-caught parade: rapid one-at-a-time fly-in ── */
+#parade-stage {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 30; cursor: pointer; overflow: hidden;
+}
+.parade-poke {
+  position: absolute;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.parade-poke img {
+  width: 116px; height: 116px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.6));
+}
+.parade-name {
+  font-size: 9px; color: #f8d030;
+  text-shadow: 2px 2px 0 #000, 0 0 8px #c08000;
+}
+.parade-skip {
+  position: absolute; bottom: 7px; right: 9px;
+  font-size: 5px; color: #9a9a9a; letter-spacing: 1px;
+}
+#complete-screen.parading > :not(#parade-stage) { opacity: 0; }
+
 #enc-header {
   display: flex;
   justify-content: space-between;

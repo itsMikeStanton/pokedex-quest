@@ -1953,8 +1953,67 @@ function throwBall() {
     pokeWrap.style.animation = 'poke-shrink 0.55s ease-in forwards';
   }, 1000);
 
-  // Phase 4 — done, go to caught screen (1600ms)
-  setTimeout(() => caught(), 1600);
+  // Phase 4 — the ball drops in and wiggles 2× before the catch confirms.
+  setTimeout(() => {
+    const screen = document.getElementById('encounter-screen');
+    const wR = pokeWrap.getBoundingClientRect();
+    const sR = screen.getBoundingClientRect();
+    ballWiggleFinale(screen, !!currentLegend, {
+      left: Math.round((wR.left - sR.left) + wR.width / 2) + 'px',
+      top:  Math.round((wR.top  - sR.top)  + wR.height / 2) + 'px',
+      marginLeft: '-21px', marginTop: '-21px',
+    }, caught);
+  }, 1560);
+}
+
+// Traditional capture finale: a big ball tosses into place and wiggles twice
+// (click… click…) before a confirming chime, then onDone. Used by every catch.
+function ballWiggleFinale(container, isMaster, place, onDone) {
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball' + (isMaster ? ' master' : '');
+  Object.assign(ball.style, place);
+  container.appendChild(ball);
+
+  ball.style.animation = 'ball-toss 0.42s ease-out forwards';
+  beep(180, 0.16, 0.12, 'square');                       // ball lands
+  setTimeout(() => beep(140, 0.14, 0.13, 'square'), 80);
+
+  setTimeout(() => {                                      // two wiggles
+    ball.style.animation = 'ball-wiggle 0.55s ease-in-out 2';
+    beep(330, 0.05, 0.1);
+    setTimeout(() => beep(330, 0.05, 0.1), 560);
+  }, 430);
+
+  setTimeout(() => {                                      // caught!
+    beep(660, 0.1, 0.12);
+    setTimeout(() => beep(880, 0.16, 0.14), 120);
+    ball.remove();
+    onDone && onDone();
+  }, 430 + 1100 + 200);
+}
+
+// Battle capture: the boss is pulled into a (Master) Ball you actually see thrown,
+// which then wiggles twice before the catch confirms.
+function battleCapture(isMaster, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const boss  = document.getElementById('battle-mewtwo');
+  document.getElementById('battle-win').classList.add('hidden');
+
+  beep(420, 0.18, 0.1);
+  setTimeout(() => beep(310, 0.14, 0.1), 130);
+  boss.style.animation = 'poke-shrink 0.5s ease-in forwards';
+
+  setTimeout(() => {
+    boss.style.animation = '';
+    const sR = stage.getBoundingClientRect();
+    const bR = boss.getBoundingClientRect();
+    boss.style.visibility = 'hidden';
+    ballWiggleFinale(stage, isMaster, {
+      left: Math.round((bR.left - sR.left) + bR.width / 2) + 'px',
+      top:  Math.round((bR.top  - sR.top)  + bR.height / 2) + 'px',
+      marginLeft: '-21px', marginTop: '-21px',
+    }, () => { boss.style.visibility = ''; onDone && onDone(); });
+  }, 520);
 }
 
 const NEW_CATCH_BOUNTY = 5; // coins awarded for each newly-discovered species
@@ -2384,7 +2443,9 @@ function throwMasterAtMewtwo() {
   masterBalls--;
   updateHud();
   saveGame();
-  caught();  // handles roamer removal, result screen, and dex completion
+  document.getElementById('battle-throw').disabled = true;
+  // Show the Master Ball thrown + wiggle, then resolve the catch.
+  battleCapture(true, caught);  // caught() handles roamer removal + dex completion
 }
 
 function throwBallAtBird(birdId) {
@@ -2394,7 +2455,8 @@ function throwBallAtBird(birdId) {
   saveGame();
   currentPoke = POKEMON_DATA.find(p => p.id === birdId);
   currentLegend = null;
-  caught();  // adds to dex, awards the Trio Badge once all three are caught
+  document.getElementById('battle-throw').disabled = true;
+  battleCapture(false, caught);  // adds to dex, awards the Trio Badge on the 3rd
 }
 
 // A boss/Rocket you didn't beat — show a "fled" result; the lair stays so you can retry.
@@ -2745,6 +2807,63 @@ function showComplete() {
     rowEl.appendChild(wrap);
   });
   showScreen('complete');
+  runParade(POKEMON_DATA);   // rapid roll-call of every Lukeymon, then the trophy
+}
+
+// Celebratory roll-call: each Lukeymon flies in big, holds, then zooms out as the
+// next arrives — a fast montage of the whole dex. Tap to skip to the trophy.
+function runParade(list) {
+  const screen = document.getElementById('complete-screen');
+  const old = document.getElementById('parade-stage');
+  if (old) old.remove();
+
+  const stage = document.createElement('div');
+  stage.id = 'parade-stage';
+  const skip = document.createElement('div');
+  skip.className = 'parade-skip';
+  skip.textContent = 'tap to skip ▸';
+  stage.appendChild(skip);
+  screen.appendChild(stage);
+  screen.classList.add('parading');
+
+  const STEP = 100;            // ms between entries — "rapid"
+  let i = 0, done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    stage.remove();
+    screen.classList.remove('parading');
+  }
+  stage.addEventListener('click', finish);
+
+  function next() {
+    if (done) return;
+    if (i >= list.length) { setTimeout(finish, 450); return; }
+    const p = list[i++];
+    const card = document.createElement('div');
+    card.className = 'parade-poke';
+    card.appendChild(pokeImg(p, 116));
+    const nm = document.createElement('div');
+    nm.className = 'parade-name';
+    nm.textContent = p.name;
+    card.appendChild(nm);
+    stage.appendChild(card);
+    beep(360 + (i * 17) % 520, 0.05, 0.06);
+
+    if (card.animate) {
+      const a = card.animate([
+        { transform: 'translateY(38px) scale(0.3)',  opacity: 0, offset: 0,    easing: 'cubic-bezier(.2,.8,.2,1)' },
+        { transform: 'translateY(0) scale(1)',        opacity: 1, offset: 0.4 },
+        { transform: 'translateY(0) scale(1)',        opacity: 1, offset: 0.62, easing: 'ease-in' },
+        { transform: 'translateY(-34px) scale(1.55)', opacity: 0, offset: 1 },
+      ], { duration: STEP * 2.4, fill: 'forwards' });
+      a.onfinish = () => card.remove();
+    } else {
+      setTimeout(() => card.remove(), STEP * 2);
+    }
+    setTimeout(next, STEP);
+  }
+  next();
 }
 
 // ═══════════════════════════════════════════════════
