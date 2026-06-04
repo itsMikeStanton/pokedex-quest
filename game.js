@@ -1992,28 +1992,65 @@ function ballWiggleFinale(container, isMaster, place, onDone) {
   }, 430 + 1100 + 200);
 }
 
-// Battle capture: the boss is pulled into a (Master) Ball you actually see thrown,
-// which then wiggles twice before the catch confirms.
+// Battle capture: you SEE the (Master) Ball thrown in an arc from the bottom up to
+// the boss, which is then sucked in; the ball settles and wiggles twice before the
+// catch confirms.
 function battleCapture(isMaster, onDone) {
   const stage = document.getElementById('battle-screen');
   const boss  = document.getElementById('battle-mewtwo');
   document.getElementById('battle-win').classList.add('hidden');
 
-  beep(420, 0.18, 0.1);
-  setTimeout(() => beep(310, 0.14, 0.1), 130);
-  boss.style.animation = 'poke-shrink 0.5s ease-in forwards';
+  const sR = stage.getBoundingClientRect();
+  const bR = boss.getBoundingClientRect();
+  const cx = Math.round((bR.left - sR.left) + bR.width / 2);   // ball's resting spot
+  const cy = Math.round((bR.top  - sR.top)  + bR.height / 2);
 
-  setTimeout(() => {
-    boss.style.animation = '';
-    const sR = stage.getBoundingClientRect();
-    const bR = boss.getBoundingClientRect();
-    boss.style.visibility = 'hidden';
-    ballWiggleFinale(stage, isMaster, {
-      left: Math.round((bR.left - sR.left) + bR.width / 2) + 'px',
-      top:  Math.round((bR.top  - sR.top)  + bR.height / 2) + 'px',
-      marginLeft: '-21px', marginTop: '-21px',
-    }, () => { boss.style.visibility = ''; onDone && onDone(); });
-  }, 520);
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball' + (isMaster ? ' master' : '');
+  ball.style.left = cx + 'px';
+  ball.style.top  = cy + 'px';
+  ball.style.marginLeft = '-21px';
+  ball.style.marginTop  = '-21px';
+  stage.appendChild(ball);
+
+  // Where the throw starts (bottom-centre, "from the trainer") relative to rest.
+  const dx = Math.round(sR.width / 2 - cx);
+  const dy = Math.round(sR.height - 26 - cy);
+
+  beep(440, 0.16, 0.1);                       // whoosh of the throw
+  setTimeout(() => beep(320, 0.12, 0.1), 120);
+
+  const onLanded = () => {
+    boss.style.animation = 'poke-shrink 0.45s ease-in forwards';   // sucked in
+    beep(180, 0.22, 0.12, 'square');
+    setTimeout(() => beep(140, 0.18, 0.14, 'square'), 80);
+    setTimeout(() => {
+      boss.style.visibility = 'hidden';
+      boss.style.animation  = '';
+      ball.style.animation  = 'ball-wiggle 0.55s ease-in-out 2';    // wiggle ×2
+      beep(330, 0.05, 0.1);
+      setTimeout(() => beep(330, 0.05, 0.1), 560);
+      setTimeout(() => {                                            // caught!
+        beep(660, 0.1, 0.12);
+        setTimeout(() => beep(880, 0.16, 0.14), 120);
+        ball.remove();
+        boss.style.visibility = '';
+        onDone && onDone();
+      }, 1150);
+    }, 440);
+  };
+
+  if (ball.animate) {
+    const a = ball.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(0.5) rotate(-340deg)`, opacity: 0.3, offset: 0, easing: 'cubic-bezier(.25,.6,.4,1)' },
+      { transform: `translate(${Math.round(dx * 0.45)}px, ${Math.round(dy * 0.45) - 30}px) scale(0.9) rotate(-110deg)`, opacity: 1, offset: 0.55 },
+      { transform: 'translate(0,0) scale(1.08) rotate(0deg)', opacity: 1, offset: 0.85 },
+      { transform: 'translate(0,0) scale(1) rotate(0deg)',    opacity: 1, offset: 1 },
+    ], { duration: 580, fill: 'forwards' });
+    a.onfinish = onLanded;
+  } else {
+    setTimeout(onLanded, 560);
+  }
 }
 
 const NEW_CATCH_BOUNTY = 5; // coins awarded for each newly-discovered species
