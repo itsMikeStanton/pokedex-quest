@@ -13,7 +13,7 @@ const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11, HOUSE: 12, FLOOR: 13, WALL: 14, DOOR: 15 };
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
@@ -29,6 +29,38 @@ const ZONE_INFO = WORLD.zones;
 const EXITS = WORLD.exits;
 // Point-portals (cave mouths etc.): step onto (from, fx, fy) to warp to (to, tx, ty).
 const PORTALS = WORLD.portals || [];
+
+// ─── Building interiors ──────────────────────────────
+// Buildings on the overworld (your home, the shop) open into their own larger
+// interior zones, linked by point-portals. Defined here so they exist before the
+// map/zone tables are built below.
+(function setupInteriors() {
+  const F = T.FLOOR, W = T.WALL, D = T.DOOR;
+  function room(cols, rows, door) {
+    const m = [];
+    for (let y = 0; y < rows; y++) {
+      const row = [];
+      for (let x = 0; x < cols; x++)
+        row.push(x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? W : F);
+      m.push(row);
+    }
+    m[door[1]][door[0]] = D;
+    return m;
+  }
+  WORLD.zones.push({ id: 9,  name: 'Home',      cols: 11, rows: 9, base: F, mapCol: null, mapRow: null, icon: '🏠', interior: true });
+  WORLD.maps[9] = room(11, 9, [5, 8]);
+  WORLD.zones.push({ id: 10, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
+  WORLD.maps[10] = room(11, 8, [5, 7]);
+
+  WORLD.maps[0][6][8] = T.HOUSE;   // your home, placed in the Meadow (the shop tile already exists)
+
+  WORLD.portals.push(
+    { from: 0,  fx: 8,  fy: 6, to: 9,  tx: 5,  ty: 7 },   // step on the house → inside home
+    { from: 9,  fx: 5,  fy: 8, to: 0,  tx: 8,  ty: 7 },   // home door → in front of the house
+    { from: 0,  fx: 10, fy: 5, to: 10, tx: 5,  ty: 6 },   // step on the shop → inside the mart
+    { from: 10, fx: 5,  fy: 7, to: 0,  tx: 10, ty: 6 },   // mart door → in front of the shop
+  );
+})();
 
 const BARRIERS = {
   log:   { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to burn these logs!',       cleared: '🔥 Your Fire buddy burns away the logs!',      sign: '🔥' },
@@ -67,7 +99,7 @@ const ZONE_MAP = {};
 (() => {
   let auto = 1;
   WORLD.zones.forEach(z => {
-    if (z.cave) return;   // caves are portal-linked; they don't appear on the world map
+    if (z.cave || z.interior) return;   // caves & building interiors aren't world-map zones
     if (z.mapCol != null && z.mapRow != null) {
       ZONE_MAP[z.id] = { col: z.mapCol, row: z.mapRow, icon: z.icon || '🗺️' };
     } else {
@@ -86,7 +118,7 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
 // Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
-const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE, T.BOULDER]);
+const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE, T.BOULDER, T.WALL]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 
@@ -198,6 +230,22 @@ const NPCS = [
             "Zapdos hurls Electricity... only GROUND just shrugs it off.",
             "Articuno's Ice melts before Fire, Fighting or Rock."];
   } },
+
+  // ── Inside your home (zone 9) ──
+  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, lines: () => {
+    if (wonGame) return ['My little Champion! So proud of you. 🏆', 'Rest up any time, sweetie.'];
+    return ['Off on your adventure? Be safe out there! 💗',
+            'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
+            'Come home to visit whenever you like.'];
+  } },
+  { zone: 9, x: 1, y: 1, emoji: '🛏️', name: 'Bed',   gift: 0, lines: ['Your cozy bed. A quick nap sounds nice… 😴'] },
+  { zone: 9, x: 9, y: 1, emoji: '📺', name: 'TV',    gift: 0, lines: ['A Lukeymon battle is on TV!'] },
+  { zone: 9, x: 9, y: 6, emoji: '🪴', name: 'Plant', gift: 0, lines: ['A leafy little houseplant.'] },
+
+  // ── Inside the Poké Mart (zone 10) ──
+  { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, lines: ['Welcome to the Poké Mart!'] },
+  { zone: 10, x: 2, y: 2, emoji: '🧴', name: 'Shelf',  gift: 0, lines: ['Shelves stocked with Potions and gear.'] },
+  { zone: 10, x: 8, y: 2, emoji: '🎒', name: 'Rack',   gift: 0, lines: ['Bags and balls, neatly racked.'] },
 ];
 
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
@@ -472,6 +520,37 @@ function buildTileCache() {
   buildVariants(T.BOULDER, 3, paintBoulder);
   buildVariants(T.CAVE,  4, paintCave);
   buildVariants(T.CAVE_ENTRANCE, 1, paintCaveEntrance);
+  buildVariants(T.HOUSE, 1, paintHouse);
+  buildVariants(T.FLOOR, 3, paintFloor);
+  buildVariants(T.WALL,  3, paintWall);
+  buildVariants(T.DOOR,  1, paintDoor);
+}
+
+function paintHouse(x) {
+  x.fillStyle = '#7cc24a'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);     // grass base
+  x.fillStyle = '#e0c090'; x.fillRect(4, 12, 24, 18);                  // body
+  x.fillStyle = '#c0432f';                                            // roof
+  x.beginPath(); x.moveTo(2, 13); x.lineTo(16, 3); x.lineTo(30, 13); x.closePath(); x.fill();
+  x.fillStyle = '#9fd8ff'; x.fillRect(7, 16, 4, 4); x.fillRect(21, 16, 4, 4); // windows
+  x.fillStyle = '#6b4423'; x.fillRect(13, 18, 6, 12);                 // door
+  x.fillStyle = '#e8d24a'; x.fillRect(17, 24, 2, 2);                  // knob
+}
+function paintFloor(x, rng) {
+  x.fillStyle = '#caa472'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#b8915f'; for (let y = 0; y < TILE_SIZE; y += 8) x.fillRect(0, y, TILE_SIZE, 1);
+  if (rng() < 0.5) { x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(2 + Math.floor(rng() * 26), 2 + Math.floor(rng() * 26), 4, 1); }
+}
+function paintWall(x) {
+  x.fillStyle = '#8a6a4a'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#6e5238'; for (let xx = 0; xx < TILE_SIZE; xx += 8) x.fillRect(xx, 0, 1, TILE_SIZE);
+  x.fillStyle = 'rgba(255,255,255,0.06)'; x.fillRect(0, 0, TILE_SIZE, 2);
+  x.fillStyle = 'rgba(0,0,0,0.20)';       x.fillRect(0, TILE_SIZE - 4, TILE_SIZE, 4);
+}
+function paintDoor(x) {
+  x.fillStyle = '#caa472'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);    // floor under
+  x.fillStyle = '#5a8acb'; x.fillRect(6, 18, 20, 12);                 // welcome mat
+  x.fillStyle = '#7aa6e0'; x.fillRect(8, 20, 16, 8);
+  x.font = '13px serif'; x.fillText('🚪', 9, 15);
 }
 
 function makeTile() {
@@ -1157,7 +1236,8 @@ function move(dx, dy, ts) {
   if (npc) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    talkNPC(npc);
+    if (npc.shop) openShop();      // the Poké Mart clerk runs the shop
+    else talkNPC(npc);
     return;
   }
 
@@ -1201,11 +1281,7 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // Open shop when stepping onto shop tile
-  if (MAPS[currentZone][playerY][playerX] === T.SHOP) {
-    setTimeout(() => openShop(), 80);
-    return;
-  }
+  // (The shop tile now warps into the Poké Mart interior via the portal above.)
 
   // Check if player stepped onto a wild Pokémon's tile
   if (wildPoke && wildPoke.zone === currentZone &&
@@ -1306,6 +1382,7 @@ function spawnWild() {
   // Not in the overworld (menu/encounter)? Try again later — never let the
   // spawn loop die.
   if (gameState !== 'world') { scheduleSpawn(); return; }
+  if (ZONE_INFO[currentZone].interior) return;   // no wild Lukeymon indoors
 
   clearWild();
 
@@ -1533,13 +1610,17 @@ function updateCamera(renderPos) {
   const mapH = rows * TILE_SIZE;
   const cx = renderPos.x + TILE_SIZE / 2 - canvas.width / 2;
   const cy = renderPos.y + TILE_SIZE / 2 - canvas.height / 2;
-  camX = Math.max(0, Math.min(cx, mapW - canvas.width));
-  camY = Math.max(0, Math.min(cy, mapH - canvas.height));
+  // Maps smaller than the viewport (building interiors) are centred; larger ones follow the player.
+  camX = mapW <= canvas.width  ? Math.round((mapW - canvas.width)  / 2) : Math.max(0, Math.min(cx, mapW - canvas.width));
+  camY = mapH <= canvas.height ? Math.round((mapH - canvas.height) / 2) : Math.max(0, Math.min(cy, mapH - canvas.height));
 }
 
 function drawWorld(ts) {
   const renderPos = getRenderPos(ts);
   updateCamera(renderPos);
+
+  ctx.fillStyle = '#000';                                  // letterbox around small interiors
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const map = MAPS[currentZone];
   const { cols, rows } = ZONE_INFO[currentZone];
@@ -3421,15 +3502,15 @@ function startNewGame() {
   initRoamers();
   clearWild();
   clearTimeout(spawnTimerId);
-  currentZone = 0;
-  playerX = 10; playerY = 7; playerDir = 'down';
-  fromPx.x = 10 * TILE_SIZE;
-  fromPx.y = 7 * TILE_SIZE;
+  currentZone = 9;             // start inside your home
+  playerX = 5; playerY = 6; playerDir = 'down';
+  fromPx.x = 5 * TILE_SIZE;
+  fromPx.y = 6 * TILE_SIZE;
   moveAnimTs = -9999;
   bumpVec = null;
   activePet = null;
-  petX = 10; petY = 7;
-  petFromPx.x = 10 * TILE_SIZE; petFromPx.y = 7 * TILE_SIZE;
+  petX = 5; petY = 6;
+  petFromPx.x = 5 * TILE_SIZE; petFromPx.y = 6 * TILE_SIZE;
   petMoveAnimTs = -9999;
   surfNoted = false;
   saveGame();
