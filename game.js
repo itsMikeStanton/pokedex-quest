@@ -1434,8 +1434,8 @@ function drawWorld(ts) {
   // glowing buddy (Fire types, etc.); otherwise it's a tiny sliver.
   if (ZONE_INFO[currentZone].base === T.CAVE) {
     const lit = buddyLightsCave();
-    const flick = lit ? Math.sin(ts * 0.012) * 0.3 + Math.sin(ts * 0.027) * 0.18 : 0; // torch edge flicker
-    const R = (lit ? 5.2 : 1.6) + flick;   // lit radius, in tiles
+    const flick = lit ? Math.sin(ts * 0.009) * 0.08 + Math.sin(ts * 0.02) * 0.05 : 0; // gentle torch flicker
+    const R = (lit ? 4.3 : 1.3) + flick;   // lit radius, in tiles
     const pcx = renderPos.x - camX + TILE_SIZE / 2;
     const pcy = renderPos.y - camY + TILE_SIZE / 2;
     for (let r = startR; r < endR; r++) {
@@ -1445,9 +1445,8 @@ function drawWorld(ts) {
         const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R; // tiles past the lit edge
         let a;
         if      (edge <= 0)   a = 0;      // fully lit
-        else if (edge <= 0.9) a = 0.34;   // dim ring
-        else if (edge <= 1.9) a = 0.66;   // dark ring
-        else                  a = 0.94;   // near pitch black
+        else if (edge <= 1.0) a = 0.55;   // one dim ring
+        else                  a = 0.92;   // near pitch black
         const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
         if (a > 0) {
           ctx.fillStyle = `rgba(3,2,10,${a})`;
