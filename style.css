@@ -460,6 +460,36 @@ body {
 }
 #complete-screen.parading > :not(#parade-stage) { opacity: 0; }
 
+/* ─── Pokédex filters + location hints ──────────────── */
+#pokedex-filters {
+  display: flex; gap: 4px; padding: 3px 6px; flex-wrap: wrap; align-items: center;
+}
+.dexf-chip {
+  font-size: 6px; color: #cfe0f0;
+  background: rgba(255,255,255,.08); border: 1px solid #3a4a66; border-radius: 10px;
+  padding: 3px 7px; cursor: pointer;
+}
+.dexf-chip.active { background: #3a78c8; color: #fff; border-color: #6aa8e8; }
+#dexf-type { margin-left: auto; }
+.dex-card-hint { font-size: 5px; color: #9fb4cc; margin-top: 1px; line-height: 1.3; }
+.dex-card.caught .dex-card-hint { display: none; }
+.dex-empty { grid-column: 1 / -1; text-align: center; font-size: 7px; color: #8090a0; padding: 24px 8px; }
+
+/* ─── Settings screen ───────────────────────────────── */
+#settings-screen {
+  background: linear-gradient(160deg, #11182c, #181c30);
+  flex-direction: column; align-items: stretch; padding: 8px; gap: 10px;
+}
+#settings-topbar { display: flex; align-items: center; justify-content: space-between; }
+#settings-title { font-size: 9px; color: #80c0e0; text-shadow: 0 0 8px #40a8f8; }
+#settings-body { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.settings-row {
+  font-size: 8px; color: #eaf2ff; text-align: left;
+  background: rgba(0,0,0,.3); border: 2px solid #2a3a5a; border-radius: 6px;
+  padding: 10px 12px; cursor: pointer;
+}
+.settings-note { font-size: 6px; color: #7a8aa0; text-align: center; margin-top: 6px; }
+
 /* ─── Pokédex "seen" silhouette ─────────────────────── */
 .dex-card.seen { opacity: .92; }
 .dex-card.seen .dex-card-name { color: #9aa0b0; font-style: italic; }

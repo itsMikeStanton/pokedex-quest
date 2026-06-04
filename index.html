@@ -22,6 +22,7 @@
           <p class="title-tagline">Catch ʼem with kindness!</p>
           <div class="title-deco">🌿&nbsp;&nbsp;🔥&nbsp;&nbsp;💧&nbsp;&nbsp;⚡&nbsp;&nbsp;👻</div>
           <button id="play-btn" class="pixel-btn green">▶ PLAY</button>
+          <button id="title-settings" class="pixel-btn small blue">⚙️ Settings</button>
           <p class="title-hint">Arrow keys or WASD to move</p>
         </div>
 
@@ -127,6 +128,12 @@
             <span id="pokedex-title">POKÉDEX</span>
             <span id="pokedex-counter"><span id="dex-count">0</span>/<span id="dex-total">90</span></span>
           </div>
+          <div id="pokedex-filters">
+            <button class="dexf-chip active" data-status="all">All</button>
+            <button class="dexf-chip" data-status="caught">Caught</button>
+            <button class="dexf-chip" data-status="missing">Missing</button>
+            <button id="dexf-type" class="dexf-chip">Type: All</button>
+          </div>
           <div id="pokedex-grid"></div>
 
           <div id="pokedex-detail" class="hidden">
@@ -154,6 +161,20 @@
               <span id="detail-befriend-icon"></span>
               <span id="detail-befriend-text"></span>
             </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS SCREEN -->
+        <div id="settings-screen" class="screen">
+          <div id="settings-topbar">
+            <button id="settings-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="settings-title">SETTINGS</span>
+            <span class="help-spacer"></span>
+          </div>
+          <div id="settings-body">
+            <button id="set-sound" class="settings-row">🔊 Sound: ON</button>
+            <button id="set-guide" class="settings-row">🎮 Controls &amp; Type Guide ▸</button>
+            <div class="settings-note">LUKEYMON · <span id="set-version"></span></div>
           </div>
         </div>
 
@@ -329,10 +350,10 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.24.1</div>
+  <div id="version">v2.25.0</div>
 
-  <script src="world.js?v=2.24.1"></script>
-  <script src="data.js?v=2.24.1"></script>
-  <script src="game.js?v=2.24.1"></script>
+  <script src="world.js?v=2.25.0"></script>
+  <script src="data.js?v=2.25.0"></script>
+  <script src="game.js?v=2.25.0"></script>
 </body>
 </html>

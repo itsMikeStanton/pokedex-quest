@@ -6,8 +6,8 @@
 const TILE_SIZE      = 32;
 const MAP_COLS       = 20;
 const MAP_ROWS       = 14;
-const WILD_TIMEOUT   = 7000;   // ms a wild Pokémon stays on its tile before fleeing
-const TIMER_MS       = 6000;   // 6 seconds to choose
+const WILD_TIMEOUT   = 11000;  // ms a wild Pokémon stays on its tile before fleeing
+const TIMER_MS       = 9000;   // seconds to choose during a taming encounter
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
 const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
@@ -804,11 +804,21 @@ function bindEvents() {
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
+  document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip => {
+    chip.addEventListener('click', () => { dexFilter.status = chip.dataset.status; refreshDexFilters(); });
+  });
+  document.getElementById('dexf-type').addEventListener('click', cycleDexType);
 
-  // World map
+  // World map + guide
   document.getElementById('map-back').addEventListener('click', closeMap);
-  document.getElementById('map-help').addEventListener('click', openHelp);
+  document.getElementById('map-help').addEventListener('click', () => openHelp('map'));
   document.getElementById('help-back').addEventListener('click', closeHelp);
+
+  // Settings
+  document.getElementById('title-settings').addEventListener('click', openSettings);
+  document.getElementById('settings-back').addEventListener('click', closeSettings);
+  document.getElementById('set-sound').addEventListener('click', () => { wakeAudio(); toggleMute(); updateSoundRow(); });
+  document.getElementById('set-guide').addEventListener('click', () => openHelp('settings'));
 
   // Badge case
   document.getElementById('map-badges').addEventListener('click', openBadgeCase);
@@ -2245,6 +2255,22 @@ let battleRoundNum = 0;
 let battleType     = null;
 let currentBoss    = null;   // active boss config
 
+// A per-biome battle backdrop (radial glow tuned to the zone you're fighting in).
+function battleBackdrop(zone) {
+  const BG = {
+    0: 'radial-gradient(circle at 50% 30%, #1d3a1d, #0a140a)',   // Meadow
+    1: 'radial-gradient(circle at 50% 30%, #2a3550, #0a0e18)',   // Beach
+    2: 'radial-gradient(circle at 50% 30%, #2e2e3e, #0c0c14)',   // City
+    3: 'radial-gradient(circle at 50% 30%, #20406a, #0a1018)',   // Highlands (Zapdos)
+    4: 'radial-gradient(circle at 50% 35%, #5a1808, #1a0604)',   // Volcano   (Moltres)
+    5: 'radial-gradient(circle at 50% 30%, #102814, #060c08)',   // Dark Forest
+    6: 'radial-gradient(circle at 50% 30%, #2a5a72, #0a1820)',   // Ice Cave  (Articuno)
+    7: 'radial-gradient(circle at 50% 35%, #5a4418, #1a1206)',   // Desert
+    8: 'radial-gradient(circle at 50% 30%, #1a1226, #060410)',   // Hidden Cave
+  };
+  return BG[zone] || 'radial-gradient(circle at 50% 30%, #2a1840, #0a0a18)';  // Mewtwo / default purple
+}
+
 function startBossBattle(cfg) {
   currentBoss = cfg;
   clearWild();
@@ -2263,6 +2289,7 @@ function startBossBattle(cfg) {
   } else {
     foe.classList.add('hidden');
   }
+  document.getElementById('battle-screen').style.background = battleBackdrop(currentZone);
   document.getElementById('battle-win').classList.add('hidden');
   document.getElementById('battle-options').classList.remove('hidden');
   document.getElementById('battle-instruction').classList.remove('hidden');
@@ -2271,6 +2298,36 @@ function startBossBattle(cfg) {
   playEncounterJingle();
   if (cfg.intro) cfg.intro();   // e.g. Team Rocket's motto, then the rounds
   else nextBattleRound();
+}
+
+// Team Rocket tosses out a Pokémon: a ball arcs in from the grunt's corner and the
+// Lukeymon pops out onto the field.
+function rocketSendOut(mon) {
+  const bossEl = document.getElementById('battle-mewtwo');
+  const stage  = document.getElementById('battle-screen');
+  setPokeDisplay(bossEl, mon, 80);
+  if (bossEl.animate) {
+    bossEl.animate([
+      { transform: 'translateY(-8px) scale(0.2)', opacity: 0, offset: 0 },
+      { transform: 'translateY(4px) scale(1.12)', opacity: 1, offset: 0.6 },
+      { transform: 'translateY(0) scale(1)',      opacity: 1, offset: 1 },
+    ], { duration: 430, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+  }
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball';
+  ball.style.cssText = 'left:50%;top:92px;margin-left:-13px;margin-top:-13px;width:26px;height:26px;';
+  stage.appendChild(ball);
+  if (ball.animate) {
+    const a = ball.animate([
+      { transform: 'translate(120px,-60px) scale(0.4) rotate(0deg)',  opacity: 0, offset: 0 },
+      { transform: 'translate(45px,-22px) scale(0.9) rotate(240deg)', opacity: 1, offset: 0.5 },
+      { transform: 'translate(0,0) scale(1) rotate(360deg)',          opacity: 1, offset: 0.72 },
+      { transform: 'translate(0,0) scale(1.4)',                       opacity: 0, offset: 1 },
+    ], { duration: 430, easing: 'ease-out' });
+    a.onfinish = () => ball.remove();
+  } else { setTimeout(() => ball.remove(), 430); }
+  beep(300, 0.12, 0.1, 'square');
+  setTimeout(() => beep(440, 0.1, 0.12), 120);
 }
 
 // Mewtwo — match its exact type for 3 rounds, then a Master Ball.
@@ -2376,7 +2433,7 @@ function nextBattleRound() {
   let demandPre = cfg.demandPre, demandPost = cfg.demandPost;
   if (cfg.lineup) {
     const mon = POKEMON_DATA.find(p => p.id === cfg.lineup[(battleRoundNum - 1) % cfg.lineup.length]);
-    setPokeDisplay(document.getElementById('battle-mewtwo'), mon, 80);
+    rocketSendOut(mon);                 // ball-toss "sent out!" animation
     battleType = mon.type;
     demandPre  = `${cfg.grunt} sent out ${mon.name}! `;
     demandPost = ' — counter it!';
@@ -2684,6 +2741,17 @@ function buyMaster(cost) {
 // ═══════════════════════════════════════════════════
 // POKÉDEX
 // ═══════════════════════════════════════════════════
+let dexFilter = { status: 'all', type: 'all' };
+
+// Where to look for a not-yet-caught species (first home zone, or its legendary status).
+function dexLocationHint(poke) {
+  if (poke.legend) return '✨ Legendary';
+  if (poke.zones && poke.zones.length) {
+    return '📍 ' + poke.zones.map(z => ZONE_INFO[z] ? ZONE_INFO[z].name : '?').join(' / ');
+  }
+  return '✨ Rare';
+}
+
 function openPokedex() {
   clearTimeout(spawnTimerId);
   renderPokedexGrid();
@@ -2703,10 +2771,18 @@ function renderPokedexGrid() {
   document.getElementById('dex-count').textContent = caughtIds.size;
   document.getElementById('dex-total').textContent = POKEMON_DATA.length;
 
+  let shown = 0;
   POKEMON_DATA.forEach(poke => {
-    const card = document.createElement('div');
     const caught = caughtIds.has(poke.id);
     const seen   = !caught && seenIds.has(poke.id);   // encountered but not yet caught
+
+    // Apply filters.
+    if (dexFilter.status === 'caught'  && !caught) return;
+    if (dexFilter.status === 'missing' &&  caught) return;
+    if (dexFilter.type !== 'all' && poke.type !== dexFilter.type) return;
+    shown++;
+
+    const card = document.createElement('div');
     card.className = 'dex-card' + (caught ? ' caught' : seen ? ' seen' : ' dex-card-unknown');
 
     const emojiDiv = document.createElement('div');
@@ -2726,11 +2802,26 @@ function renderPokedexGrid() {
     card.appendChild(emojiDiv);
     card.appendChild(nameDiv);
 
+    // Help the player find what they're missing.
+    if (!caught) {
+      const hint = document.createElement('div');
+      hint.className = 'dex-card-hint';
+      hint.textContent = dexLocationHint(poke);
+      card.appendChild(hint);
+    }
+
     if (caught) {
       card.addEventListener('click', () => showDetail(poke));
     }
     grid.appendChild(card);
   });
+
+  if (!shown) {
+    const empty = document.createElement('div');
+    empty.className = 'dex-empty';
+    empty.textContent = 'Nothing here yet — go explore!';
+    grid.appendChild(empty);
+  }
 }
 
 function showDetail(poke) {
@@ -2837,12 +2928,45 @@ function fastTravel(zone) {
   showScreen('world');
 }
 
+// ─── Pokédex filters ─────────────────────────────────
+function refreshDexFilters() {
+  document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip =>
+    chip.classList.toggle('active', chip.dataset.status === dexFilter.status));
+  renderPokedexGrid();
+  setupNav('pokedex');
+}
+function cycleDexType() {
+  const types = ['all', ...Array.from(new Set(POKEMON_DATA.filter(p => !p.legend).map(p => p.type))).sort()];
+  const i = types.indexOf(dexFilter.type);
+  dexFilter.type = types[(i + 1) % types.length];
+  const btn = document.getElementById('dexf-type');
+  btn.textContent = 'Type: ' + (dexFilter.type === 'all' ? 'All' : dexFilter.type);
+  refreshDexFilters();
+}
+
+// ─── Settings ────────────────────────────────────────
+function updateSoundRow() {
+  const r = document.getElementById('set-sound');
+  if (r) r.textContent = muted ? '🔇 Sound: OFF' : '🔊 Sound: ON';
+}
+function openSettings() {
+  updateSoundRow();
+  const v = document.getElementById('version');
+  const sv = document.getElementById('set-version');
+  if (sv && v) sv.textContent = v.textContent;
+  showScreen('settings');
+}
+function closeSettings() { showScreen('title'); }
+
 // ─── Guide / type-chart screen ───────────────────────
-function openHelp() {
+let helpReturn = 'map';
+function openHelp(from) {
+  helpReturn = from || 'map';
   renderHelp();
   showScreen('help');
 }
 function closeHelp() {
+  if (helpReturn === 'settings') { showScreen('settings'); return; }
   renderMap();
   showScreen('map');
 }
@@ -3173,7 +3297,8 @@ function setupNav(id) {
   const $   = s => document.getElementById(s);
   const all = s => Array.from(document.querySelectorAll(s));
   switch (id) {
-    case 'title':     setNav([$('play-btn')]); break;
+    case 'title':     setNav([$('play-btn'), $('title-settings')]); break;
+    case 'settings':  setNav([$('set-sound'), $('set-guide'), $('settings-back')], { onBack: closeSettings }); break;
     case 'slot':      setNav(all('#slot-list .slot-info'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
