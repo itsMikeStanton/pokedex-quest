@@ -181,7 +181,7 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 40, lines: () => [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
@@ -3653,11 +3653,12 @@ function confirmName() {
   saveName = (raw || `TRAINER`).slice(0, 10);
   currentSlot = pendingNewSlot;
   // The professor sees you off before your adventure begins.
+  const nm = saveName.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   document.getElementById('intro-text').innerHTML =
-    `Wonderful to meet you, <b>${saveName}</b>!<br><br>` +
+    `Wonderful to meet you, <b>${nm}</b>!<br><br>` +
     `A whole island of Lukeymon is waiting. Befriend them with kindness, ` +
     `earn the four Gym Badges, and who knows what legends you'll uncover…<br><br>` +
-    `Good luck, ${saveName}! Your adventure starts at home. 🌟`;
+    `Good luck, ${nm}! Your adventure starts at home. 🌟`;
   showScreen('intro');
   beep(523, 0.1, 0.1); setTimeout(() => beep(659, 0.1, 0.12), 130); setTimeout(() => beep(784, 0.16, 0.2), 270);
 }
