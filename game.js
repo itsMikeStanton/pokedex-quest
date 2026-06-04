@@ -2138,7 +2138,8 @@ function beginEncounter(poke, roamer = null) {
   document.getElementById('enc-name').textContent      = poke.name;
   document.getElementById('enc-type-badge').textContent = poke.type;
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
-  setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 80);
+  setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 120);
+  document.getElementById('enc-bottom').classList.remove('hidden');
   document.getElementById('enc-thought-emoji').textContent   = poke.actionEmoji;
 
   // Enable/reset buttons
@@ -2237,6 +2238,7 @@ function throwBall() {
   saveGame();
 
   document.getElementById('enc-throw-btn').disabled = true;
+  document.getElementById('enc-bottom').classList.add('hidden');   // instructions go away on throw
 
   const ballEl   = document.getElementById('throw-ball');
   const pokeWrap = document.getElementById('enc-pokemon-wrap');
@@ -2293,18 +2295,19 @@ function ballWiggleFinale(container, isMaster, place, onDone) {
   beep(180, 0.16, 0.12, 'square');                       // ball lands
   setTimeout(() => beep(140, 0.14, 0.13, 'square'), 80);
 
-  setTimeout(() => {                                      // two wiggles
+  setTimeout(() => {                                      // two wiggles (rock side to side)
     ball.style.animation = 'ball-wiggle 0.55s ease-in-out 2';
     beep(330, 0.05, 0.1);
     setTimeout(() => beep(330, 0.05, 0.1), 560);
   }, 430);
 
+  // …then a tense beat with the ball still before the catch confirms.
   setTimeout(() => {                                      // caught!
     beep(660, 0.1, 0.12);
     setTimeout(() => beep(880, 0.16, 0.14), 120);
     ball.remove();
     onDone && onDone();
-  }, 430 + 1100 + 200);
+  }, 430 + 1100 + 750);
 }
 
 // Battle capture: you SEE the (Master) Ball thrown in an arc from the bottom up to
@@ -2351,7 +2354,7 @@ function battleCapture(isMaster, onDone) {
         ball.remove();
         boss.style.visibility = '';
         onDone && onDone();
-      }, 1150);
+      }, 1100 + 750);   // hold a tense beat after the rock
     }, 440);
   };
 
