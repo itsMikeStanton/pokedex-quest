@@ -392,6 +392,7 @@ let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
+let audioUnlocked = false;   // iOS needs a silent buffer played inside a gesture
 let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
@@ -781,7 +782,7 @@ function bindEvents() {
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
   // Unlock/resume audio on the first real gesture anywhere (mobile needs this).
-  ['pointerdown', 'touchend', 'mousedown'].forEach(ev =>
+  ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click'].forEach(ev =>
     document.addEventListener(ev, wakeAudio, { capture: true, passive: true }));
 
   // Title / save slots
@@ -3487,16 +3488,19 @@ function wakeAudio() {
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
-      restartMusic();   // kick off the loop now that audio is unlocked
-      return;
     }
-    // Mobile (iOS/Android) starts the context suspended and can re-suspend after
-    // backgrounding — re-resume on every gesture (cheap & idempotent).
-    if (audioCtx.state === 'suspended' && audioCtx.resume) {
-      audioCtx.resume();
-      restartMusic();
+    if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
+    if (!audioUnlocked) {
+      // iOS/WebKit: actually play a 1-sample silent buffer *inside the gesture*
+      // to fully unlock the context (resume() alone is not enough on iOS).
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+      audioUnlocked = true;
     }
+    if (!muted && !musicTimer && curMusic) restartMusic();   // (re)start loop once audio is live
   } catch (_) {}
 }
 
