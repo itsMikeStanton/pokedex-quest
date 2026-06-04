@@ -181,22 +181,22 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 40, lines: [
-    'Welcome to the Lukeymon lands, friend!',
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Professor', gift: 40, lines: () => [
+    `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
-    'Some paths are blocked. Catch the right type, then WALK INTO the barrier to clear it!',
+    `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, lines: [
-    'Keeping the city safe, trainer.',
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, lines: () => [
+    `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, lines: [
-    'Waves are perfect today, dude!',
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, lines: () => [
+    `Waves are perfect today, ${saveName}!`,
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, lines: [
-    '...you wandered this deep into the forest? Impressive.',
-    'Collect every badge AND every Lukeymon, and you will be a true master.',
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, lines: () => [
+    `...you wandered this deep into the forest, ${saveName}? Impressive.`,
+    `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
   ] },
   { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, lines: () => {
     const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
@@ -209,32 +209,32 @@ const NPCS = [
     if (landDone >= 1)
       return [`${landDone}/4 badges — you're on a roll!`,
               'Team Rocket\'s still guarding the legendary birds in the far zones.'];
-    return ["Hey! I'm Ash — gonna befriend 'em all!",
+    return [`Hey ${saveName}! I'm Ash — gonna befriend 'em all!`,
             'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
             'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.'];
   } },
   { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, lines: () => {
     const birds = [144, 145, 146].filter(id => caughtIds.has(id)).length;
     if (birds === 3)
-      return ['You tamed all three legendary birds?! Amazing!',
+      return [`You tamed all three legendary birds, ${saveName}?! Amazing!`,
               'They say a tiny pink Lukeymon named Mew appears once the dex is nearly full... 🔮'];
-    return ["I'm Misty, the Water-type ace!",
+    return [`I'm Misty, the Water-type ace — nice to meet you, ${saveName}!`,
             'A Water buddy lets you surf across deep water. 🌊',
             'Moltres throwing Fire? Douse it with Water, Rock or Ground!'];
   } },
   { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, lines: () => {
     if (wonGame)
-      return ['Champion already? Let me cook your team a victory feast! 🍳',
+      return [`Champion already, ${saveName}? Let me cook your team a victory feast! 🍳`,
               'Remember — only GROUND truly shrugs off Zapdos\'s Electric.'];
-    return ['Brock here — I keep the team well fed.',
+    return [`Brock here — I keep the team well fed, ${saveName}.`,
             "Zapdos hurls Electricity... only GROUND just shrugs it off.",
             "Articuno's Ice melts before Fire, Fighting or Rock."];
   } },
 
   // ── Inside your home (zone 9) ──
   { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, lines: () => {
-    if (wonGame) return ['My little Champion! So proud of you. 🏆', 'Rest up any time, sweetie.'];
-    return ['Off on your adventure? Be safe out there! 💗',
+    if (wonGame) return [`My little Champion, ${saveName}! So proud of you. 🏆`, 'Rest up any time, sweetie.'];
+    return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
             'Come home to visit whenever you like.'];
   } },
@@ -869,6 +869,7 @@ function bindEvents() {
   document.getElementById('slot-back').addEventListener('click', () => showScreen('title'));
   document.getElementById('name-ok').addEventListener('click', () => { wakeAudio(); confirmName(); });
   document.getElementById('name-cancel').addEventListener('click', () => openSlots());
+  document.getElementById('intro-begin').addEventListener('click', () => { wakeAudio(); beginAdventure(); });
   document.getElementById('name-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); confirmName(); }
   });
@@ -3382,6 +3383,7 @@ function setupNav(id) {
     case 'settings':  setNav([$('set-sound'), $('set-guide'), $('settings-back')], { onBack: closeSettings }); break;
     case 'slot':      setNav(all('#slot-list .slot-info'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
+    case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
     case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
     case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-help'), $('map-badges'), $('map-back')], { onBack: closeMap }); break;
     case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
@@ -3648,9 +3650,20 @@ function selectSlot(n) {
 
 function confirmName() {
   const raw = document.getElementById('name-input').value.trim().toUpperCase();
-  saveName = (raw || `SAVE ${pendingNewSlot}`).slice(0, 10);
+  saveName = (raw || `TRAINER`).slice(0, 10);
   currentSlot = pendingNewSlot;
-  startNewGame();          // writes a fresh save to this slot
+  // The professor sees you off before your adventure begins.
+  document.getElementById('intro-text').innerHTML =
+    `Wonderful to meet you, <b>${saveName}</b>!<br><br>` +
+    `A whole island of Lukeymon is waiting. Befriend them with kindness, ` +
+    `earn the four Gym Badges, and who knows what legends you'll uncover…<br><br>` +
+    `Good luck, ${saveName}! Your adventure starts at home. 🌟`;
+  showScreen('intro');
+  beep(523, 0.1, 0.1); setTimeout(() => beep(659, 0.1, 0.12), 130); setTimeout(() => beep(784, 0.16, 0.2), 270);
+}
+
+function beginAdventure() {
+  startNewGame();          // writes a fresh save and spawns you inside your home
 }
 
 // Erase a slot only on a deliberate ~1.2s hold (buried so it can't happen by accident).
@@ -3828,7 +3841,7 @@ function musicTick() {
 }
 
 function trackForScreen(id) {
-  if (id === 'title' || id === 'slot' || id === 'name')    return 'title';
+  if (id === 'title' || id === 'slot' || id === 'name' || id === 'intro') return 'title';
   if (id === 'encounter' || id === 'battle')               return 'battle';
   if (id === 'result' || id === 'complete' || id === 'champion') return null; // let jingles ring
   return 'world';

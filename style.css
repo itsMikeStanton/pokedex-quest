@@ -207,13 +207,21 @@ body {
 }
 
 /* ─── SAVE SLOTS / NAME ENTRY ───────────────────────── */
-#slot-screen, #name-screen {
+#slot-screen, #name-screen, #intro-screen {
   background: linear-gradient(160deg, #0a2a0a 0%, #184018 60%, #0a1a2a 100%);
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
   padding: 16px;
 }
+#prof-portrait, #prof-portrait2 { font-size: 56px; animation: profbob 2.4s ease-in-out infinite; }
+@keyframes profbob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+#prof-greeting, #intro-text {
+  font-size: 8px; color: #eaf6ea; line-height: 1.7; text-align: center;
+  max-width: 250px; text-shadow: 1px 1px 0 #000;
+}
+#intro-text b, #prof-greeting b { color: #f8d030; }
 #slot-title, #name-title {
   font-size: 11px;
   color: #f8d030;
