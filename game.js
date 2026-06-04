@@ -2169,7 +2169,8 @@ function startBossBattle(cfg) {
   document.getElementById('battle-instruction').classList.remove('hidden');
   showScreen('battle');
   playEncounterJingle();
-  nextBattleRound();
+  if (cfg.intro) cfg.intro();   // e.g. Team Rocket's motto, then the rounds
+  else nextBattleRound();
 }
 
 // Mewtwo — match its exact type for 3 rounds, then a Master Ball.
@@ -2204,18 +2205,58 @@ function startBirdBattle(birdId) {
   });
 }
 
-// Team Rocket grunt — short 2-round counter battle guarding a bird's lair.
+// Each grunt's two-Pokémon lineup — sent out one per round (id of the roster mon).
+const ROCKET_TEAMS = {
+  Jessie: [23, 24],  // Ekans  → Arbok    (Poison, Poison)
+  James:  [41, 27],  // Zubat  → Sandshrew (Poison, Ground)
+  Meowth: [23, 28],  // Ekans  → Sandslash (Poison, Ground)
+};
+
+// Team Rocket grunt — delivers the motto, then sends out 2 Pokémon (one per round).
 function startRocketBattle(rkt) {
-  const bird = POKEMON_DATA.find(p => p.id === rkt.bird);
+  const bird   = POKEMON_DATA.find(p => p.id === rkt.bird);
+  const lineup = ROCKET_TEAMS[rkt.name] || [23, 24];
   currentLegend = null;
   clearTimeout(spawnTimerId);
   startBossBattle({
-    title: 'TEAM ROCKET', emoji: rkt.emoji, rounds: 2, rule: 'beats',
-    pickDemand: () => ['Poison', 'Ground'][Math.floor(Math.random() * 2)],
-    demandPre: `${rkt.name}'s Lukeymon strikes with `, demandPost: ' — counter it!',
+    title: `TEAM ROCKET: ${rkt.name}`, emoji: rkt.emoji, rounds: lineup.length, rule: 'beats',
+    grunt: rkt.name, lineup,
+    motto: '“Prepare for trouble!”<br>“…and make it double!”<br>' +
+           `<b>${rkt.name} of Team Rocket wants to battle!</b>`,
+    intro: () => rocketIntro(),
     onWin: () => { rocketDefeated.add(rkt.bird); saveGame(); showBattleWin('💥 Team Rocket blasts off again!', `Face ${bird.name} ▶`, true, () => startBirdBattle(rkt.bird)); },
     onLose: () => bossFlee({ name: rkt.name }, 'TEAM ROCKET WINS!', '“Better luck next time, twerp!” Come back when you are ready.'),
   });
+}
+
+// Show the grunt + their Team Rocket motto, then begin the rounds on tap.
+function rocketIntro() {
+  const cfg = currentBoss;
+  document.getElementById('battle-options').classList.add('hidden');
+  document.getElementById('battle-instruction').classList.add('hidden');
+  document.getElementById('battle-round').textContent = '';
+  document.getElementById('battle-demand-pre').textContent  = '';
+  document.getElementById('battle-demand-post').textContent = '';
+  const tEl = document.getElementById('battle-type');
+  tEl.textContent = ''; tEl.style.background = 'transparent';
+
+  const win = document.getElementById('battle-win');
+  win.classList.remove('hidden');
+  document.getElementById('battle-win-msg').innerHTML = cfg.motto;
+  const btn = document.getElementById('battle-throw');
+  btn.textContent = '⚔️ Battle!';
+  btn.disabled = false;
+  btn.onclick = () => {
+    wakeAudio();
+    win.classList.add('hidden');
+    document.getElementById('battle-options').classList.remove('hidden');
+    document.getElementById('battle-instruction').classList.remove('hidden');
+    nextBattleRound();
+  };
+  // little motto sting
+  beep(330, 0.1, 0.1);
+  setTimeout(() => beep(392, 0.1, 0.1), 150);
+  setTimeout(() => beep(330, 0.14, 0.12), 320);
 }
 
 function nextBattleRound() {
@@ -2227,13 +2268,24 @@ function nextBattleRound() {
   let pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && caughtIds.has(p.id));
   if (pool.length < 6) pool = POKEMON_DATA.filter(p => !p.legend && !p.boss);
 
-  battleType = cfg.pickDemand(pool);
+  // A lineup boss (Team Rocket) sends out one Pokémon per round — show its sprite
+  // and make its type the thing you must counter. Otherwise use the static demand.
+  let demandPre = cfg.demandPre, demandPost = cfg.demandPost;
+  if (cfg.lineup) {
+    const mon = POKEMON_DATA.find(p => p.id === cfg.lineup[(battleRoundNum - 1) % cfg.lineup.length]);
+    setPokeDisplay(document.getElementById('battle-mewtwo'), mon, 80);
+    battleType = mon.type;
+    demandPre  = `${cfg.grunt} sent out ${mon.name}! `;
+    demandPost = ' — counter it!';
+  } else {
+    battleType = cfg.pickDemand(pool);
+  }
   // Which types count as a correct answer: the exact type (Mewtwo) or any type
   // that is super-effective against the demanded one (birds / Team Rocket).
   const correctTypes = cfg.rule === 'beats' ? (BEATEN_BY[battleType] || [battleType]) : [battleType];
 
-  document.getElementById('battle-demand-pre').textContent  = cfg.demandPre;
-  document.getElementById('battle-demand-post').textContent = cfg.demandPost;
+  document.getElementById('battle-demand-pre').textContent  = demandPre;
+  document.getElementById('battle-demand-post').textContent = demandPost;
   const tEl = document.getElementById('battle-type');
   tEl.textContent = battleType;
   tEl.style.background = typeColor(battleType);
