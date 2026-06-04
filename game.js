@@ -1283,6 +1283,19 @@ function move(dx, dy, ts) {
   //    caught Lapras you can surf straight across it.
   const tile = MAPS[currentZone][ny][nx];
   const surfing = tile === T.WATER && canSurf();
+
+  // Buildings & cave mouths are solid except from directly below — you must walk
+  // UP into the door (dy === -1). Approaching from a side or the top bounces off.
+  // (Only on the overworld; interior/cave exit doors are unrestricted.)
+  const isEntrance = tile === T.HOUSE || tile === T.SHOP || tile === T.CAVE_ENTRANCE;
+  if (isEntrance && dy !== -1 &&
+      !ZONE_INFO[currentZone].interior && !ZONE_INFO[currentZone].cave) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
   if (isObstacleTile(tile) && !surfing) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
