@@ -118,7 +118,7 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ZONE MAPS
 // ═══════════════════════════════════════════════════
 // Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
-const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.ICE, T.BOULDER, T.WALL]);
+const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   // ICE is walkable but slippery
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 
@@ -470,6 +470,7 @@ let petMoveAnimTs = -9999;
 let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
 let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
 let surfNoted   = false;  // shown the "you can surf" hint this session yet?
+let slipNoted   = false;  // shown the "ice is slippery" hint this session yet?
 const JIGGLYPUFF_ID = 39; // a Jigglypuff buddy sings floating music notes
 let noteParticles = [];   // active floating ♪ from a singing buddy
 let lastNoteTs  = 0;
@@ -1232,8 +1233,8 @@ function move(dx, dy, ts) {
   // 1. Set direction
   playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
 
-  const nx = playerX + dx;
-  const ny = playerY + dy;
+  let nx = playerX + dx;
+  let ny = playerY + dy;
 
   // 2. Off-map: check for zone exit
   const { cols: mc, rows: mr } = ZONE_INFO[currentZone];
@@ -1332,6 +1333,21 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 4b. Ice is slippery! With no Ice-type buddy you slide straight across it
+  //     until you reach solid ground (or a wall). An Ice buddy keeps your footing.
+  if (tile === T.ICE && !buddyHasType('Ice')) {
+    while (MAPS[currentZone][ny][nx] === T.ICE) {
+      const ux = nx + dx, uy = ny + dy;
+      if (ux < 0 || ux >= mc || uy < 0 || uy >= mr) break;
+      const ut = MAPS[currentZone][uy][ux];
+      if (isObstacleTile(ut) || ut === T.HOUSE || ut === T.SHOP || ut === T.CAVE_ENTRANCE) break;
+      if (npcAt(currentZone, ux, uy) || lairAt(currentZone, ux, uy) || roamerAt(currentZone, ux, uy)) break;
+      nx = ux; ny = uy;
+    }
+    beep(900, 0.05, 0.2, 'sine');                       // slide whoosh
+    if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); }
+  }
+
   // 5. Normal move
   const cur = getRenderPos(ts);
   fromPx.x   = cur.x;
@@ -1342,7 +1358,7 @@ function move(dx, dy, ts) {
   playerX   = nx;
   playerY   = ny;
   playerStep ^= 1;
-  petFollow(oldX, oldY, ts);   // buddy steps onto the tile you just left
+  petFollow(nx - dx, ny - dy, ts);   // buddy trails just behind (handles ice slides too)
 
   beep(220, 0.04, 0.04, 'square');
 
@@ -1384,7 +1400,7 @@ function move(dx, dy, ts) {
   }
 
   // Random grass pickup — chance to find a ball (more common) or a coin
-  if (tile === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
+  if (MAPS[currentZone][ny][nx] === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
     if (Math.random() < 0.6) {
       balls++;
       showMessage(`<span class="pb"></span> Found a PokéBall! (${balls} total)`);
@@ -3695,6 +3711,7 @@ function startNewGame() {
   petFromPx.x = 5 * TILE_SIZE; petFromPx.y = 6 * TILE_SIZE;
   petMoveAnimTs = -9999;
   surfNoted = false;
+  slipNoted = false;
   saveGame();
   updateHud();
   enterWorld();
@@ -3770,6 +3787,7 @@ function loadSlot(n) {
       petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
       petMoveAnimTs = -9999;
       surfNoted = false;
+      slipNoted = false;
     }
   } catch (_) {}
   initRoamers();
