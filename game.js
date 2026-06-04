@@ -1522,70 +1522,73 @@ function canvasSprite(poke) {
 }
 
 // Draw fixed collectibles (bobbing) and NPCs for the current zone.
-function drawEntities(ts) {
+// ── Per-entity draws (collected into a y-sorted pass by drawWorld) ──
+function drawCollectibleE(c, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
+  const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = c.y * TILE_SIZE - camY;
   ctx.textAlign = 'center';
-  for (const c of COLLECTIBLES) {
-    if (c.zone !== currentZone || collected.has(c.id)) continue;
-    const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
-    const py = c.y * TILE_SIZE - camY;
-    // sparkle glow
-    ctx.font = '12px serif';
-    ctx.fillText('✨', px, py - 10 + bob);
-    ctx.font = '20px serif';
-    ctx.fillText(c.emoji, px, py + 18 + bob);
-  }
-  for (const n of NPCS) {
-    if (n.zone !== currentZone) continue;
-    const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
-    const py = n.y * TILE_SIZE - camY;
-    ctx.font = '22px serif';
-    ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
-  }
-  // Legendary lairs: Team Rocket grunt (red "R") until beaten, then the bird itself.
-  for (const r of ROCKETS) {
-    if (r.zone !== currentZone || caughtIds.has(r.bird)) continue;
-    const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
-    const py = r.y * TILE_SIZE - camY;
-    if (rocketDefeated.has(r.bird)) {
-      const bird = POKEMON_DATA.find(p => p.id === r.bird);
-      ctx.font = '13px serif'; ctx.textAlign = 'center';
-      ctx.fillText('✨', px - 13, py + 6 + bob); ctx.fillText('✨', px + 13, py - bob);
-      const img = canvasSprite(bird);
-      if (img.complete && img.naturalWidth) {
-        const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
-        const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
-        ctx.imageSmoothingEnabled = prev;
-      } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
-    } else {
-      ctx.font = '22px serif'; ctx.textAlign = 'center';
-      ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
-      ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('R', px + 9, py + 9);
-    }
-  }
-  // Roaming legendaries — drawn with their real sprite, with an aura of sparkles.
-  for (const r of roamers) {
-    if (r.zone !== currentZone) continue;
-    const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
-    const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
-    const py = r.y * TILE_SIZE - camY;
+  ctx.font = '12px serif'; ctx.fillText('✨', px, py - 10 + bob);
+  ctx.font = '20px serif'; ctx.fillText(c.emoji, px, py + 18 + bob);
+}
+function drawNPCE(n, ts) {
+  const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = n.y * TILE_SIZE - camY;
+  ctx.textAlign = 'center'; ctx.font = '22px serif';
+  ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+}
+function drawRocketE(r, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = r.y * TILE_SIZE - camY;
+  ctx.textAlign = 'center';
+  if (rocketDefeated.has(r.bird)) {
+    const bird = POKEMON_DATA.find(p => p.id === r.bird);
     ctx.font = '13px serif';
-    ctx.fillText('✨', px - 14, py + 4 + bob);
-    ctx.fillText('✨', px + 14, py - 2 - bob);
-    const img = canvasSprite(poke);
+    ctx.fillText('✨', px - 13, py + 6 + bob); ctx.fillText('✨', px + 13, py - bob);
+    const img = canvasSprite(bird);
     if (img.complete && img.naturalWidth) {
       const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
-      const prev = ctx.imageSmoothingEnabled;
-      ctx.imageSmoothingEnabled = false;
+      const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
       ctx.imageSmoothingEnabled = prev;
-    } else {
-      ctx.font = '26px serif';
-      ctx.fillText(poke.emoji, px, py + 24 + bob);
-    }
+    } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
+  } else {
+    ctx.font = '22px serif';
+    ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
+    ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('R', px + 9, py + 9);
   }
+}
+function drawRoamerE(r, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
+  const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = r.y * TILE_SIZE - camY;
+  ctx.textAlign = 'center'; ctx.font = '13px serif';
+  ctx.fillText('✨', px - 14, py + 4 + bob);
+  ctx.fillText('✨', px + 14, py - 2 - bob);
+  const img = canvasSprite(poke);
+  if (img.complete && img.naturalWidth) {
+    const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
+    ctx.imageSmoothingEnabled = prev;
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(poke.emoji, px, py + 24 + bob);
+  }
+}
+// A ripple under the player while surfing on water.
+function surfRipple(renderPos) {
+  if (MAPS[currentZone][playerY][playerX] !== T.WATER || !canSurf()) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(220,240,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(renderPos.x - camX + TILE_SIZE / 2, renderPos.y - camY + TILE_SIZE - 4,
+              TILE_SIZE * 0.42, TILE_SIZE * 0.16, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawWild(ts) {
@@ -1673,17 +1676,6 @@ function drawWorld(ts) {
       ctx.drawImage(img, c * TILE_SIZE - camX, r * TILE_SIZE - camY);
     }
   }
-  // Oversized buildings: drawn on top of their ground tile, anchored at the tile's
-  // bottom and extending upward so they feel like real structures.
-  for (let r = startR; r < Math.min(rows, endR + 2); r++) {
-    for (let c = startC; c < endC; c++) {
-      const spr = buildingSprites[map[r][c]];
-      if (!spr) continue;
-      const bx = c * TILE_SIZE - camX + TILE_SIZE / 2;
-      const by = r * TILE_SIZE - camY + TILE_SIZE;
-      ctx.drawImage(spr, Math.round(bx - spr.width / 2), Math.round(by - spr.height));
-    }
-  }
   const zoneTints = {
     4: 'rgba(255,80,0,0.14)',
     5: 'rgba(0,30,0,0.22)',
@@ -1695,21 +1687,37 @@ function drawWorld(ts) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawBarriers(ts);
-  drawEntities(ts);
-  drawWild(ts);
-  // A ripple under the player while surfing on water.
-  if (MAPS[currentZone][playerY][playerX] === T.WATER && canSurf()) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(220,240,255,0.5)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(renderPos.x - camX + TILE_SIZE / 2, renderPos.y - camY + TILE_SIZE - 4,
-                TILE_SIZE * 0.42, TILE_SIZE * 0.16, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+
+  // ── Depth pass: tall structures + actors drawn back-to-front by their foot Y,
+  //    so the player/buddy/NPCs are correctly occluded by buildings (and, later,
+  //    tall trees). At an equal foot Y, structures (o:0) draw behind actors (o:1).
+  const sprites = [];
+  for (let r = startR; r < Math.min(rows, endR + 2); r++) {
+    for (let c = startC; c < endC; c++) {
+      const spr = buildingSprites[map[r][c]];
+      if (!spr) continue;
+      const bx = c * TILE_SIZE + TILE_SIZE / 2;
+      const by = (r + 1) * TILE_SIZE;
+      sprites.push({ y: by, o: 0, draw: () => ctx.drawImage(spr, Math.round(bx - camX - spr.width / 2), Math.round(by - camY - spr.height)) });
+    }
   }
-  drawPet(ts);
-  drawPlayer(renderPos.x - camX, renderPos.y - camY);
+  for (const c of COLLECTIBLES)
+    if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
+  for (const n of NPCS)
+    if (n.zone === currentZone) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+  for (const r of ROCKETS)
+    if (r.zone === currentZone && !caughtIds.has(r.bird)) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRocketE(r, ts) });
+  for (const r of roamers)
+    if (r.zone === currentZone) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRoamerE(r, ts) });
+  if (activePet != null) {
+    const prp = getPetRenderPos(ts);
+    sprites.push({ y: prp.y + TILE_SIZE, o: 1, draw: () => drawPet(ts) });
+  }
+  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
+  sprites.sort((a, b) => a.y - b.y || a.o - b.o);
+  sprites.forEach(s => s.draw());
+
+  drawWild(ts);
   drawBuddyNotes(ts);
 
   // Cave darkness — old-school, lit block-by-block. Each tile gets one of a few
