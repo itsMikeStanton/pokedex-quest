@@ -1909,10 +1909,10 @@ function drawPet(ts) {
   const px = rp.x - camX, py = rp.y - camY;
   const img = canvasSprite(poke);
   if (img.complete && img.naturalWidth) {
-    // Slightly oversized (taller than a tile) so the buddy reads clearly.
-    const h = 34, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    // Oversized (taller than a tile) so the buddy reads clearly.
+    const h = 46, w = Math.round(h * img.naturalWidth / img.naturalHeight);
     const dx = Math.round(px + (TILE_SIZE - w) / 2);
-    const dy = Math.round(py + TILE_SIZE - h + 4);
+    const dy = Math.round(py + TILE_SIZE - h + 5);
     const prev = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
     if (petFacing === 1) {            // sprites face left by default → flip when moving right
@@ -1926,7 +1926,7 @@ function drawPet(ts) {
     }
     ctx.imageSmoothingEnabled = prev;
   } else {
-    ctx.font = '24px serif';
+    ctx.font = '32px serif';
     ctx.textAlign = 'center';
     ctx.save();
     if (petFacing === 1) {
