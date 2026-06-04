@@ -527,6 +527,32 @@ function buildTileCache() {
   buildBuildingSprites();
 }
 
+// ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
+const TILE_ART = {
+  0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
+  3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
+  6: { 0: 3, 1: 3, 8: 3 }, 7: { 1: 3, 4: 3 },       8: { 9: 3, 10: 3, 11: 1 },
+};
+const _tileArt = {};
+function tileArtImg(zone, tileId, variant) {
+  const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
+  if (!cnt) return null;
+  const v = ((variant % cnt) + cnt) % cnt;
+  const key = zone + '_' + tileId + '_' + v;
+  let img = _tileArt[key];
+  if (!img) { img = new Image(); img.src = 'art/tiles/z' + key + '.png'; _tileArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _treeArt = {};
+function treeArtImg(zone) {
+  if (zone > 7) return null;                       // no trees in the hidden cave
+  let img = _treeArt[zone];
+  if (!img) { img = new Image(); img.src = 'art/tree/z' + zone + '.png'; _treeArt[zone] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png'; return i; })();
+function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _shopImg : null; }
+
 // Oversized building sprites (transparent bg), drawn on top of their ground tile and
 // extending upward so a 1-tile entrance reads as a full-size building.
 const buildingSprites = {};
@@ -1614,6 +1640,19 @@ function drawRoamerE(r, ts) {
     ctx.font = '26px serif'; ctx.fillText(poke.emoji, px, py + 24 + bob);
   }
 }
+// Queue a tall structure sprite (building/tree) into the depth list, anchored at the
+// tile's bottom and extending upward. Accepts an <img> or a pre-rendered canvas.
+function pushStruct(sprites, img, c, r, targetH) {
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const w = Math.round(targetH * iw / ih);
+  const bx = c * TILE_SIZE + TILE_SIZE / 2, by = (r + 1) * TILE_SIZE;
+  sprites.push({ y: by, o: 0, draw: () => {
+    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, Math.round(bx - camX - w / 2), Math.round(by - camY - targetH), w, targetH);
+    ctx.imageSmoothingEnabled = prev;
+  } });
+}
+
 // A ripple under the player while surfing on water.
 function surfRipple(renderPos) {
   if (MAPS[currentZone][playerY][playerX] !== T.WATER || !canSurf()) return;
@@ -1707,9 +1746,22 @@ function drawWorld(ts) {
   const endR   = Math.min(rows, startR + 16);
   for (let r = startR; r < endR; r++) {
     for (let c = startC; c < endC; c++) {
-      const variants = tileCache[map[r][c]];
-      const img = variants[tileVariant(currentZone, r, c, variants.length)];
-      ctx.drawImage(img, c * TILE_SIZE - camX, r * TILE_SIZE - camY);
+      const t = map[r][c];
+      // A structure (building, or a tree we have art for) sits on grass; its body is
+      // drawn later in the depth pass. Everything else just uses its own tile art.
+      const isStruct = t === T.HOUSE || t === T.SHOP || (t === T.TREE && treeArtImg(currentZone));
+      const groundId = isStruct ? T.GRASS : t;
+      const cnt = TILE_ART[currentZone] && TILE_ART[currentZone][groundId];
+      const dx = c * TILE_SIZE - camX, dy = r * TILE_SIZE - camY;
+      let drew = false;
+      if (cnt) {
+        const img = tileArtImg(currentZone, groundId, tileVariant(currentZone, r, c, cnt));
+        if (img) { ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE); drew = true; }
+      }
+      if (!drew) {                                    // procedural fallback
+        const variants = tileCache[groundId];
+        ctx.drawImage(variants[tileVariant(currentZone, r, c, variants.length)], dx, dy);
+      }
     }
   }
   const zoneTints = {
@@ -1730,11 +1782,10 @@ function drawWorld(ts) {
   const sprites = [];
   for (let r = startR; r < Math.min(rows, endR + 2); r++) {
     for (let c = startC; c < endC; c++) {
-      const spr = buildingSprites[map[r][c]];
-      if (!spr) continue;
-      const bx = c * TILE_SIZE + TILE_SIZE / 2;
-      const by = (r + 1) * TILE_SIZE;
-      sprites.push({ y: by, o: 0, draw: () => ctx.drawImage(spr, Math.round(bx - camX - spr.width / 2), Math.round(by - camY - spr.height)) });
+      const t = map[r][c];
+      if (t === T.HOUSE) pushStruct(sprites, buildingSprites[T.HOUSE], c, r, 58);
+      else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 62 : 58); }
+      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, 54); }
     }
   }
   for (const c of COLLECTIBLES)
