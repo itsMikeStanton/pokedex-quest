@@ -442,6 +442,21 @@ body {
 }
 #complete-screen.parading > :not(#parade-stage) { opacity: 0; }
 
+/* ─── D-pad / A-B focus cursor ─────────────────────── */
+.nav-focus {
+  outline: 3px solid #ffe24d !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 9px 2px rgba(255, 226, 77, .75) !important;
+  border-radius: 6px;
+  position: relative;
+  z-index: 3;
+  animation: navpulse 0.9s ease-in-out infinite;
+}
+@keyframes navpulse {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 226, 77, .55); }
+  50%      { box-shadow: 0 0 12px 3px rgba(255, 226, 77, .9); }
+}
+
 #enc-header {
   display: flex;
   justify-content: space-between;

@@ -427,6 +427,7 @@ window.addEventListener('DOMContentLoaded', () => {
   migrateLegacy();
   bindEvents();
   setupDebugMenu();
+  setupNav('title');           // the title screen is active by default
   requestAnimationFrame(loop);
 });
 
@@ -739,6 +740,7 @@ function paintCaveEntrance(x) {
 function bindEvents() {
   // Keyboard
   const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start', Shift:'select' };
+  const kbNavMap  = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', x:'a', X:'a', Enter:'a', ' ':'a', z:'b', Z:'b', Backspace:'b', Escape:'b' };
   document.addEventListener('keydown', e => {
     if (e.target && e.target.tagName === 'INPUT') return; // don't hijack text fields
     keys[e.key] = true;
@@ -747,6 +749,7 @@ function bindEvents() {
       e.preventDefault();
     }
     if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
+    if (!e.repeat && kbNavMap[e.key]) uiPress(kbNavMap[e.key]);   // menu navigation
     // 'M' toggles the world map from the world screen.
     if (e.key === 'm' || e.key === 'M') {
       if (gameState === 'world') openMap();
@@ -821,7 +824,7 @@ function bindEvents() {
   const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
   document.querySelectorAll('.dpad-btn').forEach(btn => {
     const k = keyMap[btn.dataset.dir];
-    const press   = e => { e.preventDefault(); keys[k] = true; kamiInput(btn.dataset.dir); wakeAudio(); };
+    const press   = e => { e.preventDefault(); keys[k] = true; kamiInput(btn.dataset.dir); uiPress(btn.dataset.dir); wakeAudio(); };
     const release = e => { e.preventDefault(); keys[k] = false; };
     btn.addEventListener('touchstart',  press,   { passive: false });
     btn.addEventListener('touchend',    release, { passive: false });
@@ -834,8 +837,8 @@ function bindEvents() {
   ['btn-b', 'btn-a'].forEach(id => {
     const name = id.split('-')[1];
     const el = document.getElementById(id);
-    el.addEventListener('pointerdown', e => { e.preventDefault(); kamiInput(name); wakeAudio(); });
-    el.addEventListener('touchstart',  e => { e.preventDefault(); kamiInput(name); wakeAudio(); }, { passive: false });
+    el.addEventListener('pointerdown', e => { e.preventDefault(); kamiInput(name); uiPress(name); wakeAudio(); });
+    el.addEventListener('touchstart',  e => { e.preventDefault(); kamiInput(name); uiPress(name); wakeAudio(); }, { passive: false });
   });
 
   const startEl = document.getElementById('ss-start');
@@ -1900,6 +1903,7 @@ function resolveAction(action, btnEl) {
         document.getElementById('enc-throw-btn').disabled = false;
         document.getElementById('enc-no-balls-msg').classList.add('hidden');
       }
+      setNav([document.getElementById('enc-throw-btn')]);   // A throws the ball
     }, 400);
   } else {
     btnEl.classList.add('wrong');
@@ -2299,6 +2303,7 @@ function rocketIntro() {
     document.getElementById('battle-instruction').classList.remove('hidden');
     nextBattleRound();
   };
+  setNav([btn]);   // A = Battle!
   // little motto sting
   beep(330, 0.1, 0.1);
   setTimeout(() => beep(392, 0.1, 0.1), 150);
@@ -2369,6 +2374,7 @@ function nextBattleRound() {
     card.addEventListener('click', () => chooseBattlePoke(poke, card, correctTypes));
     grid.appendChild(card);
   });
+  setNav(Array.from(grid.querySelectorAll('.battle-opt')), { cols: 3 });   // D-pad picks a Lukeymon
 }
 
 function shuffle(arr) {
@@ -2531,6 +2537,7 @@ function showBattleWin(msg, btnLabel, btnEnabled, onBtn) {
   btn.textContent = btnLabel;
   btn.disabled = !btnEnabled;
   btn.onclick = () => { wakeAudio(); onBtn(); };
+  setNav([btn]);
   beep(523, 0.12, 0.12);
   setTimeout(() => beep(659, 0.12, 0.12), 130);
   setTimeout(() => beep(784, 0.18, 0.2), 260);
@@ -2703,6 +2710,7 @@ function showDetail(poke) {
     buddyBtn.textContent = '🐾 Make this my buddy';
     buddyBtn.classList.remove('is-buddy');
   }
+  setNav([buddyBtn, document.getElementById('detail-back')], { onBack: closeDetail });
 }
 
 // Toggle the open Pokémon as the player's buddy.
@@ -2725,6 +2733,7 @@ function closeDetail() {
   document.getElementById('pokedex-detail').classList.add('hidden');
   document.getElementById('pokedex-grid').classList.remove('hidden');
   renderPokedexGrid();
+  setupNav('pokedex');
 }
 
 // ═══════════════════════════════════════════════════
@@ -2967,11 +2976,97 @@ function runParade(list) {
 // ═══════════════════════════════════════════════════
 // SCREEN MANAGEMENT
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// D-PAD / A-B MENU NAVIGATION
+//   D-pad moves a focus cursor, A activates it, B goes back.
+//   (World movement stays continuous via keys[]; A/B are shortcuts there.)
+// ═══════════════════════════════════════════════════
+let nav = { items: [], index: 0, cols: 1, onBack: null };
+
+function navClear() {
+  nav.items.forEach(el => el && el.classList && el.classList.remove('nav-focus'));
+}
+function navShow() {
+  navClear();
+  const el = nav.items[nav.index];
+  if (el) {
+    el.classList.add('nav-focus');
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+function setNav(items, opts = {}) {
+  navClear();
+  nav.items  = (items || []).filter(el => el && !(el.classList && el.classList.contains('hidden')));
+  nav.cols   = opts.cols || 1;
+  nav.onBack = opts.onBack || null;
+  nav.index  = Math.min(opts.index || 0, Math.max(0, nav.items.length - 1));
+  navShow();
+}
+function navMove(dir) {
+  const n = nav.items.length;
+  if (!n) return;
+  const c = nav.cols;
+  let i = nav.index;
+  if      (dir === 'left')  i = (i - 1 + n) % n;
+  else if (dir === 'right') i = (i + 1) % n;
+  else if (dir === 'up')    i = ((i - c) % n + n) % n;
+  else if (dir === 'down')  i = (i + c) % n;
+  nav.index = i;
+  navShow();
+  beep(340, 0.03, 0.05);
+}
+function navActivate() {
+  const el = nav.items[nav.index];
+  if (el && !el.disabled) el.click();
+}
+function navBack() { if (nav.onBack) nav.onBack(); }
+
+// Route a button press (from D-pad, A/B, or keyboard) to the current screen.
+let _uiLast = '', _uiLastT = 0;
+function uiPress(action) {
+  if (!action) return;
+  const now = Date.now();
+  if (action === _uiLast && now - _uiLastT < 30) return;   // kill synthetic touch+pointer dupes
+  _uiLast = action; _uiLastT = now;
+
+  if (gameState === 'world') {           // movement handled by keys[] in the loop
+    if      (action === 'a') openPokedex();
+    else if (action === 'b') openMap();
+    return;
+  }
+  if (action === 'a')      navActivate();
+  else if (action === 'b') navBack();
+  else                     navMove(action);
+}
+
+// Build the focus ring for a screen (called by showScreen, after it has rendered).
+function setupNav(id) {
+  const $   = s => document.getElementById(s);
+  const all = s => Array.from(document.querySelectorAll(s));
+  switch (id) {
+    case 'title':     setNav([$('play-btn')]); break;
+    case 'slot':      setNav(all('#slot-list .slot-info'), { onBack: () => showScreen('title') }); break;
+    case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
+    case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
+    case 'map':       setNav([$('map-badges'), $('map-back')], { onBack: closeMap }); break;
+    case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
+    case 'shop':      setNav([...all('#shop-screen .shop-buy-btn'), $('shop-close')], { onBack: closeShop }); break;
+    case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
+    case 'result':    setNav([$('result-continue')], { onBack: () => $('result-continue').click() }); break;
+    case 'complete':  setNav([$('complete-restart')], { onBack: () => $('complete-restart').click() }); break;
+    case 'champion':  setNav([$('champion-continue')], { onBack: () => $('champion-continue').click() }); break;
+    case 'encounter': setNav(all('#enc-buttons .action-btn'), { cols: 3 }); break;
+    case 'battle':    break;   // set per-round by nextBattleRound / showBattleWin / rocketIntro
+    default:          setNav([]); break;   // world & misc: no cursor
+  }
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(id + '-screen');
   if (el) el.classList.add('active');
   if (id !== 'encounter') gameState = id;
+  setupNav(id);
 }
 
 function showMessage(html) {
