@@ -166,21 +166,38 @@ const NPCS = [
     '...you wandered this deep into the forest? Impressive.',
     'Collect every badge AND every Lukeymon, and you will be a true master.',
   ] },
-  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, lines: [
-    "Hey! I'm Ash — gonna befriend 'em all!",
-    'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
-    'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.',
-  ] },
-  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, lines: [
-    "I'm Misty, the Water-type ace!",
-    'A Water buddy lets you surf across deep water. 🌊',
-    'Moltres throwing Fire? Douse it with Water, Rock or Ground!',
-  ] },
-  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, lines: [
-    'Brock here — I keep the team well fed.',
-    "Zapdos hurls Electricity... only GROUND just shrugs it off.",
-    "Articuno's Ice melts before Fire, Fighting or Rock.",
-  ] },
+  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, lines: () => {
+    const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
+    if (caughtIds.size === POKEMON_DATA.length)
+      return [`You caught them ALL, ${saveName}?! You're a true Lukeymon Master! 🌟`];
+    if (wonGame)
+      return ['You\'re the CHAMPION now! 🏆',
+              'Still out there: the legendary birds, Mew & Mewtwo, and a full Pokédex.',
+              'The adventure\'s not over — go get \'em!'];
+    if (landDone >= 1)
+      return [`${landDone}/4 badges — you're on a roll!`,
+              'Team Rocket\'s still guarding the legendary birds in the far zones.'];
+    return ["Hey! I'm Ash — gonna befriend 'em all!",
+            'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
+            'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.'];
+  } },
+  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, lines: () => {
+    const birds = [144, 145, 146].filter(id => caughtIds.has(id)).length;
+    if (birds === 3)
+      return ['You tamed all three legendary birds?! Amazing!',
+              'They say a tiny pink Lukeymon named Mew appears once the dex is nearly full... 🔮'];
+    return ["I'm Misty, the Water-type ace!",
+            'A Water buddy lets you surf across deep water. 🌊',
+            'Moltres throwing Fire? Douse it with Water, Rock or Ground!'];
+  } },
+  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, lines: () => {
+    if (wonGame)
+      return ['Champion already? Let me cook your team a victory feast! 🍳',
+              'Remember — only GROUND truly shrugs off Zapdos\'s Electric.'];
+    return ['Brock here — I keep the team well fed.',
+            "Zapdos hurls Electricity... only GROUND just shrugs it off.",
+            "Articuno's Ice melts before Fire, Fighting or Rock."];
+  } },
 ];
 
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
@@ -1315,9 +1332,12 @@ function spawnWild() {
   }, WILD_TIMEOUT);
 }
 
+let npcLines = [];   // resolved dialogue for the NPC currently being talked to
+
 function talkNPC(npc) {
   currentNPC = npc;
   npcLineIdx = 0;
+  npcLines = typeof npc.lines === 'function' ? npc.lines() : npc.lines;
   clearTimeout(spawnTimerId);
 
   document.getElementById('npc-emoji').textContent = npc.emoji;
@@ -1343,8 +1363,8 @@ function talkNPC(npc) {
 }
 
 function renderNpcLine() {
-  document.getElementById('npc-text').textContent = currentNPC.lines[npcLineIdx];
-  const last = npcLineIdx >= currentNPC.lines.length - 1;
+  document.getElementById('npc-text').textContent = npcLines[npcLineIdx];
+  const last = npcLineIdx >= npcLines.length - 1;
   document.getElementById('npc-advance').textContent = last ? 'CLOSE ✓' : 'NEXT ▶';
   beep(440, 0.05, 0.06, 'sine');
   setTimeout(() => beep(550, 0.05, 0.07, 'sine'), 70);
@@ -1352,7 +1372,7 @@ function renderNpcLine() {
 
 function advanceNPC() {
   document.getElementById('npc-reward').classList.add('hidden');
-  if (npcLineIdx >= currentNPC.lines.length - 1) { closeNPC(); return; }
+  if (npcLineIdx >= npcLines.length - 1) { closeNPC(); return; }
   npcLineIdx++;
   renderNpcLine();
 }
@@ -1867,6 +1887,7 @@ function beginEncounter(poke, roamer = null) {
   document.getElementById('timer-wrap').classList.remove('hidden');
 
   showScreen('encounter');
+  flashScreen();
   playEncounterJingle();
   startTimer();
 }
@@ -2241,6 +2262,7 @@ function startBossBattle(cfg) {
   document.getElementById('battle-options').classList.remove('hidden');
   document.getElementById('battle-instruction').classList.remove('hidden');
   showScreen('battle');
+  flashScreen('#c890f8');
   playEncounterJingle();
   if (cfg.intro) cfg.intro();   // e.g. Team Rocket's motto, then the rounds
   else nextBattleRound();
@@ -3170,6 +3192,7 @@ function showScreen(id) {
   if (el) el.classList.add('active');
   if (id !== 'encounter') gameState = id;
   setupNav(id);
+  setMusic(trackForScreen(id));
 }
 
 function showMessage(html) {
@@ -3460,6 +3483,7 @@ function wakeAudio() {
   if (audioCtx) return;
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    restartMusic();   // kick off the loop now that audio is unlocked
   } catch (_) {}
 }
 
@@ -3471,7 +3495,8 @@ function toggleMute() {
   muted = !muted;
   try { localStorage.setItem('lukeymon_muted', muted ? '1' : '0'); } catch (_) {}
   updateMuteBtn();
-  if (!muted) { wakeAudio(); beep(660, 0.08, 0.08); }   // little confirmation blip
+  if (muted) { stopMusic(); }
+  else { wakeAudio(); restartMusic(); beep(660, 0.08, 0.08); }   // resume + confirm blip
 }
 
 // Cycle the active buddy through your caught Lukeymon (and a "no buddy" slot).
@@ -3491,6 +3516,104 @@ function cycleBuddy() {
   beep(523, 0.06, 0.07);
   const cur = POKEMON_DATA.find(p => p.id === activePet);
   showMessage(cur ? `🐾 Buddy: ${cur.name} (${cur.type})` : '🐾 No buddy following');
+}
+
+// ═══════════════════════════════════════════════════
+// BACKGROUND MUSIC  (simple hand-written chiptune loops)
+// ═══════════════════════════════════════════════════
+const NOTE = (() => {
+  const m = { '-': 0, '': 0 };
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  for (let oct = 2; oct <= 6; oct++)
+    for (let n = 0; n < 12; n++)
+      m[names[n] + oct] = 440 * Math.pow(2, ((oct + 1) * 12 + n - 69) / 12);
+  return m;
+})();
+
+const MUSIC = {
+  title: {
+    tempo: 112,
+    melody: ['G4','-','C5','-','E5','-','D5','C5','E5','-','G5','-','A5','-','G5','-',
+             'F5','-','A5','-','G5','-','E5','-','D5','-','C5','-','E5','-','-','-'],
+    bass:   ['C3','-','-','-','F3','-','-','-','G3','-','-','-','C3','-','-','-'],
+  },
+  world: {
+    tempo: 132,
+    melody: ['C5','E5','G5','E5','F5','A5','G5','-','E5','G5','C6','B5','A5','G5','E5','-',
+             'D5','F5','A5','F5','G5','B5','A5','-','C6','B5','A5','G5','F5','D5','C5','-'],
+    bass:   ['C3','-','G3','-','F3','-','G3','-','C3','-','G3','-','A3','-','E3','-',
+             'D3','-','A3','-','G3','-','D3','-','F3','-','G3','-','C3','-','G3','-'],
+  },
+  battle: {
+    tempo: 168,
+    melody: ['A4','C5','E5','A5','E5','C5','A4','-','G4','B4','D5','G5','D5','B4','G4','-',
+             'F4','A4','C5','F5','E5','C5','A4','-','E5','D5','C5','B4','A4','-','E4','-'],
+    bass:   ['A2','A3','A2','A3','G2','G3','G2','G3','F2','F3','F2','F3','E2','E3','E2','E3'],
+  },
+};
+
+let curMusic = null;        // desired track name (survives mute)
+let musicTimer = null;
+let musicStep = 0;
+
+function musicNote(freq, dur, type, vol) {
+  if (!audioCtx || muted || !freq) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch (_) {}
+}
+
+// Brief full-screen flash — used as a "battle start" sting.
+function flashScreen(color) {
+  const sa = document.getElementById('screen-area');
+  if (!sa) return;
+  const f = document.createElement('div');
+  f.className = 'screen-flash';
+  if (color) f.style.background = color;
+  sa.appendChild(f);
+  setTimeout(() => f.remove(), 340);
+}
+
+function stopMusic() { clearTimeout(musicTimer); musicTimer = null; }
+
+function restartMusic() {
+  stopMusic();
+  musicStep = 0;
+  if (!curMusic || !audioCtx || muted) return;
+  musicTick();
+}
+
+function musicTick() {
+  const tr = MUSIC[curMusic];
+  if (!tr) return;
+  const stepMs = 60000 / tr.tempo / 2;          // eighth-note grid
+  const mf = NOTE[tr.melody[musicStep % tr.melody.length]];
+  const bf = NOTE[tr.bass[musicStep % tr.bass.length]];
+  musicNote(mf, stepMs / 1000 * 0.85, 'square',   0.045);
+  musicNote(bf, stepMs / 1000 * 0.95, 'triangle', 0.05);
+  musicStep++;
+  musicTimer = setTimeout(musicTick, stepMs);
+}
+
+function trackForScreen(id) {
+  if (id === 'title' || id === 'slot' || id === 'name')    return 'title';
+  if (id === 'encounter' || id === 'battle')               return 'battle';
+  if (id === 'result' || id === 'complete' || id === 'champion') return null; // let jingles ring
+  return 'world';
+}
+function setMusic(track) {
+  if (curMusic === track) return;
+  curMusic = track;
+  restartMusic();
 }
 
 function beep(freq, vol, dur, type = 'square') {

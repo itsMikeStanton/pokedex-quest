@@ -510,6 +510,15 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   border: 1px solid rgba(0,0,0,.4);
 }
 
+/* ─── Screen transitions ────────────────────────────── */
+.screen.active { animation: screenIn .17s ease-out; }
+@keyframes screenIn { from { opacity: 0; transform: scale(0.992); } to { opacity: 1; transform: scale(1); } }
+.screen-flash {
+  position: absolute; inset: 0; z-index: 60; pointer-events: none;
+  background: #fff; animation: flashfade .34s ease-out forwards;
+}
+@keyframes flashfade { 0% { opacity: 0; } 16% { opacity: .82; } 100% { opacity: 0; } }
+
 /* ─── D-pad / A-B focus cursor ─────────────────────── */
 .nav-focus {
   outline: 3px solid #ffe24d !important;
