@@ -459,6 +459,7 @@ let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let moveAnimTs  = -9999;
 let moveAnimDur = MOVE_ANIM_MS;   // per-move slide duration (longer for ice slides)
 let bounceAnim  = null;           // ice slide that hit a wall: glide in, bounce back to start
+let petBounceAnim = null;         // buddy's matching bounce (trails one tile behind)
 let bumpVec     = null;
 let bumpAnimTs  = -9999;
 let camX = 0, camY = 0;
@@ -1101,16 +1102,16 @@ function getRenderPos(ts) {
     bumpVec = null;
   }
 
-  // Ice slide into a wall: glide forward into it, then bounce all the way back to start.
+  // Ice slide into a wall: glide forward at full speed, then bounce straight back to
+  // start — linear the whole way (momentum, no slowing at the wall).
   if (bounceAnim) {
     const t = ts - bounceAnim.startTs;
-    const ease = p => 1 - Math.pow(1 - p, 3);
     if (t < bounceAnim.fwdDur) {
-      const p = ease(t / bounceAnim.fwdDur);
+      const p = t / bounceAnim.fwdDur;
       return { x: bounceAnim.fromX + (bounceAnim.wallX - bounceAnim.fromX) * p,
                y: bounceAnim.fromY + (bounceAnim.wallY - bounceAnim.fromY) * p };
     } else if (t < bounceAnim.fwdDur + bounceAnim.backDur) {
-      const p = ease((t - bounceAnim.fwdDur) / bounceAnim.backDur);
+      const p = (t - bounceAnim.fwdDur) / bounceAnim.backDur;
       return { x: bounceAnim.wallX + (bounceAnim.fromX - bounceAnim.wallX) * p,
                y: bounceAnim.wallY + (bounceAnim.fromY - bounceAnim.wallY) * p };
     }
@@ -1149,6 +1150,20 @@ function petFollow(tx, ty, ts) {
 function getPetRenderPos(ts) {
   const destX = petX * TILE_SIZE;
   const destY = petY * TILE_SIZE;
+  // Buddy mirrors the player's ice-wall bounce, one tile behind (linear momentum).
+  if (petBounceAnim) {
+    const t = ts - petBounceAnim.startTs;
+    if (t < petBounceAnim.fwdDur) {
+      const p = t / petBounceAnim.fwdDur;
+      return { x: petBounceAnim.fromX + (petBounceAnim.wallX - petBounceAnim.fromX) * p,
+               y: petBounceAnim.fromY + (petBounceAnim.wallY - petBounceAnim.fromY) * p };
+    } else if (t < petBounceAnim.fwdDur + petBounceAnim.backDur) {
+      const p = (t - petBounceAnim.fwdDur) / petBounceAnim.backDur;
+      return { x: petBounceAnim.wallX + (petBounceAnim.fromX - petBounceAnim.wallX) * p,
+               y: petBounceAnim.wallY + (petBounceAnim.fromY - petBounceAnim.wallY) * p };
+    }
+    petBounceAnim = null;
+  }
   const mt = Math.min((ts - petMoveAnimTs) / moveAnimDur, 1);
   if (mt < 1) {
     const ease = 1 - Math.pow(1 - mt, 3);
@@ -1376,6 +1391,14 @@ function move(dx, dy, ts) {
         wallX: nx * TILE_SIZE,       wallY: ny * TILE_SIZE,
         startTs: ts, fwdDur: fwd, backDur: fwd,
       };
+      if (activePet != null) {                       // buddy bounces too, one tile behind
+        petBounceAnim = {
+          fromX: petX * TILE_SIZE,        fromY: petY * TILE_SIZE,
+          wallX: (nx - dx) * TILE_SIZE,   wallY: (ny - dy) * TILE_SIZE,
+          startTs: ts, fwdDur: fwd, backDur: fwd,
+        };
+        if (dx) petFacing = dx > 0 ? 1 : -1;
+      }
       setTimeout(() => beep(150, 0.08, 0.16, 'square'), fwd);   // bonk at the wall
       playerStep ^= 1;
       return;
