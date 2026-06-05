@@ -1160,7 +1160,8 @@ function loop(ts) {
       fromPx.x = r.fromTX * TILE_SIZE; fromPx.y = r.fromTY * TILE_SIZE;
       moveAnimTs = ts;
       playerX = r.toX; playerY = r.toY; playerStep ^= 1;
-      petFollow(r.toX - r.dx, r.toY - r.dy, ts);
+      // We're now facing the opposite way, so the buddy trails on the far side.
+      petFollow(r.toX + r.dx, r.toY + r.dy, ts);
     }
     if (ts - lastMoveTs >= MOVE_INTERVAL) {
       let moved = false;
