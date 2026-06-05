@@ -446,6 +446,7 @@ let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
+let pendingGift = 0;               // coins held back for the end-of-conversation reveal
 let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
 let wonGame = false;               // Champion victory (4 land badges) already celebrated
 let pendingChampion = false;       // queue the Champion screen after the BADGE GET screen
@@ -982,6 +983,7 @@ function bindEvents() {
 
   // NPC dialog
   document.getElementById('npc-advance').addEventListener('click', () => { wakeAudio(); advanceNPC(); });
+  document.getElementById('gift-continue').addEventListener('click', () => { wakeAudio(); continueGift(); });
 
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
@@ -1584,20 +1586,15 @@ function talkNPC(npc) {
   if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/portrait/' + npc.art + '.png?v=' + ART_V + '" alt="" onerror="this.parentNode.textContent=\'' + npc.emoji + '\'">';
   else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
   document.getElementById('npc-name').textContent  = npc.name;
+  document.getElementById('npc-reward').classList.add('hidden');
 
-  // One-time gift the first time you meet this character.
-  const reward = document.getElementById('npc-reward');
-  if (!metNPCs.has(npc.name)) {
+  // One-time gift the first time you meet this character — but hold it back
+  // for a big reveal once the conversation wraps up (see advanceNPC).
+  if (!metNPCs.has(npc.name) && npc.gift > 0) {
     metNPCs.add(npc.name);
-    coins += npc.gift;
-    updateHud();
-    saveGame();
-    reward.textContent = `🌸 A gift! +${npc.gift} 💰`;
-    reward.classList.remove('hidden');
-    beep(700, 0.1, 0.1);
-    setTimeout(() => beep(950, 0.12, 0.16), 110);
+    pendingGift = npc.gift;
   } else {
-    reward.classList.add('hidden');
+    pendingGift = 0;
   }
 
   renderNpcLine();
@@ -1613,14 +1610,38 @@ function renderNpcLine() {
 }
 
 function advanceNPC() {
-  document.getElementById('npc-reward').classList.add('hidden');
-  if (npcLineIdx >= npcLines.length - 1) { closeNPC(); return; }
+  if (npcLineIdx >= npcLines.length - 1) {
+    if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
+    closeNPC();
+    return;
+  }
   npcLineIdx++;
   renderNpcLine();
 }
 
+// The held-back gift, revealed once the conversation ends — a slightly smaller
+// version of the badge-get celebration.
+function revealGift(amount) {
+  pendingGift = 0;
+  coins += amount;
+  updateHud();
+  saveGame();
+
+  document.getElementById('gift-badge').textContent = '💰';
+  document.getElementById('gift-amount').textContent = `+${amount} coins`;
+  showScreen('gift');
+  playBadgeJingle();
+  badgeConfetti(document.getElementById('gift-screen'));
+}
+
+function continueGift() {
+  beep(523, 0.08, 0.08);
+  closeNPC();
+}
+
 function closeNPC() {
   currentNPC = null;
+  pendingGift = 0;
   showScreen('world');
   scheduleSpawn();
 }
@@ -3707,6 +3728,7 @@ function setupNav(id) {
     case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
     case 'shop':      setNav([...all('#shop-screen .shop-buy-btn'), $('shop-close')], { onBack: closeShop }); break;
     case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
+    case 'gift':      setNav([$('gift-continue')], { onBack: continueGift }); break;
     case 'result':    setNav([$('result-continue')], { onBack: () => $('result-continue').click() }); break;
     case 'complete':  setNav([$('complete-restart')], { onBack: () => $('complete-restart').click() }); break;
     case 'champion':  setNav([$('champion-continue')], { onBack: () => $('champion-continue').click() }); break;
@@ -4163,7 +4185,7 @@ function musicTick() {
 function trackForScreen(id) {
   if (id === 'title' || id === 'slot' || id === 'name' || id === 'intro') return 'title';
   if (id === 'encounter' || id === 'battle')               return 'battle';
-  if (id === 'result' || id === 'complete' || id === 'champion') return null; // let jingles ring
+  if (id === 'result' || id === 'complete' || id === 'champion' || id === 'gift') return null; // let jingles ring
   return 'world';
 }
 function setMusic(track) {
@@ -4229,8 +4251,8 @@ function celebrateBadge(item) {
 }
 
 // A burst of celebratory emoji that fly outward from the centre and fade.
-function badgeConfetti() {
-  const screen = document.getElementById('result-screen');
+function badgeConfetti(screen) {
+  screen = screen || document.getElementById('result-screen');
   const pieces = ['✨', '🎉', '⭐', '🏅', '🎊', '💫'];
   for (let i = 0; i < 20; i++) {
     const s = document.createElement('span');
