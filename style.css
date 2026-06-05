@@ -903,6 +903,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 #pokedex-grid::-webkit-scrollbar-thumb { background: #204060; }
 
 .dex-card {
+  position: relative;
   background: #122030;
   border: 2px solid #204050;
   border-radius: 4px;
@@ -919,6 +920,31 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 .dex-card:hover { border-color: #40a0d8; background: #1a3040; }
 .dex-card.caught { border-color: #38a838; background: #102018; }
 .dex-card.caught:hover { border-color: #58d858; }
+
+/* Type badge under the name */
+.dex-card-type {
+  font-size: 5px;
+  line-height: 1;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  text-shadow: 0 1px 1px rgba(0,0,0,.5);
+}
+.dex-card.seen .dex-card-type { opacity: .7; }
+
+/* Buddy indicator — corner paw on the active buddy's card */
+.dex-card.is-buddy { border-color: #f0c000; box-shadow: 0 0 0 1px #f0c000 inset; }
+.dex-card.is-buddy.caught { border-color: #f0c000; }
+.dex-card-buddy {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
+}
 
 .dex-card-emoji { font-size: 22px; line-height: 1; }
 .dex-card-name  { font-size: 5px; color: #80c0e0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }

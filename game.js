@@ -3131,6 +3131,25 @@ function renderPokedexGrid() {
     card.appendChild(emojiDiv);
     card.appendChild(nameDiv);
 
+    // Type badge — once you've at least seen it.
+    if (caught || seen) {
+      const typeBadge = document.createElement('div');
+      typeBadge.className = 'dex-card-type';
+      typeBadge.textContent = poke.type;
+      typeBadge.style.background = typeColor(poke.type);
+      card.appendChild(typeBadge);
+    }
+
+    // Buddy indicator — flag the Pokémon currently following the player.
+    if (activePet === poke.id) {
+      card.classList.add('is-buddy');
+      const buddyTag = document.createElement('div');
+      buddyTag.className = 'dex-card-buddy';
+      buddyTag.textContent = '🐾';
+      buddyTag.title = 'Your buddy';
+      card.appendChild(buddyTag);
+    }
+
     // Help the player find what they're missing.
     if (!caught) {
       const hint = document.createElement('div');
