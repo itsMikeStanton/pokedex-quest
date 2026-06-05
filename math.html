@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>PokéMath Lab</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="math.css?v=2.3">
+  <link rel="stylesheet" href="math.css?v=2.4">
 </head>
 <body>
 
@@ -32,14 +32,24 @@
         <!-- ─────────── BOOT / POWER-ON ─────────── -->
         <div id="boot-screen" class="screen active">
           <div class="boot-scanlines" aria-hidden="true"></div>
-          <div class="boot-ball" aria-hidden="true"></div>
-          <div class="boot-title">
-            <span>P</span><span>O</span><span>K</span><span>É</span><span>D</span><span>E</span><span>X</span>
+
+          <!-- wait here for a tap before the intro plays (also unlocks sound) -->
+          <div id="boot-prompt">
+            <div class="boot-prompt-ball" aria-hidden="true"></div>
+            <div class="boot-prompt-text">▶ TAP TO START</div>
           </div>
-          <div class="boot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
-          <div class="boot-bar" aria-hidden="true"><div class="boot-bar-fill"></div></div>
-          <div class="boot-ready">READY!</div>
-          <div class="boot-crt" aria-hidden="true"></div>
+
+          <!-- the power-on sequence, revealed on tap -->
+          <div id="boot-seq" class="hidden" aria-hidden="true">
+            <div class="boot-ball"></div>
+            <div class="boot-title">
+              <span>P</span><span>O</span><span>K</span><span>É</span><span>D</span><span>E</span><span>X</span>
+            </div>
+            <div class="boot-dots"><i></i><i></i><i></i></div>
+            <div class="boot-bar"><div class="boot-bar-fill"></div></div>
+            <div class="boot-ready">READY!</div>
+            <div class="boot-crt"></div>
+          </div>
         </div>
 
         <!-- ─────────── TITLE ─────────── -->
@@ -182,7 +192,7 @@
     </div><!-- /screen-bezel -->
   </div><!-- /device -->
 
-  <script src="mathdata.js?v=2.3"></script>
-  <script src="math.js?v=2.3"></script>
+  <script src="mathdata.js?v=2.4"></script>
+  <script src="math.js?v=2.4"></script>
 </body>
 </html>

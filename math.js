@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.3';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.4';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -67,10 +67,12 @@ window.addEventListener('DOMContentLoaded', () => {
   startBoot();
 });
 
-// Cute Pokédex power-on, then reveal the title. Tap/press to skip.
+// Wait for a tap on the "TAP TO START" prompt, then play the cute power-on
+// sequence (with sound, now that the tap has unlocked audio), then the title.
 function startBoot() {
   const boot = $('#boot-screen');
-  let done = false;
+  let started = false, done = false;
+
   const finish = () => {
     if (done) return;
     done = true;
@@ -80,9 +82,26 @@ function startBoot() {
     setTimeout(() => { show('title'); boot.classList.remove('fade'); }, 360);
   };
   const skip = () => { wakeAudio(); finish(); };
-  document.addEventListener('pointerdown', skip);
-  document.addEventListener('keydown', skip);
-  setTimeout(finish, 3000);
+
+  const begin = () => {
+    if (started) return;
+    started = true;
+    document.removeEventListener('pointerdown', begin);
+    document.removeEventListener('keydown', begin);
+    wakeAudio();
+    $('#boot-prompt').classList.add('hidden');
+    $('#boot-seq').classList.remove('hidden');   // reveal → CSS animations run
+    playBootJingle();
+    // let the sequence play (~3s), then go to title; tap again to skip ahead
+    setTimeout(finish, 3000);
+    setTimeout(() => {
+      document.addEventListener('pointerdown', skip);
+      document.addEventListener('keydown', skip);
+    }, 500);
+  };
+
+  document.addEventListener('pointerdown', begin);
+  document.addEventListener('keydown', begin);
 }
 
 const $  = sel => document.querySelector(sel);
@@ -591,4 +610,9 @@ function playCatchJingle() {
 function playPikaCheer() {
   beep(880, 0.10, 0.08, 'triangle');
   setTimeout(() => beep(1175, 0.10, 0.12, 'triangle'), 90);
+}
+function playBootJingle() {
+  // ascending power-on arpeggio, then a bright "READY!" ding
+  [262, 330, 392, 523].forEach((f, i) => setTimeout(() => beep(f, 0.10, 0.12), 200 + i * 180));
+  setTimeout(() => { beep(784, 0.14, 0.18); beep(1047, 0.10, 0.18, 'triangle'); }, 2250);
 }
