@@ -1767,6 +1767,46 @@ function surfRipple(renderPos) {
   ctx.restore();
 }
 
+// A frosty skid-trail under the player while sliding on ice (no Ice buddy to
+// keep your footing). Mirrors the surf ripple — a glossy sheen plus, when
+// actually sliding, speed streaks trailing behind in the travel direction.
+function iceTrail(renderPos, ts) {
+  if (MAPS[currentZone][playerY][playerX] !== T.ICE || buddyHasType('Ice')) return;
+  const cx = renderPos.x - camX + TILE_SIZE / 2;
+  const cy = renderPos.y - camY + TILE_SIZE - 4;
+  ctx.save();
+  // glossy icy sheen under the feet
+  ctx.strokeStyle = 'rgba(190,235,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, TILE_SIZE * 0.40, TILE_SIZE * 0.15, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // speed streaks while a slide is in motion
+  if (moveLinear) {
+    const dirX = playerDir === 'left' ? -1 : playerDir === 'right' ? 1 : 0;
+    const dirY = playerDir === 'up'   ? -1 : playerDir === 'down'  ? 1 : 0;
+    for (let i = 1; i <= 3; i++) {
+      ctx.strokeStyle = `rgba(215,248,255,${0.6 - i * 0.16})`;
+      ctx.lineWidth = 2;
+      const bx = cx - dirX * i * 7, by = cy - dirY * i * 7;
+      ctx.beginPath();
+      if (dirX !== 0) { ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4); }
+      else            { ctx.moveTo(bx - 6, by); ctx.lineTo(bx + 6, by); }
+      ctx.stroke();
+    }
+  }
+
+  // a couple of twinkling frost sparkles
+  ctx.fillStyle = 'rgba(235,252,255,0.9)';
+  for (let i = 0; i < 2; i++) {
+    if ((Math.floor(ts * 0.01) + i) % 3 === 0) continue;   // twinkle on/off
+    const sx = cx + (i === 0 ? -8 : 9), sy = cy - 2 - (i * 3);
+    ctx.fillRect(Math.round(sx), Math.round(sy), 2, 2);
+  }
+  ctx.restore();
+}
+
 function drawWild(ts) {
   if (!wildPoke || wildPoke.zone !== currentZone) return;
 
@@ -1893,7 +1933,7 @@ function drawWorld(ts) {
     const prp = getPetRenderPos(ts);
     sprites.push({ y: prp.y + TILE_SIZE, o: 1, draw: () => drawPet(ts) });
   }
-  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
+  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
   sprites.sort((a, b) => a.y - b.y || a.o - b.o);
   sprites.forEach(s => s.draw());
 
