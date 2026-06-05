@@ -1950,6 +1950,14 @@ function drawWild(ts) {
   // Blink in final 2.5 s — every 300 ms
   if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
 
+  // Off-screen? Pin an arrow to the edge so the player can hunt it down.
+  const sx = px + TILE_SIZE / 2, sy = py + TILE_SIZE / 2;
+  const margin = 18;
+  if (sx < margin || sx > canvas.width - margin || sy < margin || sy > canvas.height - margin) {
+    drawWildOffscreen(sx, sy, ts);
+    return;
+  }
+
   // A red "!" alert over the spawn tile. It pops in on appear (scale overshoot +
   // drop), then idles with a gentle bob and a side-to-side wiggle.
   const elapsed = WILD_TIMEOUT - remaining;
@@ -1978,6 +1986,40 @@ function drawWild(ts) {
   ctx.fillStyle = '#e81028';
   ctx.fillRect(-3, -11, 6, 13);
   ctx.fillRect(-3, 5, 6, 6);
+  ctx.restore();
+}
+
+// A red "!" badge clamped to the screen edge, with an arrow pointing toward an
+// off-screen wild spawn so you know which way to head.
+function drawWildOffscreen(sx, sy, ts) {
+  const W = canvas.width, H = canvas.height, pad = 26;
+  const cx0 = W / 2, cy0 = H / 2;
+  const dx = sx - cx0, dy = sy - cy0;
+  // Project the direction onto the inset rectangle's border.
+  const sc = 1 / Math.max(Math.abs(dx) / (W / 2 - pad), Math.abs(dy) / (H / 2 - pad), 1e-6);
+  const ex = cx0 + dx * sc, ey = cy0 + dy * sc;
+  const ang = Math.atan2(dy, dx);
+  const pulse = 1 + Math.sin(ts * 0.008) * 0.12;
+
+  ctx.save();
+  ctx.translate(Math.round(ex), Math.round(ey));
+  // soft glow
+  ctx.fillStyle = 'rgba(232,16,40,0.22)';
+  ctx.beginPath(); ctx.arc(0, 0, 14 * pulse, 0, Math.PI * 2); ctx.fill();
+  // arrow tip pointing toward the spawn
+  ctx.save();
+  ctx.rotate(ang);
+  ctx.fillStyle = '#e81028';
+  ctx.beginPath();
+  ctx.moveTo(16, 0); ctx.lineTo(8, -6); ctx.lineTo(8, 6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // disc with dark outline
+  ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(0, 0, 10.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e81028'; ctx.beginPath(); ctx.arc(0, 0,  8.5, 0, Math.PI * 2); ctx.fill();
+  // the "!"
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-1.5, -6, 3, 7);
+  ctx.fillRect(-1.5,  3, 3, 3);
   ctx.restore();
 }
 
