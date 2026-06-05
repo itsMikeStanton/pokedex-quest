@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PokéMath Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="math.css">
+</head>
+<body>
+
+  <!-- ════════ POKÉDEX DEVICE ════════ -->
+  <div id="device">
+
+    <!-- top "lid" with the classic lens + status lights -->
+    <div id="dex-top">
+      <div id="dex-lens"><span class="lens-shine"></span></div>
+      <div class="dex-lights">
+        <span class="led red"></span>
+        <span class="led yellow"></span>
+        <span class="led green"></span>
+      </div>
+      <div id="dex-brand">POKéMATH</div>
+    </div>
+
+    <div id="screen-bezel">
+      <div id="screen-area">
+
+        <!-- ─────────── TITLE ─────────── -->
+        <div id="title-screen" class="screen active">
+          <div class="title-logo">
+            <span>P</span><span>O</span><span>K</span><span>É</span><span>M</span><span>A</span><span>T</span><span>H</span>
+          </div>
+          <p class="title-tagline">Solve it &amp; catch ʼem all!</p>
+
+          <div class="buddies">
+            <!-- Pikachu (CSS) -->
+            <div class="pikachu big">
+              <div class="pika-ear left"></div>
+              <div class="pika-ear right"></div>
+              <div class="pika-face">
+                <div class="pika-eye left"></div>
+                <div class="pika-eye right"></div>
+                <div class="pika-cheek left"></div>
+                <div class="pika-cheek right"></div>
+                <div class="pika-mouth"></div>
+              </div>
+            </div>
+            <div class="prof-face">🧑‍🔬</div>
+          </div>
+
+          <p id="title-prof">Hi! I'm Professor Oak. Ready for some math?</p>
+
+          <button id="start-btn" class="big-btn yellow">▶ START</button>
+          <button id="dex-open-btn" class="big-btn blue">📖 MY POKÉDEX</button>
+
+          <p class="title-score">⭐ Stars: <b id="title-stars">0</b> &nbsp; • &nbsp; Caught: <b id="title-caught">0</b>/<span id="title-total">14</span></p>
+        </div>
+
+        <!-- ─────────── MODE SELECT ─────────── -->
+        <div id="mode-screen" class="screen">
+          <div class="mode-prof">
+            <span class="mode-prof-face">🧑‍🔬</span>
+            <span class="mode-prof-text">What should we practice?</span>
+          </div>
+
+          <div class="mode-grid">
+            <button class="mode-btn" data-op="add">
+              <span class="mode-icon">➕</span>
+              <span class="mode-name">Adding</span>
+            </button>
+            <button class="mode-btn" data-op="sub">
+              <span class="mode-icon">➖</span>
+              <span class="mode-name">Take Away</span>
+            </button>
+            <button class="mode-btn" data-op="mul">
+              <span class="mode-icon">✖️</span>
+              <span class="mode-name">Groups</span>
+            </button>
+            <button class="mode-btn" data-op="mix">
+              <span class="mode-icon">🎲</span>
+              <span class="mode-name">Mix It Up</span>
+            </button>
+          </div>
+
+          <p class="level-label">Pick a level:</p>
+          <div class="level-row">
+            <button class="level-btn active" data-level="1">😊 Easy</button>
+            <button class="level-btn" data-level="2">😎 Tricky</button>
+          </div>
+
+          <button id="mode-back" class="small-btn red">◀ Back</button>
+        </div>
+
+        <!-- ─────────── QUIZ ─────────── -->
+        <div id="quiz-screen" class="screen">
+          <div id="quiz-top">
+            <span id="quiz-stars">⭐ <b id="round-stars">0</b></span>
+            <span id="quiz-progress">Q <b id="q-now">1</b>/<b id="q-total">8</b></span>
+            <button id="quiz-quit" class="small-btn red">✕</button>
+          </div>
+
+          <!-- wild pokemon -->
+          <div id="wild-wrap">
+            <div id="wild-emoji">❓</div>
+            <div id="wild-info">
+              <div id="wild-name">A wild Pokémon!</div>
+              <div id="wild-type">???</div>
+            </div>
+            <div id="wild-sparkle">✨</div>
+          </div>
+
+          <!-- the problem -->
+          <div id="problem">
+            <span id="p-a">3</span>
+            <span id="p-op">+</span>
+            <span id="p-b">2</span>
+            <span id="p-eq">=</span>
+            <span id="p-q">?</span>
+          </div>
+
+          <!-- pokeball counting helper -->
+          <div id="helper"></div>
+
+          <!-- answer choices -->
+          <div id="choices">
+            <button class="choice-btn" data-i="0"></button>
+            <button class="choice-btn" data-i="1"></button>
+            <button class="choice-btn" data-i="2"></button>
+          </div>
+
+          <!-- professor + pikachu coach bar -->
+          <div id="coach">
+            <div class="pikachu small" id="coach-pika">
+              <div class="pika-ear left"></div>
+              <div class="pika-ear right"></div>
+              <div class="pika-face">
+                <div class="pika-eye left"></div>
+                <div class="pika-eye right"></div>
+                <div class="pika-cheek left"></div>
+                <div class="pika-cheek right"></div>
+                <div class="pika-mouth"></div>
+              </div>
+            </div>
+            <div id="coach-bubble">
+              <span class="coach-face">🧑‍🔬</span>
+              <span id="coach-text">You can do it!</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────── ROUND RESULT ─────────── -->
+        <div id="result-screen" class="screen">
+          <div id="result-trophy">🏆</div>
+          <div id="result-title">GREAT JOB!</div>
+          <div id="result-stars-big"></div>
+          <div id="result-line"></div>
+          <div id="result-caught-row"></div>
+          <p id="result-prof"></p>
+          <button id="result-again" class="big-btn yellow">▶ PLAY AGAIN</button>
+          <button id="result-home" class="big-btn blue">🏠 HOME</button>
+        </div>
+
+        <!-- ─────────── POKÉDEX ─────────── -->
+        <div id="dex-screen" class="screen">
+          <div id="dex-bar">
+            <button id="dex-back" class="small-btn red">◀ Back</button>
+            <span id="dex-title">POKÉDEX</span>
+            <span id="dex-counter"><b id="dex-count">0</b>/<span id="dex-total">14</span></span>
+          </div>
+          <div id="dex-grid"></div>
+        </div>
+
+      </div><!-- /screen-area -->
+    </div><!-- /screen-bezel -->
+
+    <div id="dex-bottom">
+      <a href="index.html" id="to-other-game">🎮 Lukeymon Adventure →</a>
+    </div>
+  </div><!-- /device -->
+
+  <script src="data.js"></script>
+  <script src="math.js"></script>
+</body>
+</html>
