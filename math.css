@@ -497,7 +497,9 @@ body {
   background: #fff; border: 3px solid #cfd8c0; border-radius: 10px;
   padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px;
   min-height: 78px; justify-content: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
+.dex-card:active { transform: translateY(1px); }
 .dex-card.caught { border-color: var(--green); background: #f3fff0; }
 .dex-card-emoji { width: 44px; height: 44px; }
 .dex-card.locked .dex-card-emoji { filter: brightness(0); opacity: .3; }

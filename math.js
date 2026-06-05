@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.2';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.3';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -497,6 +497,9 @@ function openDex() {
     const name = document.createElement('div');
     name.className = 'dex-card-name';
     name.textContent = caught ? p.name : '???';
+
+    // tap any Pokémon in the dex to make it dance
+    card.addEventListener('click', () => pikaDance(img));
 
     card.append(no, img, name);
     grid.appendChild(card);
