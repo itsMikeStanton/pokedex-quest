@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.0';     // shown in the corner; bump on changes
+const VERSION         = 'v2.1';     // shown in the corner; bump on changes
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -64,7 +64,26 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#title-total').textContent = ROSTER.length;   // full dex (incl. Pikachu)
   $('#dex-total').textContent   = ROSTER.length;
   $('#q-total').textContent     = QUESTIONS;
+  startBoot();
 });
+
+// Cute Pokédex power-on, then reveal the title. Tap/press to skip.
+function startBoot() {
+  const boot = $('#boot-screen');
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    document.removeEventListener('pointerdown', skip);
+    document.removeEventListener('keydown', skip);
+    boot.classList.add('fade');
+    setTimeout(() => { show('title'); boot.classList.remove('fade'); }, 360);
+  };
+  const skip = () => { wakeAudio(); finish(); };
+  document.addEventListener('pointerdown', skip);
+  document.addEventListener('keydown', skip);
+  setTimeout(finish, 3000);
+}
 
 const $  = sel => document.querySelector(sel);
 const $$ = sel => document.querySelectorAll(sel);
@@ -398,15 +417,11 @@ let typeTimer = null;
 function typeText(el, text) {
   clearInterval(typeTimer);
   el.textContent = '';
-  el.classList.add('type-caret');
   let i = 0;
   typeTimer = setInterval(() => {
     el.textContent = text.slice(0, ++i);
     if (i % 2 === 0) beep(640, 0.02, 0.015, 'square');
-    if (i >= text.length) {
-      clearInterval(typeTimer);
-      setTimeout(() => el.classList.remove('type-caret'), 500);
-    }
+    if (i >= text.length) clearInterval(typeTimer);
   }, 30);
 }
 

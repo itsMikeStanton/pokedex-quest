@@ -128,6 +128,99 @@ body {
 }
 .screen.active { display: flex; }
 
+/* ─── BOOT / POWER-ON SCREEN ─────────────────────── */
+#boot-screen {
+  background: radial-gradient(circle at 50% 42%, #123a1f, #06120a 80%);
+  justify-content: center;
+  gap: 16px;
+  padding: 0;          /* let the CRT flash + scanlines fill edge-to-edge */
+  transition: opacity .35s ease;
+}
+#boot-screen.fade { opacity: 0; }
+
+/* CRT power-on flash: a thin line that opens vertically, then fades */
+.boot-crt {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  background: #eafff0;
+  animation: crt-on .55s ease-out forwards;
+}
+@keyframes crt-on {
+  0%   { clip-path: inset(49.5% 0 49.5% 0); opacity: 1; }
+  55%  { clip-path: inset(0 0 0 0);         opacity: .85; }
+  100% { clip-path: inset(0 0 0 0);         opacity: 0; }
+}
+
+.boot-scanlines {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: .45;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0 2px, transparent 2px 4px);
+}
+
+/* Poké Ball drops in and spins */
+.boot-ball {
+  width: 74px; height: 74px; border-radius: 50%; z-index: 2; position: relative;
+  background: linear-gradient(#ee2b2b 0 47%, #f4f4f4 47% 100%);
+  border: 4px solid #111;
+  box-shadow: inset -4px -4px 6px rgba(0,0,0,.25), 0 8px 18px rgba(0,0,0,.55);
+  animation: boot-ball-drop .8s cubic-bezier(.3,.9,.4,1) both,
+             boot-ball-spin 1.2s .8s ease-in-out;
+}
+.boot-ball::before { content:''; position:absolute; top:50%; left:-4px; right:-4px; height:5px; background:#111; transform:translateY(-50%); }
+.boot-ball::after  { content:''; position:absolute; top:50%; left:50%; width:22px; height:22px; background:#fff; border:4px solid #111; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 0 8px rgba(255,255,255,.6); }
+@keyframes boot-ball-drop {
+  0%   { transform: translateY(-150px) scale(.7); opacity: 0; }
+  60%  { transform: translateY(8px)  scale(1.05); opacity: 1; }
+  80%  { transform: translateY(-4px) scale(1); }
+  100% { transform: translateY(0); }
+}
+@keyframes boot-ball-spin { from { rotate: 0deg; } to { rotate: 360deg; } }
+
+/* POKéDEX letters appear one by one */
+.boot-title {
+  display: flex; gap: 3px; z-index: 2;
+  font-family: var(--pixel); font-size: 17px; letter-spacing: 1px; color: #f8d030;
+  text-shadow: 2px 2px 0 #a05000, 3px 3px 0 #000;
+}
+.boot-title span { opacity: 0; animation: boot-letter .3s ease forwards; }
+.boot-title span:nth-child(1) { animation-delay: .9s; }
+.boot-title span:nth-child(2) { animation-delay: .98s; }
+.boot-title span:nth-child(3) { animation-delay: 1.06s; }
+.boot-title span:nth-child(4) { animation-delay: 1.14s; }
+.boot-title span:nth-child(5) { animation-delay: 1.22s; }
+.boot-title span:nth-child(6) { animation-delay: 1.30s; }
+.boot-title span:nth-child(7) { animation-delay: 1.38s; }
+@keyframes boot-letter { from { opacity: 0; transform: translateY(6px) scale(.6); } to { opacity: 1; transform: none; } }
+
+/* status dots light up red → yellow → green */
+.boot-dots { display: flex; gap: 9px; z-index: 2; }
+.boot-dots i {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #1a3a1a; box-shadow: inset 0 0 2px #000; opacity: .5;
+  animation: boot-dot .3s forwards;
+}
+.boot-dots i:nth-child(1) { --c: #ff5b54; animation-delay: 1.5s; }
+.boot-dots i:nth-child(2) { --c: #ffd84d; animation-delay: 1.75s; }
+.boot-dots i:nth-child(3) { --c: #5be06a; animation-delay: 2.0s; }
+@keyframes boot-dot { to { opacity: 1; background: var(--c); box-shadow: 0 0 8px var(--c); } }
+
+/* loading bar */
+.boot-bar {
+  width: 58%; height: 11px; z-index: 2;
+  background: #0c2410; border: 2px solid #2a5a2a; border-radius: 6px; overflow: hidden;
+}
+.boot-bar-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #5be06a, #2f9c3a);
+  animation: boot-bar-fill 1.3s 1.0s ease-out forwards;
+}
+@keyframes boot-bar-fill { to { width: 100%; } }
+
+.boot-ready {
+  font-family: var(--pixel); font-size: 12px; color: #7be08a; z-index: 2; opacity: 0;
+  text-shadow: 0 0 8px rgba(123,224,138,.6);
+  animation: boot-ready .4s 2.25s ease forwards;
+}
+@keyframes boot-ready { 0% { opacity: 0; transform: scale(.4); } 60% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+
 /* ─── BUTTONS ────────────────────────────────────── */
 .big-btn, .small-btn {
   font-family: var(--round);
@@ -421,13 +514,6 @@ body {
   80%  { transform: translateY(0)   rotate(-8deg); }
   100% { transform: translateY(0)   rotate(0); }
 }
-
-/* blinking type cursor for the professor's typewriter text */
-.type-caret::after {
-  content: '▋'; margin-left: 1px; color: #6a8a5a;
-  animation: caret-blink .7s steps(1) infinite;
-}
-@keyframes caret-blink { 50% { opacity: 0; } }
 
 /* ─── CATCH! CELEBRATION OVERLAY ─────────────────── */
 #catch-pop {
