@@ -465,6 +465,8 @@ let slideLockUntil = 0;           // input locked until this ts (during a wall b
 let bumpVec     = null;
 let bumpAnimTs  = -9999;
 let camX = 0, camY = 0;
+let zoneSlide   = null;           // active world-scroll between zones { dir, t0, dur, snap }
+const ZONE_SLIDE_MS = 380;        // how long the zone-to-zone scroll takes
 
 // ── Buddy / follower pet ─────────────────────────────
 let activePet   = null;   // pokeId of the Pokémon trailing the player (null = none)
@@ -1211,7 +1213,8 @@ function loop(ts) {
       else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0, ts); moved = true; }
       if (moved) lastMoveTs = ts;
     }
-    drawWorld(ts);
+    if (zoneSlide) drawZoneSlide(ts);
+    else           drawWorld(ts);
   }
 }
 
@@ -1503,6 +1506,7 @@ function move(dx, dy, ts) {
 // Move the player to (x, y) of another zone — used by both edge exits and
 // point-portals (cave mouths). The buddy is teleported along too.
 function warpTo(zone, x, y, dirKey) {
+  beginZoneSlide(dirKey || 'down');   // snapshot the old zone, then scroll into the new one
   currentZone = zone;
   playerX     = x;
   playerY     = y;
@@ -1538,6 +1542,42 @@ function warpTo(zone, x, y, dirKey) {
 function doTransition(exit, ts) {
   const dirMap = { south: 'down', north: 'up', west: 'left', east: 'right' };
   warpTo(exit.to, exit.entryX, exit.entryY, dirMap[exit.dir]);
+}
+
+// Grab the current frame so we can scroll the old zone out while the new one
+// slides in from the direction the player is heading. (Skipped if the canvas
+// isn't ready, e.g. during the headless tests.)
+function beginZoneSlide(dir) {
+  if (!canvas || !canvas.width) return;
+  const snap = document.createElement('canvas');
+  snap.width  = canvas.width;
+  snap.height = canvas.height;
+  try { snap.getContext('2d').drawImage(canvas, 0, 0); }
+  catch (_) { return; }                       // tainted/empty canvas — just skip the effect
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  zoneSlide = { dir, t0: now, dur: ZONE_SLIDE_MS, snap };
+  slideLockUntil = now + ZONE_SLIDE_MS;        // hold movement until the scroll finishes
+}
+
+// Composite the cross-zone scroll: new zone drawn translated, old snapshot
+// drawn on the complementary side, the pair sliding across the screen.
+function drawZoneSlide(ts) {
+  const z = zoneSlide;
+  const t = Math.min((ts - z.t0) / z.dur, 1);
+  if (t >= 1) { zoneSlide = null; drawWorld(ts); return; }
+  const e = 1 - Math.pow(1 - t, 3);            // ease-out
+  const W = canvas.width, H = canvas.height;
+  let ox = 0, oy = 0, sx = 0, sy = 0;          // new-zone offset / old-snapshot offset
+  if      (z.dir === 'right') { ox =  (1 - e) * W; sx = ox - W; }
+  else if (z.dir === 'left')  { ox = -(1 - e) * W; sx = ox + W; }
+  else if (z.dir === 'up')    { oy = -(1 - e) * H; sy = oy + H; }
+  else                        { oy =  (1 - e) * H; sy = oy - H; }   // 'down' (default)
+
+  ctx.save();
+  ctx.translate(Math.round(ox), Math.round(oy));
+  drawWorld(ts);                               // new zone fills its own region
+  ctx.restore();
+  ctx.drawImage(z.snap, Math.round(sx), Math.round(sy));  // old zone on the other side
 }
 
 // ═══════════════════════════════════════════════════
