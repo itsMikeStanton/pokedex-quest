@@ -463,6 +463,7 @@ let loadedRoamers  = null;     // roamer positions restored from save
 let currentLegend  = null;     // roamer being engaged in the current encounter/battle
 let pendingMsg     = null;     // a message to surface when the player returns to the world
 let encHappy       = false;
+let encTries       = 0;       // wrong guesses this encounter (one gentle retry allowed)
 let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
 let spawnTimerId   = null;   // next spawn setTimeout id
 let expireTimerId  = null;   // current wild's disappear setTimeout id
@@ -2416,6 +2417,7 @@ function drawPlayer(px, py) {
 // ═══════════════════════════════════════════════════
 function beginEncounter(poke, roamer = null) {
   encHappy = false;
+  encTries = 0;
   currentPoke = poke;
   currentLegend = roamer;
   gameState   = 'encounter';
@@ -2449,7 +2451,9 @@ function beginEncounter(poke, roamer = null) {
   document.getElementById('enc-buttons').classList.remove('hidden');
   // Restore the taming info for this fresh encounter (hidden once tamed).
   document.getElementById('enc-thought-bubble').classList.remove('hidden');
-  document.getElementById('enc-prompt').classList.remove('hidden');
+  const prompt = document.getElementById('enc-prompt');
+  prompt.classList.remove('hidden');
+  prompt.textContent = 'What does it want?';
   document.getElementById('timer-wrap').classList.remove('hidden');
 
   showScreen('encounter');
@@ -2515,11 +2519,25 @@ function resolveAction(action, btnEl) {
       setNav([document.getElementById('enc-throw-btn')]);   // A throws the ball
     }, 400);
   } else {
+    encTries++;
     btnEl.classList.add('wrong');
+    btnEl.disabled = true;
+    beep(196, 0.12, 0.18, 'square');                       // a soft "not quite"
+
+    if (encTries < 2) {                                    // one gentle second chance
+      document.getElementById('enc-prompt').textContent = "Hmm… it's still a little wary. Look again!";
+      const left = Array.from(document.querySelectorAll('.action-btn')).filter(b => !b.classList.contains('wrong'));
+      left.forEach(b => b.disabled = false);
+      startTimer();                                        // a fresh moment to choose
+      setNav(left, { cols: 3 });
+      return;
+    }
+
+    // Out of patience — reveal what it wanted, then it slips away.
     document.querySelectorAll('.action-btn').forEach(b => {
       if (b.dataset.action === currentPoke.action) b.classList.add('correct');
     });
-    setTimeout(() => encounterFailed(), 700);
+    setTimeout(() => encounterFailed(), 900);
   }
 }
 
@@ -2693,6 +2711,15 @@ function caught() {
   }
   awardTrioBadge();                   // catching the 3rd legendary bird grants a badge
   refreshRoamers();                   // may now make Mewtwo appear
+
+  // Just completed every WILD species (legendaries still out there)? Nudge the hunt.
+  if (isNew && !legend && !pendingMsg) {
+    const wildLeft    = POKEMON_DATA.filter(p => !p.legend && !p.boss && !caughtIds.has(p.id)).length;
+    const legendsLeft = POKEMON_DATA.some(p => (p.legend || p.boss) && !caughtIds.has(p.id));
+    if (wildLeft === 0 && legendsLeft)
+      pendingMsg = '🌟 Every wild Lukeymon caught! Now track down the legends — the birds, Mew & Mewtwo.';
+  }
+
   saveGame();
   updateHud();
 
@@ -2723,7 +2750,8 @@ function awardTrioBadge() {
   const birds = [144, 145, 146];
   if (birds.every(id => caughtIds.has(id)) && !collected.has('badge_trio')) {
     collected.add('badge_trio');
-    pendingMsg = '🦅 The legendary birds bond with you — you earned the Trio Badge!';
+    masterBalls++;                    // a guaranteed Master Ball toward a legendary
+    pendingMsg = '🦅 The legendary birds bond with you — Trio Badge earned, plus a 🟣 Master Ball!';
   }
 }
 
@@ -2753,6 +2781,8 @@ function returnToWorld() {
 // legendaries, Mew/Mewtwo, the caves and the full dex as optional post-game.
 function showChampion() {
   wonGame = true;
+  masterBalls++;                       // a guaranteed Master Ball for hunting the legends
+  pendingMsg = '🟣 Champion! Take this Master Ball and track down Mew & Mewtwo.';
   saveGame();
   const row = document.getElementById('champion-row');
   row.innerHTML = '';
@@ -3010,7 +3040,9 @@ function nextBattleRound() {
   tEl.textContent = battleType;
   tEl.style.background = typeColor(battleType);
   document.getElementById('battle-instruction').textContent =
-    cfg.rule === 'beats' ? "Send a Lukeymon that's STRONG against it!" : 'Send out a Lukeymon of that type!';
+    cfg.rule === 'beats'
+      ? `Send a Lukeymon that's STRONG against ${battleType} — try ${correctTypes.join(' / ')}!`
+      : 'Send out a Lukeymon of that type!';
   beep(150, 0.18, 0.3, 'square');
 
   // Six options, guaranteeing at least one correct answer (solvable even if you
@@ -3689,9 +3721,11 @@ function renderMap() {
   const obj = document.getElementById('map-objective');
   if (obj) {
     const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
+    const wildLeft = POKEMON_DATA.filter(p => !p.legend && !p.boss && !caughtIds.has(p.id)).length;
     if (!wonGame)                                  obj.textContent = `🎯 Earn the 4 Gym Badges  (${landDone}/4)`;
-    else if (caughtIds.size < POKEMON_DATA.length) obj.textContent = `🎯 Complete the Pokédex  (${caughtIds.size}/${POKEMON_DATA.length})`;
-    else                                           obj.textContent = '🏆 You’ve done it all — Champion & Master!';
+    else if (caughtIds.size >= POKEMON_DATA.length) obj.textContent = '🏆 You’ve done it all — Champion & Master!';
+    else if (wildLeft === 0)                       obj.textContent = '🌟 Only the legends remain — hunt the birds, Mew & Mewtwo!';
+    else                                           obj.textContent = `🎯 Complete the Pokédex  (${caughtIds.size}/${POKEMON_DATA.length})`;
   }
 
   // Badge tray.
