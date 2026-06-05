@@ -474,6 +474,7 @@ let petMoveAnimTs = -9999;
 let petMoveAnimDur = MOVE_ANIM_MS;  // buddy's own slide duration (may lag behind the player)
 let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
 let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
+let dexScroll   = 0;      // remembered grid scroll position across detail open/close
 let surfNoted   = false;  // shown the "you can surf" hint this session yet?
 let slipNoted   = false;  // shown the "ice is slippery" hint this session yet?
 const JIGGLYPUFF_ID = 39; // a Jigglypuff buddy sings floating music notes
@@ -3153,6 +3154,7 @@ function renderPokedexGrid() {
 
     const card = document.createElement('div');
     card.className = 'dex-card' + (caught ? ' caught' : seen ? ' seen' : ' dex-card-unknown');
+    card.dataset.pid = poke.id;
 
     const emojiDiv = document.createElement('div');
     emojiDiv.className = 'dex-card-emoji';
@@ -3164,10 +3166,15 @@ function renderPokedexGrid() {
       emojiDiv.textContent = '?';
     }
 
+    const numDiv = document.createElement('div');
+    numDiv.className = 'dex-card-num';
+    numDiv.textContent = `#${String(poke.id).padStart(3, '0')}`;
+
     const nameDiv = document.createElement('div');
     nameDiv.className = 'dex-card-name';
     nameDiv.textContent = caught ? poke.name : seen ? poke.name : '?????????';
 
+    card.appendChild(numDiv);
     card.appendChild(emojiDiv);
     card.appendChild(nameDiv);
 
@@ -3180,12 +3187,11 @@ function renderPokedexGrid() {
       card.appendChild(typeBadge);
     }
 
-    // Buddy indicator — flag the Pokémon currently following the player.
+    // Buddy indicator — a heart in the top-right corner of the buddy's card.
     if (activePet === poke.id) {
-      card.classList.add('is-buddy');
       const buddyTag = document.createElement('div');
       buddyTag.className = 'dex-card-buddy';
-      buddyTag.textContent = '🐾';
+      buddyTag.textContent = '❤️';
       buddyTag.title = 'Your buddy';
       card.appendChild(buddyTag);
     }
@@ -3213,7 +3219,9 @@ function renderPokedexGrid() {
 }
 
 function showDetail(poke) {
-  document.getElementById('pokedex-grid').classList.add('hidden');
+  const grid = document.getElementById('pokedex-grid');
+  if (!grid.classList.contains('hidden')) dexScroll = grid.scrollTop;  // remember place
+  grid.classList.add('hidden');
   const detail = document.getElementById('pokedex-detail');
   detail.classList.remove('hidden');
 
@@ -3237,13 +3245,10 @@ function showDetail(poke) {
 
   detailPoke = poke;
   const buddyBtn = document.getElementById('detail-buddy');
-  if (activePet === poke.id) {
-    buddyBtn.textContent = '🐾 Following you — tap to dismiss';
-    buddyBtn.classList.add('is-buddy');
-  } else {
-    buddyBtn.textContent = '🐾 Make this my buddy';
-    buddyBtn.classList.remove('is-buddy');
-  }
+  const isBuddy = activePet === poke.id;
+  buddyBtn.textContent = '❤️';
+  buddyBtn.title = isBuddy ? 'Your buddy — tap to dismiss' : 'Make this my buddy';
+  buddyBtn.classList.toggle('lit', isBuddy);
   setNav([buddyBtn, document.getElementById('detail-back')], { onBack: closeDetail });
 }
 
@@ -3265,9 +3270,15 @@ function toggleBuddy() {
 
 function closeDetail() {
   document.getElementById('pokedex-detail').classList.add('hidden');
-  document.getElementById('pokedex-grid').classList.remove('hidden');
+  const grid = document.getElementById('pokedex-grid');
+  grid.classList.remove('hidden');
   renderPokedexGrid();
-  setupNav('pokedex');
+  // Re-focus the card we were just viewing, then restore the exact scroll
+  // position last so navShow's scrollIntoView doesn't yank us to the top.
+  const cards = Array.from(document.querySelectorAll('#pokedex-grid .dex-card.caught'));
+  const idx = detailPoke ? cards.findIndex(c => +c.dataset.pid === detailPoke.id) : -1;
+  setNav(cards, { cols: 3, onBack: closeDetail, index: Math.max(0, idx) });
+  grid.scrollTop = dexScroll;        // stay where we were, don't jump to top
 }
 
 // ═══════════════════════════════════════════════════

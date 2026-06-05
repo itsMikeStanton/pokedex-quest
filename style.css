@@ -934,14 +934,17 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 }
 .dex-card.seen .dex-card-type { opacity: .7; }
 
-/* Buddy indicator — corner paw on the active buddy's card */
-.dex-card.is-buddy { border-color: #f0c000; box-shadow: 0 0 0 1px #f0c000 inset; }
-.dex-card.is-buddy.caught { border-color: #f0c000; }
+/* Dex number line */
+.dex-card-num { font-size: 5px; color: #6a8aa8; line-height: 1; }
+.dex-card.caught .dex-card-num { color: #5fa86f; }
+.dex-card-unknown .dex-card-num { color: #304050; }
+
+/* Buddy indicator — a heart in the top-right corner of the buddy's card */
 .dex-card-buddy {
   position: absolute;
-  top: 2px;
-  right: 3px;
-  font-size: 9px;
+  top: 3px;
+  right: 4px;
+  font-size: 10px;
   line-height: 1;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
 }
@@ -1034,17 +1037,33 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   color: #90d8a0;
   line-height: 1.9;
 }
+/* Buddy toggle — a heart in the top-right corner, next to the Pokémon.
+   Greyed + clickable when not your buddy; lit up red when it is. */
 #detail-buddy {
-  margin: 4px 0 2px;
-  font-size: 7px;
-  padding: 8px 12px;
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  margin: 0;
+  padding: 4px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  filter: grayscale(1) brightness(.75);
+  opacity: .55;
+  transition: filter .15s, opacity .15s, transform .1s;
 }
-#detail-buddy.is-buddy {
-  background: #3a2c10;
-  border-color: #c89030;
-  box-shadow: 0 3px 0 #6a4c10;
-  color: #ffe0a0;
+#detail-buddy:hover  { transform: scale(1.15); opacity: .85; }
+#detail-buddy:active { transform: scale(.95); }
+#detail-buddy.lit {
+  filter: none;
+  opacity: 1;
+  text-shadow: 0 0 8px #ff4060, 0 0 4px #ff4060;
 }
+#detail-buddy.nav-focus { outline: 2px solid #40a8f8; outline-offset: 2px; border-radius: 4px; }
 
 /* ─── WORLD MAP SCREEN ──────────────────────────────── */
 #map-screen {
