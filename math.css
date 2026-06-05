@@ -115,6 +115,12 @@ body {
   position: relative;
   box-shadow: inset 0 0 22px rgba(0,0,0,.25);
 }
+/* very faint LCD scanlines across the whole screen (decorative, clicks pass through) */
+#screen-area::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 9; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.05) 0 1px, transparent 1px 3px);
+}
 
 .screen {
   display: none;
@@ -124,7 +130,8 @@ body {
   align-items: center;
   padding: 12px;
   text-align: center;
-  overflow: hidden;       /* screens fit; only the dex grid scrolls internally */
+  overflow-y: auto;       /* page never scrolls (device is fixed height); a screen scrolls only if it must */
+  overflow-x: hidden;
 }
 .screen.active { display: flex; }
 
