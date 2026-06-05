@@ -25,27 +25,30 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body { height: 100%; }
 body {
   background: radial-gradient(circle at 50% 0%, #2a3a6a, #131a33 70%);
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  min-height: 100vh;
-  padding: 18px 0 36px;
+  align-items: center;
+  padding: 6px 0;
   font-family: var(--round);
-  overflow-x: hidden;
+  overflow: hidden;          /* the device fits the viewport — no page scroll */
 }
 
 /* ─── POKÉDEX DEVICE ─────────────────────────────── */
 #device {
   width: min(480px, 100vw);
+  height: min(100dvh, 900px);
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(160deg, var(--dex-red), var(--dex-red-dk));
   border-radius: 16px 16px 28px 28px;
   box-shadow:
     0 0 0 3px #6e0f13,
     0 10px 44px rgba(0,0,0,.7),
     inset 0 2px 0 rgba(255,255,255,.25);
-  padding: 12px 14px 18px;
+  padding: 10px 14px 16px;
   position: relative;
   user-select: none;
 }
@@ -55,8 +58,11 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 4px 12px;
+  padding: 4px 4px 10px;
+  flex-shrink: 0;
 }
+#dex-brandwrap { margin-left: auto; text-align: right; }
+#dex-version { font-family: var(--round); font-weight: 700; font-size: 11px; color: #ffd0a8; opacity: .85; margin-top: 2px; }
 #dex-lens {
   width: 46px; height: 46px;
   border-radius: 50%;
@@ -96,10 +102,13 @@ body {
   border-radius: 10px;
   padding: 10px;
   box-shadow: inset 0 2px 8px rgba(0,0,0,.7);
+  flex: 1 1 auto;
+  min-height: 0;          /* allow the bezel to shrink within the device */
+  display: flex;
 }
 #screen-area {
+  flex: 1;
   width: 100%;
-  aspect-ratio: 10 / 13;
   background: var(--screen-bg);
   border-radius: 6px;
   overflow: hidden;
@@ -115,7 +124,7 @@ body {
   align-items: center;
   padding: 12px;
   text-align: center;
-  overflow-y: auto;
+  overflow: hidden;       /* screens fit; only the dex grid scrolls internally */
 }
 .screen.active { display: flex; }
 
@@ -380,7 +389,7 @@ body {
 #dex-title { font-family: var(--pixel); font-size: 12px; color: var(--dex-red-dk); }
 #dex-counter { font-weight: 800; font-size: 14px; color: #2a3a1a; }
 #dex-grid {
-  flex: 1; width: 100%; overflow-y: auto; padding: 10px;
+  flex: 1; min-height: 0; width: 100%; overflow-y: auto; padding: 10px;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
   align-content: start;
 }
@@ -395,6 +404,92 @@ body {
 .dex-card-name { font-weight: 800; font-size: 10px; color: #444; }
 .dex-card.locked .dex-card-name { color: #aab; }
 .dex-card-no { font-weight: 700; font-size: 9px; color: #99a; }
+
+/* ─── COUNTING HINT + RESET ──────────────────────── */
+.pb-hint { font-weight: 800; font-size: 16px; color: #3a5a2a; }
+#reset-btn { margin-top: 2px; opacity: .85; font-size: 11px; padding: 5px 12px; }
+#reset-btn:hover { opacity: 1; }
+
+/* ─── TAPPABLE / DANCING PIKACHU ─────────────────── */
+#coach-pika, .buddy-pika { cursor: pointer; }
+.sprite.dancing { animation: pika-dance .65s ease; }
+@keyframes pika-dance {
+  0%   { transform: translateY(0)   rotate(0); }
+  20%  { transform: translateY(-12px) rotate(-16deg); }
+  40%  { transform: translateY(0)   rotate(0); }
+  60%  { transform: translateY(-12px) rotate(16deg); }
+  80%  { transform: translateY(0)   rotate(-8deg); }
+  100% { transform: translateY(0)   rotate(0); }
+}
+
+/* blinking type cursor for the professor's typewriter text */
+.type-caret::after {
+  content: '▋'; margin-left: 1px; color: #6a8a5a;
+  animation: caret-blink .7s steps(1) infinite;
+}
+@keyframes caret-blink { 50% { opacity: 0; } }
+
+/* ─── CATCH! CELEBRATION OVERLAY ─────────────────── */
+#catch-pop {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 16px; text-align: center;
+  background: radial-gradient(circle at 50% 40%, rgba(40,70,40,.82), rgba(10,20,10,.94));
+  animation: catch-fade .2s ease-out;
+}
+#catch-pop.hidden { display: none; }
+@keyframes catch-fade { from { opacity: 0; } to { opacity: 1; } }
+
+#catch-burst {
+  position: absolute; top: 38%; left: 50%;
+  width: 200px; height: 200px; transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, #fff 0 6%, transparent 7%) 50% 0,
+    radial-gradient(circle, #ffe44d 0 5%, transparent 6%) 0 50%,
+    radial-gradient(circle, #fff 0 5%, transparent 6%) 100% 50%,
+    radial-gradient(circle, #ffe44d 0 5%, transparent 6%) 50% 100%;
+  background-repeat: no-repeat;
+  animation: burst-spin 1.4s linear infinite;
+  opacity: .8;
+}
+@keyframes burst-spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+
+#catch-ball {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: linear-gradient(#ee2b2b 0 47%, #f4f4f4 47% 100%);
+  border: 3px solid #1a1a1a; position: relative; z-index: 1;
+  box-shadow: inset -3px -3px 4px rgba(0,0,0,.25);
+  animation: ball-wiggle .9s ease;
+}
+#catch-ball::before { content:''; position:absolute; top:50%; left:-3px; right:-3px; height:4px; background:#1a1a1a; transform:translateY(-50%); }
+#catch-ball::after  { content:''; position:absolute; top:50%; left:50%; width:14px; height:14px; background:#fff; border:3px solid #1a1a1a; border-radius:50%; transform:translate(-50%,-50%); }
+@keyframes ball-wiggle {
+  0%,100% { transform: rotate(0); }
+  20% { transform: rotate(-18deg); } 40% { transform: rotate(16deg); }
+  60% { transform: rotate(-12deg); } 80% { transform: rotate(8deg); }
+}
+#catch-pop.opened #catch-ball { display: none; }
+
+#catch-sprite {
+  width: 96px; height: 96px; z-index: 2; display: none;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
+}
+#catch-pop.opened #catch-sprite { display: block; animation: catch-pop-in .45s cubic-bezier(.2,1.4,.5,1) both; }
+@keyframes catch-pop-in { 0% { transform: scale(0) rotate(-20deg); } 100% { transform: scale(1) rotate(0); } }
+
+#catch-title { font-family: var(--pixel); font-size: 16px; color: #f8e030; text-shadow: 2px 2px 0 #a05000, 3px 3px 0 #000; z-index: 2; }
+#catch-name  { font-weight: 800; font-size: 20px; color: #fff; z-index: 2; }
+#catch-sub   { font-weight: 700; font-size: 13px; color: #cfe8c0; z-index: 2; }
+#catch-newdex { font-weight: 800; font-size: 11px; color: #2a2a2a; background: #ffd84d; padding: 3px 10px; border-radius: 20px; z-index: 2; margin-top: 2px; }
+#catch-pop:not(.opened) #catch-title,
+#catch-pop:not(.opened) #catch-name,
+#catch-pop:not(.opened) #catch-sub,
+#catch-pop:not(.opened) #catch-newdex { visibility: hidden; }
+
+/* ─── SESSION PARADE (result screen) ─────────────── */
+.parade { animation: parade-in .4s ease both, parade-march .6s ease-in-out infinite; }
+@keyframes parade-in   { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes parade-march { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 
 /* ─── RESPONSIVE ─────────────────────────────────── */
 @media (max-width: 500px) {

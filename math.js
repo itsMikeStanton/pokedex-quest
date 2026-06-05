@@ -8,30 +8,12 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
+const VERSION         = 'v2.0';     // shown in the corner; bump on changes
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
 
-// Our roster of classic, kid-friendly Pokémon. id matches the sprite
-// number (sprites/NNN.png) in the shared Pokédex art set.
-const ROSTER = [
-  { id: 1,   name: 'Bulbasaur',  type: 'Grass'    },
-  { id: 4,   name: 'Charmander', type: 'Fire'     },
-  { id: 7,   name: 'Squirtle',   type: 'Water'    },
-  { id: 10,  name: 'Caterpie',   type: 'Bug'      },
-  { id: 16,  name: 'Pidgey',     type: 'Flying'   },
-  { id: 19,  name: 'Rattata',    type: 'Normal'   },
-  { id: 25,  name: 'Pikachu',    type: 'Electric' },
-  { id: 35,  name: 'Clefairy',   type: 'Fairy'    },
-  { id: 39,  name: 'Jigglypuff', type: 'Normal'   },
-  { id: 52,  name: 'Meowth',     type: 'Normal'   },
-  { id: 54,  name: 'Psyduck',    type: 'Water'    },
-  { id: 94,  name: 'Gengar',     type: 'Ghost'    },
-  { id: 129, name: 'Magikarp',   type: 'Water'    },
-  { id: 133, name: 'Eevee',      type: 'Normal'   },
-  { id: 143, name: 'Snorlax',    type: 'Normal'   },
-];
-
+// ROSTER (all 151) comes from mathdata.js.
 // Wild Pokémon pool = everyone except our buddy Pikachu.
 const WILD_POOL = ROSTER.filter(p => p.id !== PIKACHU_ID);
 
@@ -63,7 +45,7 @@ let op        = 'add';   // add | sub | mul | mix
 let level     = 1;       // 1 easy, 2 tricky
 let qIndex    = 0;
 let roundStars = 0;
-let roundCaught = [];     // ids caught this round
+let sessionCaught = [];   // distinct ids caught since the page loaded (for the parade)
 let current   = null;     // { a, b, op, answer, choices, poke }
 let answered  = false;
 
@@ -78,8 +60,9 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSave();
   bindEvents();
   refreshTitle();
-  $('#title-total').textContent = WILD_POOL.length;
-  $('#dex-total').textContent   = WILD_POOL.length;
+  $('#dex-version').textContent = VERSION;
+  $('#title-total').textContent = ROSTER.length;   // full dex (incl. Pikachu)
+  $('#dex-total').textContent   = ROSTER.length;
   $('#q-total').textContent     = QUESTIONS;
 });
 
@@ -117,6 +100,24 @@ function bindEvents() {
   $('#result-again').addEventListener('click', () => { wakeAudio(); startRound(); });
   $('#result-home').addEventListener('click', () => { refreshTitle(); show('title'); });
   $('#dex-back').addEventListener('click', () => { refreshTitle(); show('title'); });
+  $('#reset-btn').addEventListener('click', resetProgress);
+
+  // tap Pikachu (title buddy or coach) to make him dance
+  document.querySelectorAll('#coach-pika, .buddy-pika').forEach(el => {
+    el.addEventListener('click', () => pikaDance(el));
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════════════
+function resetProgress() {
+  if (!window.confirm('Reset all progress?\nThis erases your stars and caught Pokémon.')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch (_) {}
+  save = { stars: 0, caught: [] };
+  caughtSet = new Set([PIKACHU_ID]);  // Pikachu is always your buddy
+  sessionCaught = [];
+  refreshTitle();
 }
 
 // ═══════════════════════════════════════════════════
@@ -133,7 +134,6 @@ function show(id) {
 function startRound() {
   qIndex = 0;
   roundStars = 0;
-  roundCaught = [];
   show('quiz');
   nextQuestion();
 }
@@ -184,28 +184,35 @@ function makeQuestion() {
   let a, b, answer;
 
   if (realOp === 'add') {
-    const max = level === 1 ? 5 : 9;
-    a = rand(1, max);
-    b = rand(1, max);
+    if (level === 1) { a = rand(1, 9);  b = rand(1, 9);  }   // sums to 18
+    else             { a = rand(4, 15); b = rand(4, 15); }   // sums to 30
     answer = a + b;
   } else if (realOp === 'sub') {
-    const max = level === 1 ? 9 : 18;
-    a = rand(2, max);
+    const max = level === 1 ? 12 : 20;
+    a = rand(3, max);
     b = rand(1, a);          // never negative
     answer = a - b;
-  } else { // mul — keep it small
-    const maxA = 5;
-    const maxB = level === 1 ? 5 : 10;
-    a = rand(1, maxA);
-    b = rand(1, maxB);
+  } else { // mul — times tables
+    if (level === 1) { a = rand(1, 5); b = rand(1, 5); }     // up to 5×5
+    else             { a = rand(2, 9); b = rand(2, 9); }     // up to 9×9
     answer = a * b;
   }
 
   return {
     a, b, op: realOp, answer,
     choices: makeChoices(answer),
-    poke: pick(WILD_POOL),
+    poke: pickWild(),
   };
+}
+
+// Mostly new Pokémon to discover, but sometimes a familiar repeat.
+function pickWild() {
+  const uncaught = WILD_POOL.filter(p => !caughtSet.has(p.id));
+  const caught   = WILD_POOL.filter(p =>  caughtSet.has(p.id));
+  if (!uncaught.length) return pick(caught.length ? caught : WILD_POOL);
+  // ~70% chance show a new one; otherwise a repeat (when any exist)
+  if (caught.length && Math.random() < 0.30) return pick(caught);
+  return pick(uncaught);
 }
 
 function makeChoices(answer) {
@@ -230,19 +237,26 @@ function renderHelper(q) {
   box.innerHTML = '';
 
   if (q.op === 'add') {
-    box.appendChild(ballGroup(q.a));
-    box.appendChild(plus());
-    box.appendChild(ballGroup(q.b));
-  } else if (q.op === 'sub') {
-    // show a balls, fade out the last b (taken away)
-    const g = document.createElement('div');
-    g.className = 'pb-group';
-    for (let i = 0; i < q.a; i++) {
-      g.appendChild(ball(i >= q.a - q.b)); // last b are "gone"
+    // balls when the piles are small enough to count; otherwise a strategy tip
+    if (q.a <= 10 && q.b <= 10) {
+      box.appendChild(ballGroup(q.a));
+      box.appendChild(plus());
+      box.appendChild(ballGroup(q.b));
+    } else {
+      box.appendChild(hint(`Start at ${q.a}, count on ${q.b} more`));
     }
-    box.appendChild(g);
+  } else if (q.op === 'sub') {
+    if (q.a <= 14) {
+      // show a balls, fade out the last b (taken away)
+      const g = document.createElement('div');
+      g.className = 'pb-group';
+      for (let i = 0; i < q.a; i++) g.appendChild(ball(i >= q.a - q.b));
+      box.appendChild(g);
+    } else {
+      box.appendChild(hint(`Start at ${q.a}, take ${q.b} away`));
+    }
   } else { // mul: an array of a rows × b balls (stacks down, never overlaps)
-    if (q.answer <= 30) {
+    if (q.a <= 5 && q.answer <= 30) {
       const array = document.createElement('div');
       array.className = 'pb-array';
       for (let r = 0; r < q.a; r++) {
@@ -253,12 +267,16 @@ function renderHelper(q) {
       }
       box.appendChild(array);
     } else {
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-weight:800;font-size:16px;color:#3a5a2a;';
-      hint.textContent = `${q.a} rows of ${q.b}`;
-      box.appendChild(hint);
+      box.appendChild(hint(`${q.a} rows of ${q.b}`));
     }
   }
+}
+
+function hint(text) {
+  const h = document.createElement('div');
+  h.className = 'pb-hint';
+  h.textContent = text;
+  return h;
 }
 
 function ballGroup(n) {
@@ -308,21 +326,48 @@ function onCorrect() {
 
   // catch the wild pokemon
   const poke = current.poke;
+  const isNew = !caughtSet.has(poke.id);
   caughtSet.add(poke.id);
-  if (!roundCaught.includes(poke.id)) roundCaught.push(poke.id);
+  if (!sessionCaught.includes(poke.id)) sessionCaught.push(poke.id);
   save.stars = (save.stars || 0) + 1;
   save.caught = [...caughtSet];
   persist();
 
   setCoach(pick(PROF.right));
   celebratePika();
-  playCorrect();
   pokeballPop();
 
+  if (isNew) {
+    // brand-new catch → little victory screen
+    playCatchJingle();
+    showCatchPop(poke, advanceQuestion);
+  } else {
+    playCorrect();
+    setTimeout(advanceQuestion, 1000);
+  }
+}
+
+function advanceQuestion() {
+  if (qIndex >= QUESTIONS) endRound();
+  else nextQuestion();
+}
+
+// "Gotcha! X was caught!" overlay for a new Pokémon
+function showCatchPop(poke, done) {
+  const pop = $('#catch-pop');
+  pop.classList.remove('opened');
+  $('#catch-sprite').src = spriteSrc(poke.id);
+  $('#catch-sprite').alt = poke.name;
+  $('#catch-name').textContent = poke.name;
+  pop.classList.remove('hidden');
+
+  // ball wiggles, then bursts open to reveal the Pokémon
+  setTimeout(() => { pop.classList.add('opened'); beep(880, 0.12, 0.18); }, 850);
+
   setTimeout(() => {
-    if (qIndex >= QUESTIONS) endRound();
-    else nextQuestion();
-  }, 1100);
+    pop.classList.add('hidden');
+    done();
+  }, 2300);
 }
 
 function pokeballPop() {
@@ -338,8 +383,35 @@ function celebratePika() {
   p.classList.add('happy');
 }
 
+// Tap Pikachu → he dances!
+function pikaDance(el) {
+  wakeAudio();
+  el.classList.remove('dancing');
+  void el.offsetWidth;
+  el.classList.add('dancing');
+  el.addEventListener('animationend', () => el.classList.remove('dancing'), { once: true });
+  playPikaCheer();
+}
+
+// Professor's lines type out like a classic game
+let typeTimer = null;
+function typeText(el, text) {
+  clearInterval(typeTimer);
+  el.textContent = '';
+  el.classList.add('type-caret');
+  let i = 0;
+  typeTimer = setInterval(() => {
+    el.textContent = text.slice(0, ++i);
+    if (i % 2 === 0) beep(640, 0.02, 0.015, 'square');
+    if (i >= text.length) {
+      clearInterval(typeTimer);
+      setTimeout(() => el.classList.remove('type-caret'), 500);
+    }
+  }, 30);
+}
+
 function setCoach(text) {
-  $('#coach-text').textContent = text;
+  typeText($('#coach-text'), text);
 }
 
 // ═══════════════════════════════════════════════════
@@ -357,28 +429,30 @@ function endRound() {
   $('#result-stars-big').textContent = filled || '✨';
   $('#result-line').textContent = `You got ${roundStars} / ${QUESTIONS}!`;
 
-  // pokemon caught this round
+  // parade of every Pokémon caught this session
   const caughtRow = $('#result-caught-row');
   caughtRow.innerHTML = '';
-  if (roundCaught.length) {
+  if (sessionCaught.length) {
     const label = document.createElement('div');
     label.className = 'res-caught-label';
-    label.textContent = 'Caught:';
+    label.textContent = `Your parade — ${sessionCaught.length} caught this session!`;
     caughtRow.appendChild(label);
-    roundCaught.forEach(id => {
-      const p = WILD_POOL.find(x => x.id === id);
+    sessionCaught.forEach((id, i) => {
+      const p = ROSTER.find(x => x.id === id);
       if (!p) return;
       const img = document.createElement('img');
-      img.className = 'sprite';
+      img.className = 'sprite parade';
       img.src = spriteSrc(p.id);
       img.alt = p.name;
+      const d = (i * 0.12).toFixed(2) + 's';
+      img.style.animationDelay = `${d}, ${d}`;   // entrance, then marching
       caughtRow.appendChild(img);
     });
   }
 
-  $('#result-prof').textContent = perfect
+  typeText($('#result-prof'), perfect
     ? 'Amazing! You answered every one! 🌟'
-    : 'Well done, trainer! Keep practicing!';
+    : 'Well done, trainer! Keep practicing!');
 
   playFanfare();
 }
@@ -391,14 +465,14 @@ function openDex() {
   grid.innerHTML = '';
   $('#dex-count').textContent = caughtSet.size;
 
-  WILD_POOL.forEach((p, i) => {
+  ROSTER.forEach(p => {
     const caught = caughtSet.has(p.id);
     const card = document.createElement('div');
     card.className = 'dex-card ' + (caught ? 'caught' : 'locked');
 
     const no = document.createElement('div');
     no.className = 'dex-card-no';
-    no.textContent = '#' + String(i + 1).padStart(2, '0');
+    no.textContent = '#' + String(p.id).padStart(3, '0');
 
     const img = document.createElement('img');
     img.className = 'dex-card-emoji sprite';
@@ -431,6 +505,7 @@ function loadSave() {
   } catch (_) { save = { stars: 0, caught: [] }; }
   if (!save.caught) save.caught = [];
   caughtSet = new Set(save.caught);
+  caughtSet.add(PIKACHU_ID);   // Pikachu is always your buddy — already in the dex
 }
 function persist() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) {}
@@ -453,9 +528,10 @@ function spriteSrc(id) { return `sprites/${String(id).padStart(3, '0')}.png`; }
 
 function typeColor(type) {
   const map = {
-    Grass: '#4a9c3a', Fire: '#e0552a', Water: '#2f7fe0', Bug: '#7a9c28',
-    Flying: '#7d8fd0', Normal: '#8a8a92', Electric: '#e0a818', Fairy: '#d06fb0',
-    Ghost: '#6a5aa8', Psychic: '#d04a7a',
+    Normal: '#7a7a86', Fire: '#e0552a', Water: '#2f7fe0', Grass: '#4a9c3a',
+    Electric: '#c79a12', Ice: '#4aa6c0', Fighting: '#b03028', Poison: '#9a3ea0',
+    Ground: '#b88a2a', Flying: '#6f7fd0', Psychic: '#d04a7a', Bug: '#7a9c28',
+    Rock: '#9a8636', Ghost: '#6a5aa8', Dragon: '#5a3fd0', Fairy: '#d06fb0',
   };
   return map[type] || '#777';
 }
@@ -488,4 +564,13 @@ function playWrong() {
 }
 function playFanfare() {
   [392, 523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.14, 0.2), i * 130));
+}
+function playCatchJingle() {
+  // little "ba-da-da-DING!" for a new catch
+  [330, 392, 494].forEach((f, i) => setTimeout(() => beep(f, 0.12, 0.12), i * 110));
+  setTimeout(() => { beep(659, 0.16, 0.22); beep(988, 0.12, 0.22, 'triangle'); }, 360);
+}
+function playPikaCheer() {
+  beep(880, 0.10, 0.08, 'triangle');
+  setTimeout(() => beep(1175, 0.10, 0.12, 'triangle'), 90);
 }

@@ -20,7 +20,10 @@
         <span class="led yellow"></span>
         <span class="led green"></span>
       </div>
-      <div id="dex-brand">POKéMATH</div>
+      <div id="dex-brandwrap">
+        <div id="dex-brand">POKéMATH</div>
+        <div id="dex-version"></div>
+      </div>
     </div>
 
     <div id="screen-bezel">
@@ -43,7 +46,8 @@
           <button id="start-btn" class="big-btn yellow">▶ START</button>
           <button id="dex-open-btn" class="big-btn blue">📖 MY POKÉDEX</button>
 
-          <p class="title-score">⭐ Stars: <b id="title-stars">0</b> &nbsp; • &nbsp; Caught: <b id="title-caught">0</b>/<span id="title-total">14</span></p>
+          <p class="title-score">⭐ Stars: <b id="title-stars">0</b> &nbsp; • &nbsp; Caught: <b id="title-caught">0</b>/<span id="title-total">151</span></p>
+          <button id="reset-btn" class="small-btn red">↺ Reset Progress</button>
         </div>
 
         <!-- ─────────── MODE SELECT ─────────── -->
@@ -145,15 +149,27 @@
           <div id="dex-bar">
             <button id="dex-back" class="small-btn red">◀ Back</button>
             <span id="dex-title">POKÉDEX</span>
-            <span id="dex-counter"><b id="dex-count">0</b>/<span id="dex-total">14</span></span>
+            <span id="dex-counter"><b id="dex-count">0</b>/<span id="dex-total">151</span></span>
           </div>
           <div id="dex-grid"></div>
+        </div>
+
+        <!-- ─────────── CATCH! overlay (new catches) ─────────── -->
+        <div id="catch-pop" class="hidden">
+          <div id="catch-burst"></div>
+          <div id="catch-ball"></div>
+          <img id="catch-sprite" class="sprite" src="" alt="">
+          <div id="catch-title">Gotcha!</div>
+          <div id="catch-name"></div>
+          <div id="catch-sub">was caught!</div>
+          <div id="catch-newdex">NEW! Added to your Pokédex</div>
         </div>
 
       </div><!-- /screen-area -->
     </div><!-- /screen-bezel -->
   </div><!-- /device -->
 
+  <script src="mathdata.js"></script>
   <script src="math.js"></script>
 </body>
 </html>
