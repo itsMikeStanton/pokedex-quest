@@ -45,7 +45,7 @@ body {
     0 0 0 3px #6e0f13,
     0 10px 44px rgba(0,0,0,.7),
     inset 0 2px 0 rgba(255,255,255,.25);
-  padding: 12px 14px 0;
+  padding: 12px 14px 18px;
   position: relative;
   user-select: none;
 }
@@ -99,7 +99,7 @@ body {
 }
 #screen-area {
   width: 100%;
-  aspect-ratio: 10 / 11;
+  aspect-ratio: 10 / 13;
   background: var(--screen-bg);
   border-radius: 6px;
   overflow: hidden;
@@ -240,7 +240,8 @@ body {
 #mode-back { margin-top: auto; }
 
 /* ─── QUIZ SCREEN ────────────────────────────────── */
-#quiz-screen { justify-content: flex-start; gap: 8px; padding: 8px 10px; }
+/* space-between spreads the rows to fill the whole screen */
+#quiz-screen { justify-content: space-between; gap: 10px; padding: 12px 12px 14px; }
 #quiz-top {
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; font-weight: 800; font-size: 14px; color: #2a3a1a;
@@ -255,9 +256,9 @@ body {
   padding: 4px 12px; position: relative;
   width: 100%;
 }
-#wild-sprite { width: 52px; height: 52px; animation: bounce 1s ease-in-out infinite alternate; }
+#wild-sprite { width: 64px; height: 64px; animation: bounce 1s ease-in-out infinite alternate; }
 #wild-info { text-align: left; flex: 1; }
-#wild-name { font-weight: 800; font-size: 15px; color: #233; }
+#wild-name { font-weight: 800; font-size: 17px; color: #233; }
 #wild-type {
   display: inline-block; font-weight: 700; font-size: 10px; color: #fff;
   padding: 1px 8px; border-radius: 10px; background: #777; margin-top: 2px;
@@ -266,9 +267,9 @@ body {
 @keyframes sparkle { 0%,100% { opacity: 0; transform: scale(.5); } 50% { opacity: 1; transform: scale(1.2); } }
 
 #problem {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
   font-weight: 800; color: var(--ink);
-  font-size: 40px;
+  font-size: 50px;
   line-height: 1;
   width: 100%;
   text-shadow: 1px 1px 0 rgba(255,255,255,.7);
@@ -276,19 +277,22 @@ body {
 #p-op { color: var(--dex-red); }
 #p-q  { color: var(--blue-dk); }
 
-/* pokeball counting helper */
+/* pokeball counting helper — never shrinks, so it can't overlap choices */
 #helper {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
-  gap: 10px;
-  min-height: 30px;
+  gap: 8px 12px;
+  flex-shrink: 0;
   width: 100%;
 }
-.pb-group { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
-.pb-plus { font-weight: 800; font-size: 22px; color: var(--dex-red); }
-.pb-ring { padding: 4px; border: 2px dashed #8aa874; border-radius: 10px; }
+.pb-group { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.pb-plus { font-weight: 800; font-size: 24px; color: var(--dex-red); }
+
+/* multiplication shown as an array: a rows of b balls */
+.pb-array { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+.pb-row   { display: flex; gap: 5px; justify-content: center; }
 
 .pokeball {
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   border-radius: 50%;
   background: linear-gradient(#ee2b2b 0 47%, #f4f4f4 47% 100%);
   border: 2px solid #1a1a1a;
@@ -313,13 +317,13 @@ body {
 @keyframes pbpop { 0% { transform: scale(0) rotate(-40deg); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
 
 /* answer choices */
-#choices { display: flex; gap: 10px; width: 100%; justify-content: center; }
+#choices { display: flex; gap: 12px; width: 100%; justify-content: center; flex-shrink: 0; }
 .choice-btn {
-  flex: 1; max-width: 110px;
-  font-family: var(--round); font-weight: 800; font-size: 30px;
+  flex: 1; max-width: 120px;
+  font-family: var(--round); font-weight: 800; font-size: 38px;
   color: #222;
-  padding: 14px 4px;
-  border: 3px solid #3a2c00; border-radius: 14px;
+  padding: 22px 4px;
+  border: 3px solid #3a2c00; border-radius: 16px;
   background: #fff; cursor: pointer;
   box-shadow: 0 5px 0 rgba(0,0,0,.2);
   transition: transform .08s, box-shadow .08s, background .12s;
@@ -333,7 +337,7 @@ body {
 @keyframes wrongshake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
 
 /* coach bar */
-#coach { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: auto; }
+#coach { display: flex; align-items: center; gap: 8px; width: 100%; flex-shrink: 0; }
 #coach-bubble {
   flex: 1; display: flex; align-items: center; gap: 8px;
   background: #fff; border: 2px solid #cfd8c0; border-radius: 12px;
@@ -391,15 +395,6 @@ body {
 .dex-card-name { font-weight: 800; font-size: 10px; color: #444; }
 .dex-card.locked .dex-card-name { color: #aab; }
 .dex-card-no { font-weight: 700; font-size: 9px; color: #99a; }
-
-/* ─── BOTTOM LINK ────────────────────────────────── */
-#dex-bottom { display: flex; justify-content: center; padding: 12px 0 18px; }
-#to-other-game {
-  font-family: var(--round); font-weight: 800; font-size: 13px;
-  color: #ffe9a8; text-decoration: none; opacity: .9;
-  background: rgba(0,0,0,.18); padding: 6px 14px; border-radius: 20px;
-}
-#to-other-game:hover { opacity: 1; }
 
 /* ─── RESPONSIVE ─────────────────────────────────── */
 @media (max-width: 500px) {
