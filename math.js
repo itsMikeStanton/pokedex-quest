@@ -126,7 +126,9 @@ function nextQuestion() {
 
   // wild pokemon
   const poke = current.poke;
-  $('#wild-emoji').textContent = poke.emoji;
+  const wildImg = $('#wild-sprite');
+  wildImg.src = spriteSrc(poke.id);
+  wildImg.alt = poke.name;
   $('#wild-name').textContent  = poke.name;
   const typeBadge = $('#wild-type');
   typeBadge.textContent = poke.type;
@@ -332,11 +334,23 @@ function endRound() {
   $('#result-line').textContent = `You got ${roundStars} / ${QUESTIONS}!`;
 
   // pokemon caught this round
-  const row = roundCaught.map(id => {
-    const p = WILD_POOL.find(x => x.id === id);
-    return p ? p.emoji : '';
-  }).join(' ');
-  $('#result-caught-row').textContent = row ? `Caught: ${row}` : '';
+  const caughtRow = $('#result-caught-row');
+  caughtRow.innerHTML = '';
+  if (roundCaught.length) {
+    const label = document.createElement('div');
+    label.className = 'res-caught-label';
+    label.textContent = 'Caught:';
+    caughtRow.appendChild(label);
+    roundCaught.forEach(id => {
+      const p = WILD_POOL.find(x => x.id === id);
+      if (!p) return;
+      const img = document.createElement('img');
+      img.className = 'sprite';
+      img.src = spriteSrc(p.id);
+      img.alt = p.name;
+      caughtRow.appendChild(img);
+    });
+  }
 
   $('#result-prof').textContent = perfect
     ? 'Amazing! You answered every one! 🌟'
@@ -362,15 +376,16 @@ function openDex() {
     no.className = 'dex-card-no';
     no.textContent = '#' + String(i + 1).padStart(2, '0');
 
-    const emoji = document.createElement('div');
-    emoji.className = 'dex-card-emoji';
-    emoji.textContent = p.emoji; // locked cards are blacked-out via CSS
+    const img = document.createElement('img');
+    img.className = 'dex-card-emoji sprite';
+    img.src = spriteSrc(p.id);
+    img.alt = caught ? p.name : '';  // locked cards are blacked-out via CSS
 
     const name = document.createElement('div');
     name.className = 'dex-card-name';
     name.textContent = caught ? p.name : '???';
 
-    card.append(no, emoji, name);
+    card.append(no, img, name);
     grid.appendChild(card);
   });
 
@@ -410,6 +425,7 @@ function shuffle(arr) {
   return arr;
 }
 function opSymbol(o) { return o === 'add' ? '+' : o === 'sub' ? '−' : '×'; }
+function spriteSrc(id) { return `sprites/${String(id).padStart(3, '0')}.png`; }
 
 function typeColor(type) {
   const map = {

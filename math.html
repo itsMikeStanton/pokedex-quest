@@ -34,19 +34,8 @@
           <p class="title-tagline">Solve it &amp; catch ʼem all!</p>
 
           <div class="buddies">
-            <!-- Pikachu (CSS) -->
-            <div class="pikachu big">
-              <div class="pika-ear left"></div>
-              <div class="pika-ear right"></div>
-              <div class="pika-face">
-                <div class="pika-eye left"></div>
-                <div class="pika-eye right"></div>
-                <div class="pika-cheek left"></div>
-                <div class="pika-cheek right"></div>
-                <div class="pika-mouth"></div>
-              </div>
-            </div>
-            <div class="prof-face">🧑‍🔬</div>
+            <img class="sprite buddy-pika" src="sprites/025.png" alt="Pikachu">
+            <img class="sprite buddy-prof" src="sprites/professor.png" alt="Professor">
           </div>
 
           <p id="title-prof">Hi! I'm Professor Oak. Ready for some math?</p>
@@ -60,7 +49,7 @@
         <!-- ─────────── MODE SELECT ─────────── -->
         <div id="mode-screen" class="screen">
           <div class="mode-prof">
-            <span class="mode-prof-face">🧑‍🔬</span>
+            <img class="sprite mode-prof-face" src="sprites/professor.png" alt="Professor">
             <span class="mode-prof-text">What should we practice?</span>
           </div>
 
@@ -102,7 +91,7 @@
 
           <!-- wild pokemon -->
           <div id="wild-wrap">
-            <div id="wild-emoji">❓</div>
+            <img id="wild-sprite" class="sprite" src="" alt="">
             <div id="wild-info">
               <div id="wild-name">A wild Pokémon!</div>
               <div id="wild-type">???</div>
@@ -131,19 +120,9 @@
 
           <!-- professor + pikachu coach bar -->
           <div id="coach">
-            <div class="pikachu small" id="coach-pika">
-              <div class="pika-ear left"></div>
-              <div class="pika-ear right"></div>
-              <div class="pika-face">
-                <div class="pika-eye left"></div>
-                <div class="pika-eye right"></div>
-                <div class="pika-cheek left"></div>
-                <div class="pika-cheek right"></div>
-                <div class="pika-mouth"></div>
-              </div>
-            </div>
+            <img id="coach-pika" class="sprite" src="sprites/025.png" alt="Pikachu">
             <div id="coach-bubble">
-              <span class="coach-face">🧑‍🔬</span>
+              <img class="coach-face sprite" src="sprites/professor.png" alt="Professor">
               <span id="coach-text">You can do it!</span>
             </div>
           </div>
