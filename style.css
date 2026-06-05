@@ -166,6 +166,107 @@ body {
   padding: 16px;
 }
 
+/* ─── BOOT / POWER-ON (Game Boy) ────────────────────── */
+#boot-screen {
+  background: #0f1a0f;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+#boot-logo {
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: #9bbc0f;
+  text-shadow: 0 2px 0 #306230;
+  position: relative;
+  animation: bootDrop 1.15s linear both, bootFlash .25s 1.12s ease-out;
+}
+#boot-r { font-size: 6px; vertical-align: super; margin-left: 1px; }
+#boot-sub {
+  font-size: 5px;
+  letter-spacing: 4px;
+  color: #4a6a2a;
+  margin-top: 8px;
+  opacity: 0;
+  animation: bootSubIn .3s 1.25s ease-out forwards;
+}
+@keyframes bootDrop {
+  0%   { transform: translateY(-1200%); }
+  100% { transform: translateY(0); }
+}
+@keyframes bootFlash {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(3.2); }
+  100% { filter: brightness(1); }
+}
+@keyframes bootSubIn { to { opacity: 1; } }
+#boot-screen.boot-out { animation: bootOut .42s ease-in forwards; }
+@keyframes bootOut {
+  to { opacity: 0; transform: scale(1.05); }
+}
+
+/* ─── TITLE SCENE (adventurer + Pikachu) ────────────── */
+.title-scene {
+  position: relative;
+  width: 150px;
+  height: 56px;
+  margin: 2px 0;
+}
+.title-ground {
+  position: absolute;
+  left: 8px; right: 8px; bottom: 6px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #2e5a2e 18%, #2e5a2e 82%, transparent);
+  box-shadow: 0 2px 0 rgba(0,0,0,.3);
+}
+.title-hero, .title-pika {
+  position: absolute;
+  bottom: 8px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.title-hero {
+  left: 78px;
+  width: 46px; height: 46px;
+  transform-origin: bottom center;
+  animation: heroStep .46s steps(1,end) infinite, heroBob .46s ease-in-out infinite;
+}
+.title-pika {
+  left: 36px;
+  width: 36px; height: 36px;
+  transform-origin: bottom center;
+  animation: pikaTrot .38s ease-in-out infinite;
+}
+@keyframes heroBob {
+  0%, 100% { transform: translateY(0)    scaleY(1); }
+  50%      { transform: translateY(-3px) scaleY(1.03); }
+}
+@keyframes heroStep {           /* subtle facing wobble so it reads as walking */
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-2deg); }
+}
+@keyframes pikaTrot {
+  0%, 100% { transform: translateY(0)    rotate(0deg); }
+  35%      { transform: translateY(-5px) rotate(-4deg); }
+  70%      { transform: translateY(0)    rotate(3deg); }
+}
+.title-spark {
+  position: absolute;
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+}
+.title-spark.sp1 { left: 24px; bottom: 34px; animation: sparkPop 2.2s .2s infinite; }
+.title-spark.sp2 { left: 58px; bottom: 30px; animation: sparkPop 2.2s .9s infinite; }
+.title-spark.sp3 { left: 44px; bottom: 42px; animation: sparkPop 2.2s 1.5s infinite; }
+@keyframes sparkPop {
+  0%   { opacity: 0; transform: scale(.4) rotate(-15deg); }
+  8%   { opacity: 1; transform: scale(1.2) rotate(8deg); }
+  20%  { opacity: 0; transform: scale(.9) rotate(0deg); }
+  100% { opacity: 0; }
+}
+
 .title-logo {
   font-size: 24px;
   letter-spacing: 3px;

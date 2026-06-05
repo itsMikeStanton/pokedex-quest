@@ -506,8 +506,34 @@ window.addEventListener('DOMContentLoaded', () => {
   setupNav('title');           // the title screen is active by default
   try { muted = localStorage.getItem('lukeymon_muted') === '1'; } catch (_) {}
   updateMuteBtn();
+  runBoot();                   // Game Boy power-on, then reveal the title
   requestAnimationFrame(loop);
 });
+
+// ── Game Boy power-on sequence ──────────────────────────
+// The LUKETENDO logo scrolls down, dings, then wipes to the title.
+let _bootDone = false;
+function bootChime() {
+  beep(392, 0.12, 0.16, 'square');                          // G — low
+  setTimeout(() => beep(659, 0.13, 0.18, 'square'), 120);   // E
+  setTimeout(() => beep(784, 0.26, 0.40, 'square'), 250);   // G — the "ding"
+}
+function finishBoot() {
+  if (_bootDone) return;
+  _bootDone = true;
+  const boot = document.getElementById('boot-screen');
+  if (!boot) return;
+  boot.classList.add('boot-out');
+  setTimeout(() => { boot.classList.remove('active'); boot.classList.add('hidden'); }, 430);
+}
+function runBoot() {
+  const boot = document.getElementById('boot-screen');
+  if (!boot) return;
+  setTimeout(bootChime, 1150);     // ding as the logo lands (best-effort before first tap)
+  setTimeout(finishBoot, 2450);    // auto-advance to the title
+  // Tap to skip — and use the gesture to wake audio so the chime can ring.
+  boot.addEventListener('click', () => { wakeAudio(); bootChime(); finishBoot(); });
+}
 
 // ═══════════════════════════════════════════════════
 // TILE CACHE

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2.39.0">
+  <link rel="stylesheet" href="style.css?v=2.40.0">
 </head>
 <body>
 
@@ -14,13 +14,26 @@
     <div id="screen-bezel">
       <div id="screen-area">
 
+        <!-- BOOT (Game Boy power-on) -->
+        <div id="boot-screen" class="screen active">
+          <div id="boot-logo">LUKETENDO<span id="boot-r">®</span></div>
+          <div id="boot-sub">GAME BOY</div>
+        </div>
+
         <!-- TITLE SCREEN -->
         <div id="title-screen" class="screen active">
           <div class="title-logo">
             <span>L</span><span>U</span><span>K</span><span>E</span><span>Y</span><span>M</span><span>O</span><span>N</span>
           </div>
           <p class="title-tagline">Catch ʼem with kindness!</p>
-          <div class="title-deco">🌿&nbsp;&nbsp;🔥&nbsp;&nbsp;💧&nbsp;&nbsp;⚡&nbsp;&nbsp;👻</div>
+          <div class="title-scene">
+            <span class="title-ground"></span>
+            <img class="title-hero" src="art/player/side.png" alt="">
+            <img class="title-pika" src="sprites/025.png" alt="">
+            <span class="title-spark sp1">⚡</span>
+            <span class="title-spark sp2">⚡</span>
+            <span class="title-spark sp3">✨</span>
+          </div>
           <button id="play-btn" class="pixel-btn green">▶ PLAY</button>
           <button id="title-settings" class="pixel-btn small blue">⚙️ Settings</button>
           <p class="title-hint">Arrow keys or WASD to move</p>
@@ -369,10 +382,10 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.39.0</div>
+  <div id="version">v2.40.0</div>
 
-  <script src="world.js?v=2.39.0"></script>
-  <script src="data.js?v=2.39.0"></script>
-  <script src="game.js?v=2.39.0"></script>
+  <script src="world.js?v=2.40.0"></script>
+  <script src="data.js?v=2.40.0"></script>
+  <script src="game.js?v=2.40.0"></script>
 </body>
 </html>
