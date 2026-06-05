@@ -3,15 +3,37 @@
 // ═══════════════════════════════════════════════════
 // POKéMATH LAB
 // A friendly Pokédex math game for little trainers.
-// Reuses POKEMON_DATA (emoji + names + types) from data.js.
+// Self-contained: sprites are addressed by national-dex id
+// (sprites/NNN.png), so the game runs anywhere it's dropped —
+// including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
 
+// Our roster of classic, kid-friendly Pokémon. id matches the sprite
+// number (sprites/NNN.png) in the shared Pokédex art set.
+const ROSTER = [
+  { id: 1,   name: 'Bulbasaur',  type: 'Grass'    },
+  { id: 4,   name: 'Charmander', type: 'Fire'     },
+  { id: 7,   name: 'Squirtle',   type: 'Water'    },
+  { id: 10,  name: 'Caterpie',   type: 'Bug'      },
+  { id: 16,  name: 'Pidgey',     type: 'Flying'   },
+  { id: 19,  name: 'Rattata',    type: 'Normal'   },
+  { id: 25,  name: 'Pikachu',    type: 'Electric' },
+  { id: 35,  name: 'Clefairy',   type: 'Fairy'    },
+  { id: 39,  name: 'Jigglypuff', type: 'Normal'   },
+  { id: 52,  name: 'Meowth',     type: 'Normal'   },
+  { id: 54,  name: 'Psyduck',    type: 'Water'    },
+  { id: 94,  name: 'Gengar',     type: 'Ghost'    },
+  { id: 129, name: 'Magikarp',   type: 'Water'    },
+  { id: 133, name: 'Eevee',      type: 'Normal'   },
+  { id: 143, name: 'Snorlax',    type: 'Normal'   },
+];
+
 // Wild Pokémon pool = everyone except our buddy Pikachu.
-const WILD_POOL = POKEMON_DATA.filter(p => p.id !== PIKACHU_ID);
+const WILD_POOL = ROSTER.filter(p => p.id !== PIKACHU_ID);
 
 // ─── PROFESSOR LINES ───────────────────────────────
 const PROF = {
