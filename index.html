@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2.41.0">
+  <link rel="stylesheet" href="style.css?v=2.42.0">
 </head>
 <body>
 
@@ -244,6 +244,10 @@
             <span id="map-badges-row"></span>
             <span id="map-badges-view">view ▸</span>
           </button>
+          <button id="map-notes" type="button">
+            <span id="map-notes-label">📝 FIELD NOTES <span id="map-notes-count">0</span>/<span id="map-notes-total">0</span></span>
+            <span id="map-notes-view">view ▸</span>
+          </button>
           <div id="map-legend">
             <span><span class="legend-swatch open"></span>Open</span>
             <span><span class="legend-swatch locked"></span>Locked</span>
@@ -259,6 +263,16 @@
             <span id="badges-counter"><span id="badges-count">0</span>/<span id="badges-total">5</span></span>
           </div>
           <div id="badges-grid"></div>
+        </div>
+
+        <!-- FIELD NOTES SCREEN -->
+        <div id="notes-screen" class="screen">
+          <div id="notes-topbar">
+            <button id="notes-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="notes-title">📝 FIELD NOTES</span>
+            <span id="notes-counter"><span id="notes-count">0</span>/<span id="notes-total">0</span></span>
+          </div>
+          <div id="notes-body"></div>
         </div>
 
         <!-- MEWTWO BATTLE SCREEN -->
@@ -382,10 +396,10 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.41.0</div>
+  <div id="version">v2.42.0</div>
 
-  <script src="world.js?v=2.41.0"></script>
-  <script src="data.js?v=2.41.0"></script>
-  <script src="game.js?v=2.41.0"></script>
+  <script src="world.js?v=2.42.0"></script>
+  <script src="data.js?v=2.42.0"></script>
+  <script src="game.js?v=2.42.0"></script>
 </body>
 </html>

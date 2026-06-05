@@ -1324,6 +1324,103 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 #map-badges-row { display: flex; gap: 6px; }
 #map-badges-view { font-size: 5px; color: #6090c0; }
 
+/* Field-notes tray button */
+#map-notes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-top: 2px solid #204060;
+  flex-shrink: 0;
+  width: 100%;
+  background: transparent;
+  border-left: none; border-right: none; border-bottom: none;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+}
+#map-notes:hover { background: #122538; }
+#map-notes-label { font-size: 6px; color: #80c8a0; }
+#map-notes-view  { font-size: 5px; color: #6090c0; }
+/* "new note" dot, used on the map button and the HUD map icon */
+#map-notes.has-new::after,
+#map-btn.has-new::after {
+  content: '';
+  position: absolute;
+  top: 4px; right: 5px;
+  width: 7px; height: 7px;
+  background: #ff4060;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 5px #ff4060;
+  animation: noteDot 1s ease-in-out infinite;
+}
+#map-btn { position: relative; }
+@keyframes noteDot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.25); opacity: .7; }
+}
+
+/* Field Notes screen */
+#notes-screen { background: #0a1a28; flex-direction: column; }
+#notes-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #102030;
+  padding: 6px 8px;
+  border-bottom: 2px solid #204060;
+  flex-shrink: 0;
+}
+#notes-title   { font-size: 8px; color: #80c8a0; text-shadow: 0 0 8px #2e8a5a; }
+#notes-counter { font-size: 6px; color: #80c8a0; }
+#notes-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.notes-empty { font-size: 6px; color: #6a8aa8; line-height: 2; text-align: center; padding: 24px 16px; }
+.notes-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding: 3px 4px;
+  font-size: 7px;
+  color: #f8e8a0;
+  border-bottom: 1px solid #2a4a3a;
+}
+.notes-cat-count { font-size: 5px; color: #6a8aa8; }
+.note-card {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: #102218;
+  border: 1px solid #2b5a40;
+  border-left: 3px solid #38a868;
+  border-radius: 5px;
+  padding: 7px 8px;
+}
+.note-card.locked {
+  background: #121a22;
+  border-color: #243040;
+  border-left-color: #34465a;
+  opacity: .7;
+}
+.note-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+.note-card.locked .note-icon { filter: grayscale(1); opacity: .6; }
+.note-title { font-size: 6px; color: #b8f0c8; margin-bottom: 3px; }
+.note-card.locked .note-title { color: #5a6a7a; }
+.note-body  { font-size: 6px; color: #9fc4b4; line-height: 1.9; }
+.note-card.locked .note-body { color: #56687a; }
+
 /* Badge Case screen */
 #badges-screen { background: #0a1a28; flex-direction: column; }
 #badges-topbar {

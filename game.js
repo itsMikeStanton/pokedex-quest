@@ -72,6 +72,37 @@ const BARRIERS = {
   sand:  { needsType: 'Ground',   hint: 'Bring a 🌍 Ground Pokémon as your buddy to clear the sand wall!', cleared: '🌍 Your Ground buddy clears the sand wall!',   sign: '🌍' },
 };
 
+// ── FIELD NOTES ──────────────────────────────────────
+// Tips the player picks up as they play, collected into a notepad they can
+// review any time. Barrier tips are generated from BARRIERS below.
+const BARRIER_LABEL = {
+  log:'Fallen logs', rock:'River rocks', fence:'Electric fence',
+  lava:'Lava flow', vine:'Thick vines', frost:'Ice wall', sand:'Sand wall',
+};
+const STATIC_TIPS = [
+  { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
+    text:'Wild Lukeymon want kindness, not force. Feed 🍎, Pet 🤚 or Play ⚽ to read their mood and fill the heart meter — then throw a Ball.' },
+  { id:'buddy', cat:'Training', icon:'🐾', title:'Pick a buddy',
+    text:'Set a buddy from the Pokédex (tap the ❤️) or the HUD. It follows you, and its TYPE is the key to barriers, surfing and cave-light.' },
+  { id:'battles', cat:'Battles', icon:'⚔️', title:'Send the counter',
+    text:'Legendary guardians demand a TYPE each round. Send out a buddy whose type is SUPER-EFFECTIVE against it to win the exchange.' },
+  { id:'ice', cat:'Ice', icon:'🧊', title:'Slippery ice',
+    text:'Step on ice without an Ice-type buddy and you slide straight across until something stops you. An Ice buddy keeps your footing so you can walk.' },
+  { id:'water', cat:'Water', icon:'🌊', title:'Surf the water',
+    text:'Deep water blocks the way — unless a Water-type buddy is following. Then you hop on and surf right across.' },
+  { id:'cave', cat:'Exploring', icon:'🕯️', title:'Dark caves',
+    text:'Caves are pitch black. Bring a glowing buddy (a Fire-type works well) to light up the path around you.' },
+];
+const TIP_CATEGORIES = ['Training', 'Battles', 'Barriers', 'Ice', 'Water', 'Exploring'];
+function barrierTip(key) {
+  const b = BARRIERS[key];
+  return { id:'barrier_'+key, cat:'Barriers', icon:b.sign,
+           title:BARRIER_LABEL[key] || (b.needsType+' barrier'), text:b.hint };
+}
+function allTips() {
+  return [...STATIC_TIPS, ...Object.keys(BARRIERS).map(barrierTip)];
+}
+
 // Type effectiveness — for a demanded type, which attacking types are super-effective
 // against it (used by the legendary/Team-Rocket "send a counter" battles).
 const BEATEN_BY = {
@@ -447,6 +478,8 @@ let unlockedBarriers = new Set();  // barrier keys the player has physically cle
 let collected = new Set();         // ids of badges/collectibles found
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
 let pendingGift = 0;               // coins held back for the end-of-conversation reveal
+let knownTips = new Set();         // ids of field-notes tips the player has discovered
+let notesUnread = false;           // a new tip is waiting in the notepad
 let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
 let wonGame = false;               // Champion victory (4 land badges) already celebrated
 let pendingChampion = false;       // queue the Champion screen after the BADGE GET screen
@@ -1006,6 +1039,10 @@ function bindEvents() {
   document.getElementById('map-badges').addEventListener('click', openBadgeCase);
   document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
 
+  // Field notes
+  document.getElementById('map-notes').addEventListener('click', openNotes);
+  document.getElementById('notes-back').addEventListener('click', closeNotes);
+
   // Mewtwo battle
   // (battle-throw's handler is assigned per-battle in showBattleWin)
 
@@ -1310,6 +1347,7 @@ function move(dx, dy, ts) {
         bumpAnimTs = ts;
         beep(160, 0.07, 0.1, 'square');
         showMessage(BARRIERS[exit.barrier].hint);
+        learnTip('barrier_' + exit.barrier);
       }
     } else {
       // Plain wall
@@ -1333,9 +1371,11 @@ function move(dx, dy, ts) {
       beep(523, 0.1, 0.1);
       setTimeout(() => beep(784, 0.14, 0.18), 110);
       showMessage(BARRIERS[barrierKey].cleared);
+      learnTip('barrier_' + barrierKey);
     } else {
       beep(160, 0.07, 0.1, 'square');
       showMessage(BARRIERS[barrierKey].hint);
+      learnTip('barrier_' + barrierKey);
     }
     return;
   }
@@ -1406,7 +1446,7 @@ function move(dx, dy, ts) {
       nx = ux; ny = uy;
     }
     beep(900, 0.05, 0.2, 'sine');                       // slide whoosh
-    if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); }
+    if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); learnTip('ice'); }
     // Stopped while still on ice → you hit a wall. Treat it as TWO slides: glide to
     // the wall now (a normal slide), then slide all the way back to the start tile.
     if (MAPS[currentZone][ny][nx] === T.ICE) {
@@ -1450,6 +1490,7 @@ function move(dx, dy, ts) {
     surfNoted = true;
     const b = buddyPoke();
     showMessage(`🌊 ${b ? b.name : 'Your buddy'} carries you across the water!`);
+    learnTip('water');
   }
 
   // Step onto a cave mouth (or other point-portal) → warp into the linked zone.
@@ -1526,8 +1567,10 @@ function warpTo(zone, x, y, dirKey) {
 
   saveGame();
   updateHud();
-  if (ZONE_INFO[zone].base === T.CAVE && !buddyLightsCave())
+  if (ZONE_INFO[zone].base === T.CAVE && !buddyLightsCave()) {
     showMessage("🕯️ It's pitch black! Bring a glowing buddy (a Fire-type, say) to light the way…");
+    learnTip('cave');
+  }
   else
     showMessage('📍 ' + ZONE_INFO[zone].name);
 
@@ -2319,6 +2362,7 @@ function beginEncounter(poke, roamer = null) {
   currentLegend = roamer;
   gameState   = 'encounter';
   seenIds.add(poke.id);
+  learnTip('befriend');
 
   clearWild();
   clearTimeout(spawnTimerId);
@@ -2724,6 +2768,7 @@ function battleBackdrop(zone) {
 
 function startBossBattle(cfg) {
   currentBoss = cfg;
+  learnTip('battles');
   clearWild();
   clearTimeout(spawnTimerId);
   battleRoundNum = 0;
@@ -3346,6 +3391,7 @@ function toggleBuddy() {
     activePet = null;
   } else {
     activePet = detailPoke.id;
+    learnTip('buddy');
     petX = playerX; petY = playerY;
     petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
     petMoveAnimTs = -9999;
@@ -3493,6 +3539,11 @@ function renderMap() {
   document.getElementById('map-open-count').textContent = open.size;
   document.getElementById('map-total').textContent = Object.keys(ZONE_MAP).length;
 
+  // Field-notes tally on its tray button (+ a dot when a new tip is waiting).
+  document.getElementById('map-notes-count').textContent = [...knownTips].length;
+  document.getElementById('map-notes-total').textContent = allTips().length;
+  document.getElementById('map-notes').classList.toggle('has-new', notesUnread);
+
   // Cell centres in the 400×400 SVG viewBox (4×4 grid → 100px cells).
   const cx = id => (ZONE_MAP[id].col - 0.5) * 100;
   const cy = id => (ZONE_MAP[id].row - 0.5) * 100;
@@ -3634,6 +3685,81 @@ function renderBadgeCase() {
 
     card.append(icon, name, loc);
     grid.appendChild(card);
+  });
+}
+
+// ─── Field Notes (tips notepad) ──────────────────────
+// Record a tip the first time the player runs into the relevant situation.
+function learnTip(id) {
+  if (knownTips.has(id)) return;
+  knownTips.add(id);
+  notesUnread = true;
+  saveGame();
+  markNotesNew();
+  beep(660, 0.05, 0.06, 'sine');
+  setTimeout(() => beep(880, 0.06, 0.09, 'sine'), 70);
+}
+// Flag the map + notepad buttons so the player notices a new note.
+function markNotesNew() {
+  ['map-btn', 'map-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('has-new', notesUnread);
+  });
+}
+function openNotes() {
+  notesUnread = false;
+  markNotesNew();
+  renderNotes();
+  showScreen('notes');
+}
+function closeNotes() {
+  renderMap();
+  showScreen('map');
+}
+function renderNotes() {
+  const tips = allTips();
+  const known = tips.filter(t => knownTips.has(t.id));
+  document.getElementById('notes-count').textContent = known.length;
+  document.getElementById('notes-total').textContent = tips.length;
+
+  const body = document.getElementById('notes-body');
+  body.innerHTML = '';
+
+  if (!known.length) {
+    const empty = document.createElement('div');
+    empty.className = 'notes-empty';
+    empty.textContent = 'No notes yet — explore and the tips you find will be jotted down here.';
+    body.appendChild(empty);
+    return;
+  }
+
+  TIP_CATEGORIES.forEach(cat => {
+    const inCat = tips.filter(t => t.cat === cat);
+    const got   = inCat.filter(t => knownTips.has(t.id));
+    if (!inCat.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'notes-cat';
+    head.innerHTML = `<span>${cat}</span><span class="notes-cat-count">${got.length}/${inCat.length}</span>`;
+    body.appendChild(head);
+
+    inCat.forEach(t => {
+      const have = knownTips.has(t.id);
+      const card = document.createElement('div');
+      card.className = 'note-card' + (have ? '' : ' locked');
+      if (have) {
+        card.innerHTML =
+          `<div class="note-icon">${t.icon}</div>` +
+          `<div class="note-text"><div class="note-title">${t.title}</div>` +
+          `<div class="note-body">${t.text}</div></div>`;
+      } else {
+        card.innerHTML =
+          `<div class="note-icon">🔒</div>` +
+          `<div class="note-text"><div class="note-title">???</div>` +
+          `<div class="note-body">Keep exploring to discover this tip.</div></div>`;
+      }
+      body.appendChild(card);
+    });
   });
 }
 
@@ -3789,9 +3915,10 @@ function setupNav(id) {
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
     case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
-    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-help'), $('map-badges'), $('map-back')], { onBack: closeMap }); break;
+    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-help'), $('map-badges'), $('map-notes'), $('map-back')], { onBack: closeMap }); break;
     case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
     case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
+    case 'notes':     setNav([$('notes-back')], { onBack: closeNotes }); break;
     case 'shop':      setNav([...all('#shop-screen .shop-buy-btn'), $('shop-close')], { onBack: closeShop }); break;
     case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
     case 'gift':      setNav([$('gift-continue')], { onBack: continueGift }); break;
@@ -3899,6 +4026,8 @@ function startNewGame() {
   unlockedBarriers.clear();
   collected.clear();
   metNPCs.clear();
+  knownTips.clear();
+  notesUnread = false;
   rocketDefeated.clear();
   wonGame = false;
   pendingChampion = false;
@@ -3945,6 +4074,7 @@ function saveGame() {
       barriers:  [...unlockedBarriers],
       collected: [...collected],
       metNPCs:   [...metNPCs],
+      knownTips: [...knownTips],
       rocketDefeated: [...rocketDefeated],
       wonGame,
       roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
@@ -3974,6 +4104,7 @@ function loadSlot(n) {
       unlockedBarriers = new Set(data.barriers || []);
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
+      knownTips        = new Set(data.knownTips || []);
       rocketDefeated   = new Set(data.rocketDefeated || []);
       // Legacy saves that already had all 4 land badges count as won (don't re-fire).
       wonGame          = !!data.wonGame || landBadgesDone();
@@ -3997,6 +4128,7 @@ function loadSlot(n) {
       petMoveAnimTs = -9999;
       surfNoted = false;
       slipNoted = false;
+      notesUnread = false;
     }
   } catch (_) {}
   initRoamers();
@@ -4160,6 +4292,7 @@ function cycleBuddy() {
   beep(523, 0.06, 0.07);
   const cur = POKEMON_DATA.find(p => p.id === activePet);
   showMessage(cur ? `🐾 Buddy: ${cur.name} (${cur.type})` : '🐾 No buddy following');
+  if (cur) learnTip('buddy');
 }
 
 // ═══════════════════════════════════════════════════
