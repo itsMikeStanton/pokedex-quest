@@ -241,19 +241,21 @@ function renderHelper(q) {
       g.appendChild(ball(i >= q.a - q.b)); // last b are "gone"
     }
     box.appendChild(g);
-  } else { // mul: a groups of b — only if it isn't a huge pile
-    if (q.answer <= 20) {
-      for (let i = 0; i < q.a; i++) {
-        if (i > 0) box.appendChild(plus());
-        const ring = document.createElement('div');
-        ring.className = 'pb-ring';
-        ring.appendChild(ballGroup(q.b));
-        box.appendChild(ring);
+  } else { // mul: an array of a rows × b balls (stacks down, never overlaps)
+    if (q.answer <= 30) {
+      const array = document.createElement('div');
+      array.className = 'pb-array';
+      for (let r = 0; r < q.a; r++) {
+        const row = document.createElement('div');
+        row.className = 'pb-row';
+        for (let c = 0; c < q.b; c++) row.appendChild(ball(false));
+        array.appendChild(row);
       }
+      box.appendChild(array);
     } else {
       const hint = document.createElement('div');
-      hint.style.cssText = 'font-weight:800;font-size:14px;color:#3a5a2a;';
-      hint.textContent = `${q.a} groups of ${q.b}`;
+      hint.style.cssText = 'font-weight:800;font-size:16px;color:#3a5a2a;';
+      hint.textContent = `${q.a} rows of ${q.b}`;
       box.appendChild(hint);
     }
   }
