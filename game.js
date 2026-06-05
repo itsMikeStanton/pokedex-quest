@@ -458,8 +458,9 @@ let npcLineIdx = 0;
 let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let moveAnimTs  = -9999;
 let moveAnimDur = MOVE_ANIM_MS;   // per-move slide duration (longer for ice slides)
-let bounceAnim  = null;           // ice slide that hit a wall: glide in, bounce back to start
-let petBounceAnim = null;         // buddy's matching bounce (trails one tile behind)
+let moveLinear  = false;          // slides render at constant speed (ice); normal steps ease out
+let pendingReturn = null;         // queued 2nd half of an ice wall bounce (slide back to start)
+let slideLockUntil = 0;           // input locked until this ts (during a wall bounce)
 let bumpVec     = null;
 let bumpAnimTs  = -9999;
 let camX = 0, camY = 0;
@@ -1102,27 +1103,11 @@ function getRenderPos(ts) {
     bumpVec = null;
   }
 
-  // Ice slide into a wall: glide forward at full speed, then bounce straight back to
-  // start — linear the whole way (momentum, no slowing at the wall).
-  if (bounceAnim) {
-    const t = ts - bounceAnim.startTs;
-    if (t < bounceAnim.fwdDur) {
-      const p = t / bounceAnim.fwdDur;
-      return { x: bounceAnim.fromX + (bounceAnim.wallX - bounceAnim.fromX) * p,
-               y: bounceAnim.fromY + (bounceAnim.wallY - bounceAnim.fromY) * p };
-    } else if (t < bounceAnim.fwdDur + bounceAnim.backDur) {
-      const p = (t - bounceAnim.fwdDur) / bounceAnim.backDur;
-      return { x: bounceAnim.wallX + (bounceAnim.fromX - bounceAnim.wallX) * p,
-               y: bounceAnim.wallY + (bounceAnim.fromY - bounceAnim.wallY) * p };
-    }
-    bounceAnim = null;
-  }
-
-  // Tile-to-tile slide with a tiny vertical hop arc
+  // Tile-to-tile slide. Ice slides glide at constant speed; normal steps ease out.
   const mt = Math.min((ts - moveAnimTs) / moveAnimDur, 1);
   if (mt < 1) {
-    const ease = 1 - Math.pow(1 - mt, 3); // ease-out cubic
-    const hopY  = Math.sin(mt * Math.PI) * -3; // small upward arc mid-step
+    const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
+    const hopY = moveLinear ? 0 : Math.sin(mt * Math.PI) * -3;
     return {
       x: fromPx.x + (destX - fromPx.x) * ease,
       y: fromPx.y + (destY - fromPx.y) * ease + hopY,
@@ -1150,23 +1135,9 @@ function petFollow(tx, ty, ts) {
 function getPetRenderPos(ts) {
   const destX = petX * TILE_SIZE;
   const destY = petY * TILE_SIZE;
-  // Buddy mirrors the player's ice-wall bounce, one tile behind (linear momentum).
-  if (petBounceAnim) {
-    const t = ts - petBounceAnim.startTs;
-    if (t < petBounceAnim.fwdDur) {
-      const p = t / petBounceAnim.fwdDur;
-      return { x: petBounceAnim.fromX + (petBounceAnim.wallX - petBounceAnim.fromX) * p,
-               y: petBounceAnim.fromY + (petBounceAnim.wallY - petBounceAnim.fromY) * p };
-    } else if (t < petBounceAnim.fwdDur + petBounceAnim.backDur) {
-      const p = (t - petBounceAnim.fwdDur) / petBounceAnim.backDur;
-      return { x: petBounceAnim.wallX + (petBounceAnim.fromX - petBounceAnim.wallX) * p,
-               y: petBounceAnim.wallY + (petBounceAnim.fromY - petBounceAnim.wallY) * p };
-    }
-    petBounceAnim = null;
-  }
   const mt = Math.min((ts - petMoveAnimTs) / moveAnimDur, 1);
   if (mt < 1) {
-    const ease = 1 - Math.pow(1 - mt, 3);
+    const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
     return { x: petFromPx.x + (destX - petFromPx.x) * ease,
              y: petFromPx.y + (destY - petFromPx.y) * ease };
   }
@@ -1181,6 +1152,16 @@ function loop(ts) {
   requestAnimationFrame(loop);
 
   if (gameState === 'world') {
+    // Second half of an ice wall bounce: once the forward slide lands, slide back.
+    if (pendingReturn && ts >= pendingReturn.due) {
+      const r = pendingReturn; pendingReturn = null;
+      moveLinear = true;
+      moveAnimDur = r.dur;
+      fromPx.x = r.fromTX * TILE_SIZE; fromPx.y = r.fromTY * TILE_SIZE;
+      moveAnimTs = ts;
+      playerX = r.toX; playerY = r.toY; playerStep ^= 1;
+      petFollow(r.toX - r.dx, r.toY - r.dy, ts);
+    }
     if (ts - lastMoveTs >= MOVE_INTERVAL) {
       let moved = false;
       if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1, ts); moved = true; }
@@ -1263,8 +1244,8 @@ function findActiveExit(x, y, dx, dy) {
 // MOVEMENT
 // ═══════════════════════════════════════════════════
 function move(dx, dy, ts) {
-  // Locked out while bouncing back off an ice wall.
-  if (bounceAnim && (ts - bounceAnim.startTs) < bounceAnim.fwdDur + bounceAnim.backDur) return;
+  // Locked out while a wall bounce (forward + return) is playing.
+  if (ts < slideLockUntil) return;
 
   // 1. Set direction
   playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
@@ -1382,31 +1363,28 @@ function move(dx, dy, ts) {
     }
     beep(900, 0.05, 0.2, 'sine');                       // slide whoosh
     if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); }
-    // Stopped while still on ice → you hit a wall: glide into it, then bounce
-    // all the way back to where you started (you stay put — it's purely visual).
+    // Stopped while still on ice → you hit a wall. Treat it as TWO slides: glide to
+    // the wall now (a normal slide), then slide all the way back to the start tile.
     if (MAPS[currentZone][ny][nx] === T.ICE) {
-      const fwd = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;
-      bounceAnim = {
-        fromX: playerX * TILE_SIZE, fromY: playerY * TILE_SIZE,
-        wallX: nx * TILE_SIZE,       wallY: ny * TILE_SIZE,
-        startTs: ts, fwdDur: fwd, backDur: fwd,
-      };
-      if (activePet != null) {                       // buddy bounces too, one tile behind
-        petBounceAnim = {
-          fromX: petX * TILE_SIZE,        fromY: petY * TILE_SIZE,
-          wallX: (nx - dx) * TILE_SIZE,   wallY: (ny - dy) * TILE_SIZE,
-          startTs: ts, fwdDur: fwd, backDur: fwd,
-        };
-        if (dx) petFacing = dx > 0 ? 1 : -1;
-      }
-      setTimeout(() => beep(150, 0.08, 0.16, 'square'), fwd);   // bonk at the wall
-      playerStep ^= 1;
+      const startX = playerX, startY = playerY;
+      const dur = Math.max(1, Math.abs(nx - startX) + Math.abs(ny - startY)) * MOVE_ANIM_MS;
+      moveLinear = true;
+      moveAnimDur = dur;
+      const cur0 = getRenderPos(ts);
+      fromPx.x = cur0.x; fromPx.y = cur0.y;
+      moveAnimTs = ts;
+      playerX = nx; playerY = ny; playerStep ^= 1;
+      petFollow(nx - dx, ny - dy, ts);                  // buddy slides forward, one behind
+      setTimeout(() => beep(150, 0.08, 0.16, 'square'), dur);   // bonk at the wall
+      pendingReturn = { fromTX: nx, fromTY: ny, toX: startX, toY: startY, dx, dy, dur, due: ts + dur };
+      slideLockUntil = ts + 2 * dur;
       return;
     }
   }
 
   // 5. Normal move
-  moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;  // slides glide slower
+  moveLinear  = (tile === T.ICE && !buddyHasType('Ice')); // uncontrolled ice slides glide at constant speed
+  moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;
   const cur = getRenderPos(ts);
   fromPx.x   = cur.x;
   fromPx.y   = cur.y;
