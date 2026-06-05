@@ -471,6 +471,7 @@ let petX        = 10;
 let petY        = 7;
 let petFromPx   = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
 let petMoveAnimTs = -9999;
+let petMoveAnimDur = MOVE_ANIM_MS;  // buddy's own slide duration (may lag behind the player)
 let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
 let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
 let surfNoted   = false;  // shown the "you can surf" hint this session yet?
@@ -1121,7 +1122,7 @@ function getRenderPos(ts) {
 
 // ── Buddy follower ───────────────────────────────────
 // Each step the buddy slides onto the tile the player just vacated.
-function petFollow(tx, ty, ts) {
+function petFollow(tx, ty, ts, dur) {
   if (activePet == null) return;
   const cur = getPetRenderPos(ts);
   petFromPx.x = cur.x;
@@ -1129,13 +1130,14 @@ function petFollow(tx, ty, ts) {
   if (tx > petX) petFacing = 1;        // moving right
   else if (tx < petX) petFacing = -1;  // moving left → flip; vertical keeps last facing
   petX = tx; petY = ty;
-  petMoveAnimTs = ts;
+  petMoveAnimTs  = ts;
+  petMoveAnimDur = (dur != null) ? dur : moveAnimDur;   // buddy can lag behind on long slides
 }
 
 function getPetRenderPos(ts) {
   const destX = petX * TILE_SIZE;
   const destY = petY * TILE_SIZE;
-  const mt = Math.min((ts - petMoveAnimTs) / moveAnimDur, 1);
+  const mt = Math.min((ts - petMoveAnimTs) / petMoveAnimDur, 1);
   if (mt < 1) {
     const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
     return { x: petFromPx.x + (destX - petFromPx.x) * ease,
@@ -1152,16 +1154,25 @@ function loop(ts) {
   requestAnimationFrame(loop);
 
   if (gameState === 'world') {
-    // Second half of an ice wall bounce: once the forward slide lands, slide back.
-    if (pendingReturn && ts >= pendingReturn.due) {
-      const r = pendingReturn; pendingReturn = null;
-      moveLinear = true;
-      moveAnimDur = r.dur;
-      fromPx.x = r.fromTX * TILE_SIZE; fromPx.y = r.fromTY * TILE_SIZE;
-      moveAnimTs = ts;
-      playerX = r.toX; playerY = r.toY; playerStep ^= 1;
-      // We're now facing the opposite way, so the buddy trails on the far side.
-      petFollow(r.toX + r.dx, r.toY + r.dy, ts);
+    // Second half of an ice wall bounce, in two beats:
+    //   1) the player reaches the wall and slides straight back to the start,
+    //   2) the buddy — which slid to the same wall point a touch later — turns
+    //      and follows us back, again landing slightly after.
+    if (pendingReturn) {
+      const r = pendingReturn;
+      if (!r.playerTurned && ts >= r.due) {
+        r.playerTurned = true;
+        moveLinear = true;
+        moveAnimDur = r.dur;
+        fromPx.x = r.fromTX * TILE_SIZE; fromPx.y = r.fromTY * TILE_SIZE;
+        moveAnimTs = ts;
+        playerX = r.toX; playerY = r.toY; playerStep ^= 1;
+      }
+      if (ts >= r.petDue) {
+        pendingReturn = null;
+        // We're now facing the opposite way, so the buddy trails on the far side.
+        petFollow(r.toX + r.dx, r.toY + r.dy, ts, r.dur + r.lag);
+      }
     }
     if (ts - lastMoveTs >= MOVE_INTERVAL) {
       let moved = false;
@@ -1375,10 +1386,13 @@ function move(dx, dy, ts) {
       fromPx.x = cur0.x; fromPx.y = cur0.y;
       moveAnimTs = ts;
       playerX = nx; playerY = ny; playerStep ^= 1;
-      petFollow(nx - dx, ny - dy, ts);                  // buddy slides forward, one behind
+      const lag = Math.round(MOVE_ANIM_MS * 0.8);        // buddy lands just after us
+      petFollow(nx, ny, ts, dur + lag);                  // buddy slides to the SAME wall point
       setTimeout(() => beep(150, 0.08, 0.16, 'square'), dur);   // bonk at the wall
-      pendingReturn = { fromTX: nx, fromTY: ny, toX: startX, toY: startY, dx, dy, dur, due: ts + dur };
-      slideLockUntil = ts + 2 * dur;
+      pendingReturn = { fromTX: nx, fromTY: ny, toX: startX, toY: startY,
+                        dx, dy, dur, lag, due: ts + dur, petDue: ts + dur + lag,
+                        playerTurned: false };
+      slideLockUntil = ts + 2 * dur + 2 * lag;
       return;
     }
   }
