@@ -1816,10 +1816,21 @@ function drawCharField(key, dir, cx, py, H) {
   if (single) { drawCharSprite(single, cx, py, H); return true; }
   return false;
 }
+// A soft little drop-shadow at an entity's feet so it pops off the ground.
+function drawShadow(centerX, footY, rx, alpha = 0.22) {
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(centerX, footY, rx, rx * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawCollectibleE(c, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
   const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = c.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 5, 8);
   ctx.textAlign = 'center';
   ctx.font = '12px serif'; ctx.fillText('✨', px, py - 10 + bob);
   ctx.font = '20px serif'; ctx.fillText(c.emoji, px, py + 18 + bob);
@@ -1827,6 +1838,7 @@ function drawCollectibleE(c, ts) {
 function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = n.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
   if (n.art && drawCharField(n.art, 'down', px, py, 42)) return;
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
@@ -1835,6 +1847,7 @@ function drawRocketE(r, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
   const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = r.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
   ctx.textAlign = 'center';
   if (rocketDefeated.has(r.bird)) {
     const bird = POKEMON_DATA.find(p => p.id === r.bird);
@@ -1859,6 +1872,7 @@ function drawRoamerE(r, ts) {
   const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
   const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = r.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
   ctx.textAlign = 'center'; ctx.font = '13px serif';
   ctx.fillText('✨', px - 14, py + 4 + bob);
   ctx.fillText('✨', px + 14, py - 2 - bob);
@@ -2187,6 +2201,7 @@ function drawPet(ts) {
   if (!poke || !caughtIds.has(poke.id)) return;
   const rp = getPetRenderPos(ts);
   const px = rp.x - camX, py = rp.y - camY;
+  drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 12);
   const img = canvasSprite(poke);
   if (img.complete && img.naturalWidth) {
     // Oversized (taller than a tile) so the buddy reads clearly.
@@ -2370,6 +2385,7 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
 }
 
 function drawPlayer(px, py) {
+  drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 11);
   // Explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
   if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 38)) return;
   const rows   = PLAYER_SPRITE[playerDir];
