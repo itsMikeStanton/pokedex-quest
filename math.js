@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.8';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.9';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -144,6 +144,16 @@ function bindEvents() {
   document.querySelectorAll('#coach-pika, .buddy-pika').forEach(el => {
     el.addEventListener('click', () => pikaDance(el));
   });
+
+  // a little sound on every button press (answer buttons keep their own sound)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn || btn.classList.contains('choice-btn')) return;
+    wakeAudio();
+    if (btn.matches('#mode-back, #dex-back, #quiz-quit, #reset-btn'))      sfx('back');
+    else if (btn.matches('#start-btn, .mode-btn, #result-again'))          sfx('select');
+    else                                                                   sfx('tap');
+  }, true);
 }
 
 // ═══════════════════════════════════════════════════
@@ -583,6 +593,7 @@ const SFX_VERSION = '2.7';     // audio files unchanged → keep their cache key
 const SFX_FILES = {
   correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
   catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',
+  tap:     'sfx/tap.wav',     select:'sfx/select.wav', back:   'sfx/back.wav',
 };
 const sfxEl = {};         // name -> one HTMLAudioElement
 let sfxReady = false;
