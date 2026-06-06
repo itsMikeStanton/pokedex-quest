@@ -78,6 +78,17 @@
       </div>
     </div>
     <div class="panel">
+      <h2>Décor (furniture)</h2>
+      <div class="tools">
+        <button class="btn" id="t-decor">🛋️ Place</button>
+        <button class="btn" id="t-derase">🧹 Erase</button>
+        <label style="margin-left:6px"><input type="checkbox" id="dc-solid"> solid</label>
+      </div>
+      <div class="row" style="margin-top:6px"><span class="hint" id="dc-sel">Pick a prop below, then Place on the map.</span></div>
+      <div id="decor-cats"></div>
+      <div class="palette" id="decor-palette" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px"></div>
+    </div>
+    <div class="panel">
       <h2>World file</h2>
       <div class="tools">
         <button class="btn go" id="copy-json">📋 Copy world.js</button>
@@ -170,6 +181,7 @@
 </section>
 
 <script src="world.js"></script>
+<script src="decor.js"></script>
 <script>
 const TILES = [
   { id:0, name:'Path',  color:'#d0b068' }, { id:1, name:'Grass', color:'#38b038' },
@@ -180,6 +192,7 @@ const TILES = [
   { id:10, name:'Cave', color:'#34313f' }, { id:11, name:'Cave Door', color:'#15131f' },
   { id:12, name:'House',  color:'#c0432f' }, { id:13, name:'Floor', color:'#caa472' },
   { id:14, name:'Wall',   color:'#8a6a4a' }, { id:15, name:'Door',  color:'#5a8acb' },
+  { id:16, name:'Hospital', color:'#e8403a' }, { id:17, name:'Gym', color:'#7a5230' },
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
 const TREE = 2, CAVE = 10, CAVE_DOOR = 11, BOULDER = 9;
@@ -190,12 +203,14 @@ const DIRS = ['north', 'south', 'east', 'west'];
 const LS_KEY = 'lukeymon_world_v1';
 
 let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = true, painting = false;
+let decorSel = null, decorSolid = false;       // selected décor prop + whether placed props block movement
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; return; } } catch (_) {}
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; return; } } catch (_) {}
   world = clone(WORLD);
   if (!world.portals) world.portals = [];
+  if (!world.decor) world.decor = {};
 }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
 function zone() { return world.zones[zi]; }
@@ -252,8 +267,11 @@ function render() {
     else if (t === 9) { ctx.fillStyle='#9a9aa6'; ctx.beginPath(); ctx.arc(c*cell+cell*0.4, r*cell+cell*0.4, cell*0.18, 0, 7); ctx.fill(); }
     else if (t === CAVE_DOOR) { ctx.font=(cell*0.66)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🕳️', c*cell+cell/2, r*cell+cell/2); }
     else if (t === CAVE) { ctx.fillStyle='#52505e'; ctx.fillRect(c*cell+cell*0.3, r*cell+cell*0.55, 2, 2); ctx.fillRect(c*cell+cell*0.6, r*cell+cell*0.3, 2, 2); }
+    else if (t === 16) { ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏥', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === 17) { ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🥊', c*cell+cell/2, r*cell+cell/2); }
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(c*cell+.5, r*cell+.5, cell, cell);
   }
+  drawDecor(z);
   if (overlays) {
     ctx.lineWidth = 2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=(cell*0.5)+'px serif';
     openingCells().forEach((b, key) => { const [x,y] = key.split(',').map(Number);
@@ -279,6 +297,8 @@ function cellAt(ev) {
 }
 function applyAt(x, y) {
   const z = zone(), g = gridOf(z);
+  if (tool === 'decor')  { placeDecor(x, y); return; }
+  if (tool === 'derase') { eraseDecor(x, y); return; }
   if (tool === 'pick') { sel = g[y][x]; renderPalette(); return; }
   if (tool === 'fill') { flood(x, y, g[y][x], sel); return; }
   const off = Math.floor(brush/2);
@@ -298,6 +318,69 @@ function flood(x, y, from, to) {
 canvas.addEventListener('pointerdown', e => { const c=cellAt(e); if(!c) return; painting=true; applyAt(c.x,c.y); render(); });
 canvas.addEventListener('pointermove', e => { if(!painting) return; const c=cellAt(e); if(!c) return; applyAt(c.x,c.y); render(); });
 window.addEventListener('pointerup', () => { if (painting) { painting=false; save(); } });
+
+// ── décor (furniture) layer ─────────────────────────────────────
+const _edImg = {};
+function edImg(key) {
+  let i = _edImg[key];
+  if (!i) { i = new Image(); i.onload = render; i.src = 'art/interior/' + key + '.png'; _edImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+function decorList(z) { world.decor = world.decor || {}; return (world.decor[z.id] = world.decor[z.id] || []); }
+function drawDecor(z) {
+  decorList(z).forEach(d => {
+    const img = edImg(d.s), cx = d.x*cell + cell/2, by = (d.y+1)*cell;
+    if (img) {
+      const s = Math.min(cell/img.naturalWidth, cell/img.naturalHeight);
+      const w = img.naturalWidth*s, h = img.naturalHeight*s;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, cx - w/2, by - h, w, h);
+    } else { ctx.fillStyle = '#caa'; ctx.fillRect(d.x*cell+cell*0.3, d.y*cell+cell*0.3, cell*0.4, cell*0.4); }
+    if (d.solid) { ctx.strokeStyle='#ff5050'; ctx.lineWidth=1; ctx.strokeRect(d.x*cell+1.5, d.y*cell+1.5, cell-3, cell-3); }
+  });
+}
+function placeDecor(x, y) {
+  if (!decorSel) return;
+  const list = decorList(zone()), i = list.findIndex(d => d.x===x && d.y===y);
+  const obj = decorSolid ? {x,y,s:decorSel,solid:1} : {x,y,s:decorSel};
+  if (i>=0) list[i] = obj; else list.push(obj);
+}
+function eraseDecor(x, y) {
+  const list = decorList(zone()), i = list.findIndex(d => d.x===x && d.y===y);
+  if (i>=0) list.splice(i,1);
+}
+function renderDecorPalette() {
+  const cats = document.getElementById('decor-cats');
+  if (typeof DECOR_CATALOG === 'undefined') { cats.textContent = 'decor.js not loaded — run from a web server.'; return; }
+  const groups = DECOR_CATALOG.groups, labels = DECOR_CATALOG.labels;
+  if (!cats.dataset.init) {
+    cats.dataset.init = '1'; cats.className = 'tools'; cats.style.flexWrap='wrap'; cats.style.marginBottom='6px';
+    cats._cur = Object.keys(groups)[0];
+    Object.keys(groups).forEach((g, idx) => {
+      const b = document.createElement('button'); b.className='btn'+(idx?'':' on'); b.textContent = labels[g]||g;
+      b.onclick = () => { cats._cur = g; Array.from(cats.children).forEach(c=>c.classList.toggle('on', c===b)); fillDecorSwatches(g); };
+      cats.appendChild(b);
+    });
+  }
+  fillDecorSwatches(cats._cur);
+}
+function fillDecorSwatches(g) {
+  const pal = document.getElementById('decor-palette'); pal.innerHTML='';
+  (DECOR_CATALOG.groups[g]||[]).forEach(key => {
+    const b = document.createElement('div');
+    b.className = 'swatch' + (key===decorSel?' sel':'');
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:46px;background:#1a1a26';
+    b.title = key;
+    const im = document.createElement('img'); im.src='art/interior/'+key+'.png';
+    im.style.cssText='max-width:42px;max-height:42px;image-rendering:pixelated';
+    b.appendChild(im);
+    b.onclick = () => { decorSel = key; tool='decor'; document.getElementById('dc-sel').textContent='Selected: '+key; syncTools(); fillDecorSwatches(g); };
+    pal.appendChild(b);
+  });
+}
+document.getElementById('t-decor').onclick  = () => { tool='decor'; syncTools(); };
+document.getElementById('t-derase').onclick = () => { tool='derase'; syncTools(); };
+document.getElementById('dc-solid').onchange = e => { decorSolid = e.target.checked; };
 
 // ── UI: tabs, palette, tools ────────────────────────────────────
 function renderTabs() {
@@ -327,7 +410,7 @@ function renderPalette() {
   });
 }
 function syncTools() {
-  ['paint','fill','pick'].forEach(t => document.getElementById('t-'+t).classList.toggle('on', tool===t));
+  ['paint','fill','pick','decor','derase'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
 }
 document.getElementById('t-paint').onclick = () => { tool='paint'; syncTools(); };
 document.getElementById('t-fill').onclick  = () => { tool='fill'; syncTools(); };
@@ -519,7 +602,14 @@ function exportText() {
   world.zones.forEach((z, i, arr) => {
     s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
   });
-  s += '  },\n};\n';
+  s += '  },\n';
+  const dz = Object.keys(world.decor || {}).filter(k => (world.decor[k] || []).length);
+  if (dz.length) {
+    s += '  decor: {\n';
+    dz.forEach((k, i) => { s += `    "${k}": [` + world.decor[k].map(d => JSON.stringify(d)).join(', ') + ']' + (i < dz.length-1 ? ',' : '') + '\n'; });
+    s += '  },\n';
+  }
+  s += '};\n';
   return s;
 }
 document.getElementById('copy-json').onclick = () => { navigator.clipboard.writeText(exportText()); flash('copy-json','Copied!'); };
@@ -534,7 +624,7 @@ document.getElementById('import-json').onclick = () => {
   let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
   if (i<0||j<i) return alert('No object found.');
   try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
-    world = w; if (!world.portals) world.portals = []; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
   } catch (err) { alert('Parse error: ' + err.message); }
 };
 function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }
@@ -735,7 +825,7 @@ document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aSc
 
 // ── boot ────────────────────────────────────────────────────────
 function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); render(); }
-loadWorld(); ensureCoords(); renderPalette(); syncTools(); refresh();
+loadWorld(); ensureCoords(); renderPalette(); renderDecorPalette(); syncTools(); refresh();
 </script>
 </body>
 </html>

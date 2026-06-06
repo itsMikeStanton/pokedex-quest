@@ -13,7 +13,7 @@ const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11, HOUSE: 12, FLOOR: 13, WALL: 14, DOOR: 15 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11, HOUSE: 12, FLOOR: 13, WALL: 14, DOOR: 15, HOSPITAL: 16, GYM: 17 };
 
 // ═══════════════════════════════════════════════════
 // ZONE MAPS
@@ -210,6 +210,7 @@ const COLLECTIBLES = [
   { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', name: 'Glacier Badge' },
   { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', name: 'Dune Badge' },
   // Awarded automatically — not placed in the world.
+  { id: 'badge_gym',  auto: true, emoji: '🥊', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
   { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
 ];
 
@@ -281,6 +282,28 @@ const NPCS = [
   { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Poké Mart!'] },
   { zone: 10, x: 2, y: 2, emoji: '🧴', name: 'Shelf',  gift: 0, lines: ['Shelves stocked with Potions and gear.'] },
   { zone: 10, x: 8, y: 2, emoji: '🎒', name: 'Rack',   gift: 0, lines: ['Bags and balls, neatly racked.'] },
+
+  // ── Inside the Pokémon Hospital (zone 11) ──
+  // Resting gives a daily bundle of free PokéBalls (your team has no HP to heal).
+  { zone: 11, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Nurse Joy', gift: 0, lines: () => {
+    const today = todayKey();
+    if (lastHeal !== today) {
+      lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      return ['Welcome to the Pokémon Hospital! 💗',
+              'Your Lukéymon look wonderfully happy and rested.',
+              `Here — take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
+    }
+    return ['Welcome back! Your Lukéymon are happy and well. 💗',
+            'Come see me again tomorrow for more free PokéBalls!'];
+  } },
+  { zone: 11, x: 1, y: 1, emoji: '🪑', name: 'Waiting Bench', gift: 0, lines: ['A comfy bench for resting trainers.'] },
+
+  // ── Inside the Gym (zone 12) ──
+  { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', gift: 0, gymLeader: true,
+    leaderName: 'Leader Rocky', battleEmoji: '🥋', lineup: [74, 75, 95],   // Geodude → Graveler → Onix
+    lines: () => collected.has('badge_gym')
+      ? [`Good to see you again, ${saveName}!`, 'That Rumble Badge looks great on you. Keep training!']
+      : ['So you want to challenge my Gym, eh?', 'Bring it on!'] },
 ];
 
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
@@ -481,6 +504,9 @@ let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
+let lastHeal  = '';                // date key of the last free Hospital rest (daily PokéBalls)
+const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the Hospital
+function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
 let pendingGift = 0;               // coins held back for the end-of-conversation reveal
 let knownTips = new Set();         // ids of field-notes tips the player has discovered
@@ -630,6 +656,24 @@ function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _s
 const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png?v=' + ART_V; return i; })();
 function houseArtImg() { return (_houseImg.complete && _houseImg.naturalWidth) ? _houseImg : null; }
 
+// ── Interior décor props (furniture sliced from the building art sheet) ──
+// Placements live in WORLD.decor: { "<zoneId>": [ {x,y,s:spriteKey,solid?}, … ] }.
+const DECOR        = WORLD.decor || {};
+const DECOR_SCALE  = 0.5;     // sliced props are ~2× a tile; halve to sit nicely in a room
+const _decorImg = {};
+function decorImg(key) {
+  let i = _decorImg[key];
+  if (!i) { i = new Image(); i.src = 'art/interior/' + key + '.png?v=' + ART_V; _decorImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+// Solid props block movement (counters, beds…). Cached per zone as an "x,y" set.
+const _decorSolid = {};
+function decorSolidAt(zone, x, y) {
+  let s = _decorSolid[zone];
+  if (!s) { s = _decorSolid[zone] = new Set(); (DECOR[zone] || []).forEach(d => { if (d.solid) s.add(d.x + ',' + d.y); }); }
+  return s.has(x + ',' + y);
+}
+
 // Oversized building sprites (transparent bg), drawn on top of their ground tile and
 // extending upward so a 1-tile entrance reads as a full-size building.
 const buildingSprites = {};
@@ -641,6 +685,33 @@ function makeCanvas(w, h) {
 function buildBuildingSprites() {
   { const [c, x] = makeCanvas(54, 58); paintHouseBig(x); buildingSprites[T.HOUSE] = c; }
   { const [c, x] = makeCanvas(54, 58); paintShopBig(x);  buildingSprites[T.SHOP]  = c; }
+  { const [c, x] = makeCanvas(54, 60); paintHospitalBig(x); buildingSprites[T.HOSPITAL] = c; }
+  { const [c, x] = makeCanvas(54, 60); paintGymBig(x);      buildingSprites[T.GYM]      = c; }
+}
+function paintHospitalBig(x) {
+  x.fillStyle = '#f4f4f8'; x.fillRect(5, 22, 44, 34);               // clean white body
+  x.fillStyle = '#d8d8e2'; x.fillRect(5, 22, 44, 4);               // body shade
+  x.fillStyle = '#e8403a'; x.fillRect(2, 12, 50, 12);             // red roof band
+  x.fillStyle = '#c0322c'; x.fillRect(2, 22, 50, 3);
+  x.fillStyle = '#fff';                                            // white cross sign
+  x.fillRect(24, 13, 6, 10); x.fillRect(21, 16, 12, 4);
+  x.fillStyle = '#bfe4ff'; x.fillRect(10, 30, 11, 10); x.fillRect(33, 30, 11, 10);  // windows
+  x.fillStyle = '#7aa6c8'; x.fillRect(10, 30, 11, 2); x.fillRect(33, 30, 11, 2);
+  x.fillStyle = '#8a6a4a'; x.fillRect(22, 40, 10, 16);            // doors
+  x.fillStyle = '#6b4423'; x.fillRect(27, 40, 1, 16);
+  x.fillStyle = '#e8d24a'; x.fillRect(24, 48, 2, 2);
+}
+function paintGymBig(x) {
+  x.fillStyle = '#7a5230'; x.fillRect(5, 22, 44, 34);              // sturdy timber body
+  x.fillStyle = '#5e3f24'; x.fillRect(5, 22, 44, 4);
+  x.fillStyle = '#9a6a3a'; for (let i = 8; i < 49; i += 8) x.fillRect(i, 26, 1, 30); // plank seams
+  x.fillStyle = '#454552'; x.beginPath(); x.moveTo(1, 24); x.lineTo(27, 6); x.lineTo(53, 24); x.closePath(); x.fill(); // grey roof
+  x.fillStyle = '#33333e'; x.beginPath(); x.moveTo(1, 24); x.lineTo(53, 24); x.lineTo(53, 27); x.lineTo(1, 27); x.closePath(); x.fill();
+  x.fillStyle = '#f0d24a'; x.fillRect(20, 30, 14, 8);             // gym banner
+  x.fillStyle = '#c89a18'; x.font = '9px serif'; x.textAlign = 'center'; x.fillText('🥊', 27, 37); x.textAlign = 'left';
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);           // big doors
+  x.fillStyle = '#54381c'; x.fillRect(27, 40, 1, 16);
+  x.fillStyle = '#e8d24a'; x.fillRect(24, 48, 2, 2);
 }
 function paintHouseBig(x) {
   x.fillStyle = '#d8b48a'; x.fillRect(6, 26, 42, 30);                 // body
@@ -1410,7 +1481,8 @@ function move(dx, dy, ts) {
   if (npc) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    if (npc.shop) openShop();      // the Poké Mart clerk runs the shop
+    if (npc.gymLeader && !collected.has('badge_gym')) startGymBattle(npc);  // challenge → battle
+    else if (npc.shop) openShop();  // the Poké Mart clerk runs the shop
     else talkNPC(npc);
     return;
   }
@@ -1430,9 +1502,22 @@ function move(dx, dy, ts) {
   // Buildings & cave mouths are solid except from directly below — you must walk
   // UP into the door (dy === -1). Approaching from a side or the top bounces off.
   // (Only on the overworld; interior/cave exit doors are unrestricted.)
-  const isEntrance = tile === T.HOUSE || tile === T.SHOP || tile === T.CAVE_ENTRANCE;
-  if (isEntrance && dy !== -1 &&
-      !ZONE_INFO[currentZone].interior && !ZONE_INFO[currentZone].cave) {
+  const isEntrance = tile === T.HOUSE || tile === T.SHOP || tile === T.HOSPITAL ||
+                     tile === T.GYM || tile === T.CAVE_ENTRANCE;
+  if (isEntrance && !ZONE_INFO[currentZone].interior && !ZONE_INFO[currentZone].cave) {
+    // Enterable buildings & cave mouths have a portal — pass only when walking UP
+    // into the door (dy === -1). Decorative buildings (no portal) are solid all round.
+    const enterable = !!portalAt(currentZone, nx, ny);
+    if (!enterable || dy !== -1) {
+      bumpVec    = { dx, dy };
+      bumpAnimTs = ts;
+      beep(160, 0.07, 0.1, 'square');
+      return;
+    }
+  }
+
+  // Solid décor (counters, beds…) blocks movement just like an obstacle tile.
+  if (decorSolidAt(currentZone, nx, ny)) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     beep(160, 0.07, 0.1, 'square');
@@ -1453,7 +1538,8 @@ function move(dx, dy, ts) {
       const ux = nx + dx, uy = ny + dy;
       if (ux < 0 || ux >= mc || uy < 0 || uy >= mr) break;
       const ut = MAPS[currentZone][uy][ux];
-      if (isObstacleTile(ut) || ut === T.HOUSE || ut === T.SHOP || ut === T.CAVE_ENTRANCE) break;
+      if (isObstacleTile(ut) || ut === T.HOUSE || ut === T.SHOP || ut === T.HOSPITAL || ut === T.GYM || ut === T.CAVE_ENTRANCE) break;
+      if (decorSolidAt(currentZone, ux, uy)) break;
       if (npcAt(currentZone, ux, uy) || lairAt(currentZone, ux, uy) || roamerAt(currentZone, ux, uy)) break;
       nx = ux; ny = uy;
     }
@@ -2081,8 +2167,10 @@ function drawWorld(ts) {
       const t = map[r][c];
       // A structure (building, or a tree we have art for) sits on grass; its body is
       // drawn later in the depth pass. Everything else just uses its own tile art.
-      const isStruct = t === T.HOUSE || t === T.SHOP || (t === T.TREE && treeArtImg(currentZone));
-      const groundId = isStruct ? T.GRASS : t;
+      const isBuild = t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
+      const isStruct = isBuild || (t === T.TREE && treeArtImg(currentZone));
+      const groundId = isBuild ? (ZONE_INFO[currentZone].base === T.CITY ? T.CITY : T.GRASS)
+                               : (isStruct ? T.GRASS : t);
       const cnt = TILE_ART[currentZone] && TILE_ART[currentZone][groundId];
       const dx = c * TILE_SIZE - camX, dy = r * TILE_SIZE - camY;
       let drew = false;
@@ -2117,8 +2205,16 @@ function drawWorld(ts) {
       const t = map[r][c];
       if (t === T.HOUSE) { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 62 : 58); }
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 62 : 58); }
+      else if (t === T.HOSPITAL) { pushStruct(sprites, buildingSprites[T.HOSPITAL], c, r, 60); }
+      else if (t === T.GYM)      { pushStruct(sprites, buildingSprites[T.GYM],      c, r, 60); }
       else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, 54); }
     }
+  }
+  // Interior décor props (furniture) — y-sorted like structures so the player
+  // walks correctly behind/in front of them.
+  for (const d of (DECOR[currentZone] || [])) {
+    const img = decorImg(d.s);
+    if (img) pushStruct(sprites, img, d.x, d.y, Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE)));
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
@@ -2988,6 +3084,36 @@ function startRocketBattle(rkt) {
     onWin: () => { rocketDefeated.add(rkt.bird); saveGame(); showBattleWin('💥 Team Rocket blasts off again!', `Face ${bird.name} ▶`, true, () => startBirdBattle(rkt.bird)); },
     onLose: () => bossFlee({ name: rkt.name }, 'TEAM ROCKET WINS!', '“Better luck next time, twerp!” Come back when you are ready.'),
   });
+}
+
+// Gym Leader — sends out a themed lineup (one per round); counter each type to win
+// the Rumble Badge plus a bundle of coins & balls.
+const GYM_BADGE_BALLS = 5;
+const GYM_BADGE_COINS = 30;
+function startGymBattle(leader) {
+  const lineup = leader.lineup || [74, 75, 95];
+  currentLegend = null;
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: `GYM · ${leader.leaderName}`, emoji: leader.battleEmoji || '🥋',
+    rounds: lineup.length, rule: 'beats',
+    grunt: leader.leaderName, lineup, foeEmoji: leader.battleEmoji || '🥋',
+    motto: `<b>${leader.leaderName} wants to battle!</b><br>“Show me the bond you share with your Lukéymon!”`,
+    intro: () => rocketIntro(),
+    onWin: () => awardGymBadge(leader),
+    onLose: () => bossFlee({ name: leader.leaderName }, 'GYM DEFENDED!', '“Train up and challenge me again!”'),
+  });
+}
+function awardGymBadge(leader) {
+  const first = !collected.has('badge_gym');
+  if (first) collected.add('badge_gym');
+  balls += GYM_BADGE_BALLS; coins += GYM_BADGE_COINS;
+  saveGame(); updateHud();
+  const badge = COLLECTIBLES.find(c => c.id === 'badge_gym');
+  showBattleWin(
+    `🏆 Victory! +${GYM_BADGE_BALLS} Balls, +${GYM_BADGE_COINS} coins`,
+    first ? 'Claim the Badge ✓' : 'Nice! ✓', true,
+    () => { if (first) celebrateBadge(badge); else showScreen('world'); });
 }
 
 // Show the grunt + their Team Rocket motto, then begin the rounds on tap.
@@ -4183,6 +4309,7 @@ function saveGame() {
       balls,
       masterBalls,
       coins,
+      lastHeal,
     }));
   } catch (_) {}
 }
@@ -4214,6 +4341,7 @@ function loadSlot(n) {
       balls = data.balls ?? 12;
       masterBalls = data.masterBalls ?? 0;
       coins = data.coins ?? 0;
+      lastHeal = data.lastHeal || '';
       activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
