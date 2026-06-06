@@ -2153,13 +2153,18 @@ function updateCamera(renderPos) {
 }
 
 // ═══════════════════════════════════════════════════
-// WEATHER / TIME-OF-DAY OVERLAYS  (preview toggles: N = night, R = rain)
+// WEATHER / TIME-OF-DAY OVERLAYS
 // ═══════════════════════════════════════════════════
-let nightMode = false, rainMode = false, rainDrops = [];
+// A day↔night cycle runs on its own (fades through dusk/dawn); rain drifts in
+// and out at random, except where a zone forces it ("rain") or forbids it
+// ("norain"). Debug toggles can force night/rain for previewing.
+const DAYNIGHT_CYCLE_MS = 600000;   // full cycle ≈ 5 min day / 5 min night — tweak here
+let nightMode = false, rainMode = false, nightCycle = true, rainDrops = [];
+let rainLevel = 0, rainTarget = 0, _rainNext = 0, _rainLastTs = 0;
 
 // A player-centred "lantern" light field — the same mechanic as the cave darkness,
-// reused for night & rain so you keep a visible bubble around you. A Fire/light
-// buddy widens it (buddyLightsCave), exactly like in caves.
+// reused for night so you keep a visible bubble around you. A Fire/light buddy
+// widens it (buddyLightsCave), exactly like in caves.
 function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
   const lit = buddyLightsCave();
   const flick = lit ? Math.sin(ts * 0.009) * 0.08 + Math.sin(ts * 0.02) * 0.05 : 0;
@@ -2181,24 +2186,55 @@ function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
   }
 }
 
-function drawWeather(ts, renderPos) {
-  if (ZONE_INFO[currentZone].base === T.CAVE) return;   // caves draw their own darkness
-  if (nightMode) {
-    // Same lantern logic as the cave (radius 1.3 → 4.3 with a Fire/Pikachu buddy,
-    // full-bright centre, 0.55 dim ring) — the ONLY difference is the outer night
-    // isn't pitch black like a cave. With no light buddy it's a uniform dark night.
-    if (buddyLightsCave())
-      drawLightField(renderPos, ts, 0.0, 0.55, 0.62, '10,15,42', true, 1.3, 4.3);
-    else
-      { ctx.fillStyle = 'rgba(10,15,42,0.62)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+// 0 = full day, 1 = full night, with smooth dusk/dawn fades.
+function autoNight(ts) {
+  const p = (ts % DAYNIGHT_CYCLE_MS) / DAYNIGHT_CYCLE_MS;
+  const smooth = t => t * t * (3 - 2 * t);
+  if (p < 0.45) return 0;                         // day
+  if (p < 0.50) return smooth((p - 0.45) / 0.05); // dusk
+  if (p < 0.95) return 1;                         // night
+  return 1 - smooth((p - 0.95) / 0.05);           // dawn
+}
+
+// Roaming rain: occasionally starts/stops on its own and fades smoothly.
+function updateRainState(ts) {
+  if (!_rainLastTs) _rainLastTs = ts;
+  const dt = Math.min(120, ts - _rainLastTs); _rainLastTs = ts;
+  if (ts > _rainNext) {
+    _rainNext = ts + 15000;                       // reconsider every 15s
+    if (rainTarget < 0.5) { if (Math.random() < 0.06) rainTarget = 1; }  // starts now and then
+    else { if (Math.random() < 0.12) rainTarget = 0; }                   // showers last a few minutes
   }
-  const raining = rainMode || ZONE_INFO[currentZone].weather === 'rain';
-  if (raining) {
-    drawLightField(renderPos, ts, 0.0, 0.05, 0.12, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
-    drawRain(ts);
+  rainLevel += Math.sign(rainTarget - rainLevel) * Math.min(Math.abs(rainTarget - rainLevel), 0.0004 * dt);
+}
+function zoneRain() {
+  const w = ZONE_INFO[currentZone].weather;
+  if (w === 'rain')   return 1;    // always (Dark Forest)
+  if (w === 'norain') return 0;    // never  (Volcano)
+  return rainLevel;                // elsewhere: the roaming weather
+}
+
+function drawWeather(ts, renderPos) {
+  updateRainState(ts);                            // weather keeps evolving everywhere…
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return;    // …but the sky only shows outdoors
+
+  // ── Time of day ──  (cave-identical lantern when lit; only the outer night is lighter)
+  const nf = nightMode ? 1 : (nightCycle ? autoNight(ts) : 0);
+  if (nf > 0.01) {
+    if (buddyLightsCave())
+      drawLightField(renderPos, ts, 0.0, 0.55 * nf, 0.62 * nf, '10,15,42', true, 1.3, 4.3);
+    else { ctx.fillStyle = `rgba(10,15,42,${0.62 * nf})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  }
+
+  // ── Rain ──
+  const rf = rainMode ? 1 : zoneRain();
+  if (rf > 0.01) {
+    drawLightField(renderPos, ts, 0.0, 0.05 * rf, 0.12 * rf, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
+    drawRain(ts, rf);
   }
 }
-function drawRain(ts) {
+function drawRain(ts, rf) {
   const W = canvas.width, H = canvas.height;
   if (!rainDrops.length || rainDrops._w !== W || rainDrops._h !== H) {
     rainDrops = []; rainDrops._w = W; rainDrops._h = H;
@@ -2206,7 +2242,7 @@ function drawRain(ts) {
     for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 9 + Math.random() * 12, s: 9 + Math.random() * 7 });
   }
   ctx.save();
-  ctx.strokeStyle = 'rgba(190,210,245,0.55)'; ctx.lineWidth = 1.1;
+  ctx.strokeStyle = `rgba(190,210,245,${0.55 * rf})`; ctx.lineWidth = 1.1;
   const slant = 2.2;
   ctx.beginPath();
   for (const d of rainDrops) {
@@ -2218,7 +2254,7 @@ function drawRain(ts) {
   ctx.stroke();
   ctx.restore();
 }
-// Console helpers too, in case you'd rather flip them from devtools.
+// Console/debug helpers — force night or rain on/off for previewing.
 function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return nightMode; }
 function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  return rainMode; }
 
@@ -4897,8 +4933,9 @@ function setupDebugMenu() {
     sync();
     p.appendChild(b);
   };
-  toggleBtn('🌙 Night', () => nightMode, v => { nightMode = v; });
-  toggleBtn('🌧️ Rain',  () => rainMode,  v => { rainMode  = v; });
+  toggleBtn('🔁 Day/Night cycle', () => nightCycle, v => { nightCycle = v; });
+  toggleBtn('🌙 Force night', () => nightMode, v => { nightMode = v; });
+  toggleBtn('🌧️ Force rain',  () => rainMode,  v => { rainMode  = v; });
 
   section('MISC');
   btn('Clear NPC visits', () => { metNPCs.clear(); });
