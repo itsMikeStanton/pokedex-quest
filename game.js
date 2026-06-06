@@ -624,7 +624,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '3';   // bump to bust the image cache when art files change
+const ART_V = '4';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -2156,33 +2156,54 @@ function updateCamera(renderPos) {
 // WEATHER / TIME-OF-DAY OVERLAYS  (preview toggles: N = night, R = rain)
 // ═══════════════════════════════════════════════════
 let nightMode = false, rainMode = false, rainDrops = [];
-function drawWeather(ts) {
-  if (ZONE_INFO[currentZone].base === T.CAVE) return;   // caves do their own darkness
-  if (nightMode) drawNight();
-  if (rainMode)  drawRain(ts);
+
+// A player-centred "lantern" light field — the same mechanic as the cave darkness,
+// reused for night & rain so you keep a visible bubble around you. A Fire/light
+// buddy widens it (buddyLightsCave), exactly like in caves.
+function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
+  const lit = buddyLightsCave();
+  const flick = lit ? Math.sin(ts * 0.009) * 0.08 + Math.sin(ts * 0.02) * 0.05 : 0;
+  const R = (lit ? litR : baseR) + flick;
+  const pcx = renderPos.x - camX + TILE_SIZE / 2, pcy = renderPos.y - camY + TILE_SIZE / 2;
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const startC = Math.max(0, Math.floor(camX / TILE_SIZE)), endC = Math.min(cols, startC + 22);
+  const startR = Math.max(0, Math.floor(camY / TILE_SIZE)), endR = Math.min(rows, startR + 16);
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      const dxp = (c * TILE_SIZE - camX + TILE_SIZE / 2) - pcx;
+      const dyp = (r * TILE_SIZE - camY + TILE_SIZE / 2) - pcy;
+      const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R;
+      const a = edge <= 0 ? near : edge <= 1.0 ? dim : far;
+      const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
+      if (a > 0) { ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+      else if (warm && lit) { ctx.fillStyle = 'rgba(255,168,70,0.07)'; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+    }
+  }
 }
-function drawNight() {
-  const W = canvas.width, H = canvas.height;
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';            // darken + cool the whole scene
-  ctx.fillStyle = '#44568c'; ctx.fillRect(0, 0, W, H);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(8,12,34,0.30)'; ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.72);
-  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,22,0.5)');   // soft vignette
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.restore();
+
+function drawWeather(ts, renderPos) {
+  if (ZONE_INFO[currentZone].base === T.CAVE) return;   // caves draw their own darkness
+  if (nightMode) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';           // cool the whole scene to night-blue
+    ctx.fillStyle = '#44568c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    drawLightField(renderPos, ts, 0.05, 0.30, 0.52, '6,10,32', true, 3.0, 6.0);   // good darkness + lantern bubble
+  }
+  if (rainMode) {
+    drawLightField(renderPos, ts, 0.0, 0.05, 0.12, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
+    drawRain(ts);
+  }
 }
 function drawRain(ts) {
   const W = canvas.width, H = canvas.height;
   if (!rainDrops.length || rainDrops._w !== W || rainDrops._h !== H) {
     rainDrops = []; rainDrops._w = W; rainDrops._h = H;
-    const n = Math.round(W * H / 8000);
-    for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 8 + Math.random() * 10, s: 7 + Math.random() * 6 });
+    const n = Math.round(W * H / 2000);     // plenty of drops — a real downpour
+    for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 9 + Math.random() * 12, s: 9 + Math.random() * 7 });
   }
   ctx.save();
-  ctx.fillStyle = 'rgba(40,52,74,0.20)'; ctx.fillRect(0, 0, W, H);   // overcast wash
-  ctx.strokeStyle = 'rgba(185,205,240,0.55)'; ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(190,210,245,0.55)'; ctx.lineWidth = 1.1;
   const slant = 2.2;
   ctx.beginPath();
   for (const d of rainDrops) {
@@ -2316,7 +2337,7 @@ function drawWorld(ts) {
     }
   }
 
-  drawWeather(ts);
+  drawWeather(ts, renderPos);
 }
 
 // A Jigglypuff buddy sings — emit little music notes that drift up and fade.
