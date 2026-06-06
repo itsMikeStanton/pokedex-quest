@@ -559,6 +559,7 @@ const aCanvas = document.getElementById('atlas-canvas'), aCtx = aCanvas.getConte
 function ensureCoords() {
   let cx = 0, cy = 0, rowH = 0; const MAXW = 90, PAD = 2;
   world.zones.forEach(z => {
+    if (z.interior) return;                 // building rooms aren't on the geographic atlas
     if (z.wx == null || z.wy == null) {
       if (cx + z.cols > MAXW) { cx = 0; cy += rowH + PAD; rowH = 0; }
       z.wx = cx; z.wy = cy; cx += z.cols + PAD; rowH = Math.max(rowH, z.rows);
@@ -583,7 +584,7 @@ function seamBetween(a, b) {
 }
 function allSeams() {
   const out = [];
-  const zs = world.zones.filter(z => !z.cave);   // caves are portal-linked, not edge-adjacent
+  const zs = world.zones.filter(z => !z.cave && !z.interior);   // caves & rooms are portal-linked, not edge-adjacent
   for (let i = 0; i < zs.length; i++)
     for (let j = i + 1; j < zs.length; j++) {
       const s = seamBetween(zs[i], zs[j]); if (s) out.push(s);
@@ -628,7 +629,7 @@ function makeDoorway(seam, barrier, width) {
 
 function worldBounds() {
   let w = 1, h = 1;
-  world.zones.forEach(z => { if (z.cave) return; w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
+  world.zones.forEach(z => { if (z.cave || z.interior) return; w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
   return { w: w + 4, h: h + 4 };
 }
 function renderAtlas() {
@@ -651,7 +652,7 @@ function renderAtlas() {
   });
   // zones (caves are portal-linked and not shown on the geographic atlas)
   world.zones.forEach(z => {
-    if (z.cave) return;
+    if (z.cave || z.interior) return;
     const x=z.wx*aScale, y=z.wy*aScale, w=z.cols*aScale, h=z.rows*aScale;
     aCtx.fillStyle = (COLOR[z.base] || '#555') + 'cc'; aCtx.fillRect(x,y,w,h);
     aCtx.strokeStyle = '#000'; aCtx.lineWidth = 1; aCtx.strokeRect(x+.5,y+.5,w,h);
@@ -660,7 +661,7 @@ function renderAtlas() {
   });
   // overlaps
   aCtx.lineWidth = 2;
-  const ov = world.zones.filter(z => !z.cave);
+  const ov = world.zones.filter(z => !z.cave && !z.interior);
   for (let i=0;i<ov.length;i++) for (let j=i+1;j<ov.length;j++){
     const a=ov[i],b=ov[j];
     if (overlaps(a,b)) { aCtx.strokeStyle='#ff3040';

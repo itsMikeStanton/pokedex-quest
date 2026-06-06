@@ -31,10 +31,12 @@ const EXITS = WORLD.exits;
 const PORTALS = WORLD.portals || [];
 
 // ─── Building interiors ──────────────────────────────
-// Buildings on the overworld (your home, the shop) open into their own larger
-// interior zones, linked by point-portals. Defined here so they exist before the
-// map/zone tables are built below.
+// Home & the Poké Mart are authored in world.js now (so the editor can manage
+// them). This is just a FALLBACK for an older world.js that predates them: it
+// appends the interiors at the next free ids — never the fixed 9/10 — so it can
+// never collide with zones the editor added.
 (function setupInteriors() {
+  if (WORLD.zones.some(z => z.interior)) return;     // already defined in world.js
   const F = T.FLOOR, W = T.WALL, D = T.DOOR;
   function room(cols, rows, door) {
     const m = [];
@@ -47,18 +49,20 @@ const PORTALS = WORLD.portals || [];
     m[door[1]][door[0]] = D;
     return m;
   }
-  WORLD.zones.push({ id: 9,  name: 'Home',      cols: 11, rows: 9, base: F, mapCol: null, mapRow: null, icon: '🏠', interior: true });
-  WORLD.maps[9] = room(11, 9, [5, 8]);
-  WORLD.zones.push({ id: 10, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
-  WORLD.maps[10] = room(11, 8, [5, 7]);
+  const homeId = WORLD.zones.length;
+  WORLD.zones.push({ id: homeId, name: 'Home', cols: 11, rows: 9, base: F, mapCol: null, mapRow: null, icon: '🏠', interior: true });
+  WORLD.maps[homeId] = room(11, 9, [5, 8]);
+  const martId = WORLD.zones.length;
+  WORLD.zones.push({ id: martId, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
+  WORLD.maps[martId] = room(11, 8, [5, 7]);
 
   WORLD.maps[0][6][8] = T.HOUSE;   // your home, placed in the Meadow (the shop tile already exists)
 
   WORLD.portals.push(
-    { from: 0,  fx: 8,  fy: 6, to: 9,  tx: 5,  ty: 7 },   // step on the house → inside home
-    { from: 9,  fx: 5,  fy: 8, to: 0,  tx: 8,  ty: 7 },   // home door → in front of the house
-    { from: 0,  fx: 10, fy: 5, to: 10, tx: 5,  ty: 6 },   // step on the shop → inside the mart
-    { from: 10, fx: 5,  fy: 7, to: 0,  tx: 10, ty: 6 },   // mart door → in front of the shop
+    { from: 0,      fx: 8,  fy: 6, to: homeId, tx: 5,  ty: 7 },   // step on the house → inside home
+    { from: homeId, fx: 5,  fy: 8, to: 0,      tx: 8,  ty: 7 },   // home door → in front of the house
+    { from: 0,      fx: 10, fy: 5, to: martId, tx: 5,  ty: 6 },   // step on the shop → inside the mart
+    { from: martId, fx: 5,  fy: 7, to: 0,      tx: 10, ty: 6 },   // mart door → in front of the shop
   );
 })();
 
