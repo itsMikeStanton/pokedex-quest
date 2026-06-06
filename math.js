@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.10';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.11';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -585,48 +585,54 @@ function typeColor(type) {
 }
 
 // ═══════════════════════════════════════════════════
-// SOUND — pre-rendered WAV files via <audio> elements.
-// We use HTMLAudio (not Web Audio) on purpose: on iOS the hardware mute
-// switch silences the Web Audio API but NOT media elements, so this actually
-// plays. Kept lightweight (one element per clip, unlocked once on first tap)
-// to avoid the jank the earlier many-element version had.
+// SOUND — pre-rendered WAV files played through ONE Web Audio context
+// (low latency, like desktop). To stay audible on iOS even with the ring/mute
+// switch ON, we also loop a SILENT <audio> element, which flips iOS into its
+// "playback" audio session so Web Audio output is heard.
 // ═══════════════════════════════════════════════════
-const SFX_VERSION = '2.10';     // audio files unchanged → keep their cache key
+const SFX_VERSION = '2.10';     // bump when any .wav changes
 const SFX_FILES = {
   correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
   catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',
   tap:     'sfx/tap.wav',     select:'sfx/select.wav', back:   'sfx/back.wav',
 };
-const sfxEl = {};         // name -> one HTMLAudioElement
-let sfxReady = false;
+let actx = null;
+const sfxBuf = {};        // name -> decoded AudioBuffer
+let silentEl = null;      // looping silent media element (unlocks playback session)
 
 function initSfx() {
-  for (const [name, src] of Object.entries(SFX_FILES)) {
-    const a = new Audio(`${src}?v=${SFX_VERSION}`);
-    a.preload = 'auto';
-    sfxEl[name] = a;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { actx = null; }
+  if (actx) {
+    for (const [name, src] of Object.entries(SFX_FILES)) {
+      fetch(`${src}?v=${SFX_VERSION}`)
+        .then(r => r.arrayBuffer())
+        .then(ab => new Promise((res, rej) => actx.decodeAudioData(ab, res, rej)))
+        .then(buf => { sfxBuf[name] = buf; })
+        .catch(() => {});
+    }
   }
+  silentEl = new Audio(`sfx/silence.wav?v=${SFX_VERSION}`);
+  silentEl.loop = true;
+  silentEl.preload = 'auto';
 }
 
-// First user tap: play+pause each clip (muted) so iOS unlocks them for later.
+// Call from user gestures (taps): resume the context and start the silent loop.
 function wakeAudio() {
-  if (sfxReady) return;
-  sfxReady = true;
-  if (!Object.keys(sfxEl).length) initSfx();
-  for (const name in sfxEl) {
-    const a = sfxEl[name];
-    a.muted = true;
-    const p = a.play();
-    if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; })
-                      .catch(() => { a.muted = false; });
-    else a.muted = false;
-  }
+  if (!actx) initSfx();
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  if (silentEl && silentEl.paused) { const p = silentEl.play(); if (p && p.catch) p.catch(() => {}); }
 }
 
 function sfx(name) {
-  const a = sfxEl[name];
-  if (!a) return;
-  try { a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+  const buf = sfxBuf[name];
+  if (!actx || !buf) return;
+  if (actx.state === 'suspended') actx.resume().catch(() => {});
+  try {
+    const s = actx.createBufferSource();
+    s.buffer = buf;
+    s.connect(actx.destination);
+    s.start();                    // near-zero latency
+  } catch (_) {}
 }
 
 function playCorrect()     { sfx('correct'); }

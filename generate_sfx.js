@@ -28,6 +28,10 @@ const SFX = {
   tap:    [{f:880,v:.08,d:.05,t:'triangle',s:0}],
   select: [{f:660,v:.09,d:.06,t:'triangle',s:0},{f:990,v:.09,d:.09,t:'triangle',s:.06}],
   back:   [{f:520,v:.08,d:.06,t:'triangle',s:0},{f:360,v:.08,d:.10,t:'triangle',s:.07}],
+
+  // truly silent loop — played as an <audio> to put iOS in the "playback" audio
+  // session so Web Audio is heard even with the ring/mute switch on
+  silence: [{f:1,v:0,d:0.5,t:'triangle',s:0}],
 };
 
 function wave(type, ph){ // ph in radians
@@ -43,11 +47,11 @@ function render(notes){
   for (const n of notes){
     const start = Math.floor(n.s*SR);
     const len = Math.floor(n.d*SR);
-    const k = Math.log(0.001/n.v); // exp decay exponent
+    const k = n.v > 0 ? Math.log(0.001/n.v) : 0; // exp decay exponent
     const atk = Math.floor(0.002*SR); // 2ms attack to avoid clicks
     for (let i=0;i<len;i++){
       const t = i/SR;
-      let amp = n.v*Math.exp(k*(t/n.d));
+      let amp = n.v > 0 ? n.v*Math.exp(k*(t/n.d)) : 0;
       if (i<atk) amp *= i/atk;
       const ph = 2*Math.PI*n.f*t;
       const idx = start+i;
