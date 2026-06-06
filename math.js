@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.6';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.7';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -574,54 +574,48 @@ function typeColor(type) {
 }
 
 // ═══════════════════════════════════════════════════
-// SOUND — pre-rendered WAV files (no runtime synthesis, mobile-friendly)
+// SOUND — pre-rendered WAV files played through ONE Web Audio context.
+// (Files = no runtime synthesis; single context + cheap buffer sources =
+//  smooth on mobile, unlike many <audio> elements.)
 // ═══════════════════════════════════════════════════
-const SFX_VERSION = '2.6';     // cache-bust the audio files too
+const SFX_VERSION = '2.7';     // cache-bust the audio files
 const SFX_FILES = {
   correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
   catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',
   blip:    'sfx/blip.wav',
 };
-const sfxPool = {};   // name -> [HTMLAudioElement, ...] used round-robin so sounds can overlap/retrigger
-const sfxNext = {};
-let sfxUnlocked = false;
+let actx = null;
+const sfxBuf = {};   // name -> decoded AudioBuffer
 
 function initSfx() {
+  if (actx) return;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return; }
+  // fetch + decode each clip once (works even while the context is suspended)
   for (const [name, src] of Object.entries(SFX_FILES)) {
-    const count = name === 'blip' ? 5 : 3;   // blips fire rapidly while text types
-    sfxPool[name] = Array.from({ length: count }, () => {
-      const a = new Audio(`${src}?v=${SFX_VERSION}`);
-      a.preload = 'auto';
-      return a;
-    });
-    sfxNext[name] = 0;
+    fetch(`${src}?v=${SFX_VERSION}`)
+      .then(r => r.arrayBuffer())
+      .then(ab => new Promise((res, rej) => actx.decodeAudioData(ab, res, rej)))
+      .then(buf => { sfxBuf[name] = buf; })
+      .catch(() => {});
   }
 }
 
-// Called from the first user taps (TAP TO START, buttons). Primes every clip
-// inside the gesture so iOS/Android will let us play them later on demand.
+// Call from user gestures to (create and) resume the context — required on iOS.
 function wakeAudio() {
-  if (sfxUnlocked) return;
-  sfxUnlocked = true;
-  if (!Object.keys(sfxPool).length) initSfx();
-  for (const name in sfxPool) {
-    for (const a of sfxPool[name]) {
-      const wasMuted = a.muted;
-      a.muted = true;
-      const p = a.play();
-      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = wasMuted; })
-                        .catch(() => { a.muted = wasMuted; });
-      else { a.muted = wasMuted; }
-    }
-  }
+  if (!actx) initSfx();
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
 }
 
 function sfx(name) {
-  const pool = sfxPool[name];
-  if (!pool) return;
-  const a = pool[sfxNext[name]];
-  sfxNext[name] = (sfxNext[name] + 1) % pool.length;
-  try { a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+  const buf = sfxBuf[name];
+  if (!actx || !buf) return;
+  if (actx.state === 'suspended') actx.resume().catch(() => {});
+  try {
+    const s = actx.createBufferSource();
+    s.buffer = buf;
+    s.connect(actx.destination);
+    s.start();                    // buffer sources are cheap & overlap naturally
+  } catch (_) {}
 }
 
 function playCorrect()     { sfx('correct'); }
