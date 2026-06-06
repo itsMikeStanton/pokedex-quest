@@ -1094,6 +1094,28 @@ function bindEvents() {
   document.getElementById('mute-btn').addEventListener('click', () => { wakeAudio(); toggleMute(); });
   document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); cycleBuddy(); });
 
+  // Full-screen / immersive: hide the Game Boy shell so the screen fills the
+  // display (great for landscape / casting to a TV). Also asks the browser for
+  // real fullscreen where allowed.
+  const fsBtn = document.getElementById('fullscreen-btn');
+  if (fsBtn) {
+    const syncFsBtn = on => { fsBtn.textContent = on ? '✕' : '⛶'; fsBtn.title = on ? 'Exit full screen' : 'Full screen'; };
+    fsBtn.addEventListener('click', () => {
+      const on = document.body.classList.toggle('immersive');
+      syncFsBtn(on);
+      try {
+        if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+        else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      } catch (_) {}
+    });
+    // Keep our layout in sync if the user leaves browser fullscreen via Esc/back.
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('immersive')) {
+        document.body.classList.remove('immersive'); syncFsBtn(false);
+      }
+    });
+  }
+
   // Pokédex
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
   document.getElementById('detail-back').addEventListener('click', closeDetail);

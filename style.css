@@ -119,6 +119,14 @@ body {
   gap: 2px;
   white-space: nowrap;
 }
+/* HUD action buttons (map / pokédex / mute): no frame, just bigger icons. */
+#hud .pixel-btn {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+}
 
 /* ─── HUD buddy chip ────────────────────────────────── */
 #hud-buddy {
@@ -1125,6 +1133,15 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   overflow-y: auto;
 }
 #pokedex-detail.hidden { display: none; }
+/* Bigger back button, pinned to the top-left corner of the detail view. */
+#detail-back {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  font-size: 11px;
+  padding: 8px 13px;
+}
 #detail-emoji { font-size: 64px; animation: detailpop .3s ease-out; }
 @keyframes detailpop {
   from { transform: scale(0); opacity: 0; }
@@ -1924,3 +1941,71 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 .duel-noteam { grid-column: 1 / -1; text-align: center; font-size: 6px; color: #8aa0c0; padding: 30px 10px; line-height: 2; }
 
 #duel-buttons { display: flex; gap: 8px; justify-content: center; min-height: 4px; }
+
+/* ─── FULL-SCREEN / IMMERSIVE (hide the Game Boy shell) ─────────────── */
+#fullscreen-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 50;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+  background: rgba(0,0,0,.16);
+  color: #4a4a5a;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#fullscreen-btn:active { transform: translateY(1px); }
+
+/* When immersive, the grey shell + controls vanish and the screen fills the view. */
+body.immersive { background: #000; align-items: center; }
+body.immersive #device {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.immersive #brand,
+body.immersive #controls-row,
+body.immersive #start-select-row,
+body.immersive #version { display: none; }
+body.immersive #screen-bezel {
+  padding: 0;
+  background: #000;
+  box-shadow: none;
+  border-radius: 0;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.immersive #screen-area {
+  width: min(100vw, calc(100vh * 10 / 9));
+  height: auto;
+  border-radius: 0;
+}
+body.immersive #fullscreen-btn {
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 100000;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  line-height: 30px;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+}
