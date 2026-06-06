@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.5';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.6';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -51,7 +51,6 @@ let answered  = false;
 
 let save = { stars: 0, caught: [] };
 let caughtSet = new Set();
-let audioCtx  = null;
 
 // ═══════════════════════════════════════════════════
 // BOOT
@@ -59,6 +58,7 @@ let audioCtx  = null;
 window.addEventListener('DOMContentLoaded', () => {
   loadSave();
   bindEvents();
+  initSfx();
   refreshTitle();
   $('#dex-version').textContent = VERSION;
   $('#title-total').textContent = ROSTER.length;   // full dex (incl. Pikachu)
@@ -400,7 +400,7 @@ function showCatchPop(poke, done) {
   pop.classList.remove('hidden');
 
   // ball wiggles, then bursts open to reveal the Pokémon
-  setTimeout(() => { pop.classList.add('opened'); beep(880, 0.12, 0.18); }, 850);
+  setTimeout(() => { pop.classList.add('opened'); }, 850);  // open ding is baked into catch.wav
 
   setTimeout(() => {
     pop.classList.add('hidden');
@@ -439,7 +439,7 @@ function typeText(el, text) {
   let i = 0;
   typeTimer = setInterval(() => {
     el.textContent = text.slice(0, ++i);
-    if (i % 2 === 0) beep(640, 0.02, 0.015, 'square');
+    if (i % 2 === 0) sfx('blip');
     if (i >= text.length) clearInterval(typeTimer);
   }, 30);
 }
@@ -574,45 +574,59 @@ function typeColor(type) {
 }
 
 // ═══════════════════════════════════════════════════
-// AUDIO (chiptune — same idea as the Lukeymon game)
+// SOUND — pre-rendered WAV files (no runtime synthesis, mobile-friendly)
 // ═══════════════════════════════════════════════════
+const SFX_VERSION = '2.6';     // cache-bust the audio files too
+const SFX_FILES = {
+  correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
+  catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',
+  blip:    'sfx/blip.wav',
+};
+const sfxPool = {};   // name -> [HTMLAudioElement, ...] used round-robin so sounds can overlap/retrigger
+const sfxNext = {};
+let sfxUnlocked = false;
+
+function initSfx() {
+  for (const [name, src] of Object.entries(SFX_FILES)) {
+    const count = name === 'blip' ? 5 : 3;   // blips fire rapidly while text types
+    sfxPool[name] = Array.from({ length: count }, () => {
+      const a = new Audio(`${src}?v=${SFX_VERSION}`);
+      a.preload = 'auto';
+      return a;
+    });
+    sfxNext[name] = 0;
+  }
+}
+
+// Called from the first user taps (TAP TO START, buttons). Primes every clip
+// inside the gesture so iOS/Android will let us play them later on demand.
 function wakeAudio() {
-  if (audioCtx) return;
-  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+  if (sfxUnlocked) return;
+  sfxUnlocked = true;
+  if (!Object.keys(sfxPool).length) initSfx();
+  for (const name in sfxPool) {
+    for (const a of sfxPool[name]) {
+      const wasMuted = a.muted;
+      a.muted = true;
+      const p = a.play();
+      if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = wasMuted; })
+                        .catch(() => { a.muted = wasMuted; });
+      else { a.muted = wasMuted; }
+    }
+  }
 }
-function beep(freq, vol, dur, type = 'square') {
-  if (!audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.frequency.value = freq; osc.type = type;
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    osc.start(); osc.stop(audioCtx.currentTime + dur + 0.01);
-  } catch (_) {}
+
+function sfx(name) {
+  const pool = sfxPool[name];
+  if (!pool) return;
+  const a = pool[sfxNext[name]];
+  sfxNext[name] = (sfxNext[name] + 1) % pool.length;
+  try { a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
 }
-function playCorrect() {
-  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.14, 0.16), i * 110));
-}
-function playWrong() {
-  beep(300, 0.12, 0.12);
-  setTimeout(() => beep(200, 0.10, 0.18), 130);
-}
-function playFanfare() {
-  [392, 523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.14, 0.2), i * 130));
-}
-function playCatchJingle() {
-  // little "ba-da-da-DING!" for a new catch
-  [330, 392, 494].forEach((f, i) => setTimeout(() => beep(f, 0.12, 0.12), i * 110));
-  setTimeout(() => { beep(659, 0.16, 0.22); beep(988, 0.12, 0.22, 'triangle'); }, 360);
-}
-function playPikaCheer() {
-  beep(880, 0.10, 0.08, 'triangle');
-  setTimeout(() => beep(1175, 0.10, 0.12, 'triangle'), 90);
-}
-function playBootJingle() {
-  // ascending power-on arpeggio, then a bright "READY!" ding
-  [262, 330, 392, 523].forEach((f, i) => setTimeout(() => beep(f, 0.10, 0.12), 200 + i * 180));
-  setTimeout(() => { beep(784, 0.14, 0.18); beep(1047, 0.10, 0.18, 'triangle'); }, 2250);
-}
+
+function playCorrect()     { sfx('correct'); }
+function playWrong()       { sfx('wrong'); }
+function playFanfare()     { sfx('fanfare'); }
+function playCatchJingle() { sfx('catch'); }
+function playPikaCheer()   { sfx('pika'); }
+function playBootJingle()  { sfx('boot'); }
