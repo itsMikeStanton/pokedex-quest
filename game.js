@@ -2188,7 +2188,10 @@ function drawWeather(ts, renderPos) {
     ctx.globalCompositeOperation = 'multiply';           // cool the whole scene to night-blue
     ctx.fillStyle = '#44568c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    drawLightField(renderPos, ts, 0.05, 0.30, 0.52, '6,10,32', true, 3.0, 6.0);   // good darkness + lantern bubble
+    if (buddyLightsCave())                               // Fire type or Pikachu's spark lights the night
+      drawLightField(renderPos, ts, 0.0, 0.30, 0.52, '6,10,32', true, 6.0, 6.0);   // lantern bubble around you
+    else
+      { ctx.fillStyle = 'rgba(6,10,32,0.52)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }  // dark night — no buddy light
   }
   if (rainMode) {
     drawLightField(renderPos, ts, 0.0, 0.05, 0.12, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
