@@ -1068,6 +1068,13 @@ function bindEvents() {
       if (gameState === 'world') openMap();
       else if (gameState === 'map') closeMap();
     }
+    // Weather/time preview toggles (outdoors): 'N' = night, 'R' = rain.
+    if (!e.repeat && gameState === 'world' && (e.key === 'n' || e.key === 'N')) {
+      setNight(); showMessage(nightMode ? '🌙 Night mode ON' : '☀️ Night mode off');
+    }
+    if (!e.repeat && gameState === 'world' && (e.key === 'r' || e.key === 'R')) {
+      setRain(); showMessage(rainMode ? '🌧️ Rain ON' : '🌤️ Rain off');
+    }
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -2149,6 +2156,52 @@ function updateCamera(renderPos) {
   camY = mapH <= canvas.height ? Math.round((mapH - canvas.height) / 2) : Math.max(0, Math.min(cy, mapH - canvas.height));
 }
 
+// ═══════════════════════════════════════════════════
+// WEATHER / TIME-OF-DAY OVERLAYS  (preview toggles: N = night, R = rain)
+// ═══════════════════════════════════════════════════
+let nightMode = false, rainMode = false, rainDrops = [];
+function drawWeather(ts) {
+  if (ZONE_INFO[currentZone].base === T.CAVE) return;   // caves do their own darkness
+  if (nightMode) drawNight();
+  if (rainMode)  drawRain(ts);
+}
+function drawNight() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';            // darken + cool the whole scene
+  ctx.fillStyle = '#44568c'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(8,12,34,0.30)'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.72);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,22,0.5)');   // soft vignette
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+function drawRain(ts) {
+  const W = canvas.width, H = canvas.height;
+  if (!rainDrops.length || rainDrops._w !== W || rainDrops._h !== H) {
+    rainDrops = []; rainDrops._w = W; rainDrops._h = H;
+    const n = Math.round(W * H / 8000);
+    for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 8 + Math.random() * 10, s: 7 + Math.random() * 6 });
+  }
+  ctx.save();
+  ctx.fillStyle = 'rgba(40,52,74,0.20)'; ctx.fillRect(0, 0, W, H);   // overcast wash
+  ctx.strokeStyle = 'rgba(185,205,240,0.55)'; ctx.lineWidth = 1.2;
+  const slant = 2.2;
+  ctx.beginPath();
+  for (const d of rainDrops) {
+    ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - slant, d.y + d.l);
+    d.y += d.s; d.x -= slant * 0.4;
+    if (d.y > H) { d.y = -d.l; d.x = Math.random() * W; }
+    if (d.x < 0) d.x += W;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+// Console helpers too, in case you'd rather flip them from devtools.
+function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return nightMode; }
+function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  return rainMode; }
+
 function drawWorld(ts) {
   const renderPos = getRenderPos(ts);
   updateCamera(renderPos);
@@ -2266,6 +2319,8 @@ function drawWorld(ts) {
       }
     }
   }
+
+  drawWeather(ts);
 }
 
 // A Jigglypuff buddy sings — emit little music notes that drift up and fade.
