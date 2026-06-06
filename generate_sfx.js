@@ -18,8 +18,11 @@ const SFX = {
   ],
   pika: [{f:880,v:.10,d:.08,t:'triangle',s:0},{f:1175,v:.10,d:.12,t:'triangle',s:.09}],
   boot: [
-    ...[262,330,392,523].map((f,i)=>({f,v:.10,d:.12,t:'square',s:i*0.16})),  // no leading silence
-    {f:784,v:.14,d:.18,t:'square',s:2.25},
+    {f:330,v:.10,d:.14,t:'square',s:0.20},      // soft power-on as the Poké Ball drops
+    {f:660,v:.09,d:.07,t:'triangle',s:1.50},    // loading blip — dot 1
+    {f:830,v:.09,d:.07,t:'triangle',s:1.75},    // loading blip — dot 2
+    {f:990,v:.09,d:.07,t:'triangle',s:2.00},    // loading blip — dot 3
+    {f:784,v:.14,d:.18,t:'square',s:2.25},      // READY! ding
     {f:1047,v:.10,d:.18,t:'triangle',s:2.25},
   ],
   blip: [{f:640,v:.06,d:.03,t:'square',s:0}],
