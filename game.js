@@ -1411,6 +1411,13 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3d. Another player (LAN multiplayer) on the destination tile → friendly duel.
+  if (window.MP && MP.maybeBump(nx, ny, ts)) {
+    bumpVec = { dx, dy };
+    bumpAnimTs = ts;
+    return;
+  }
+
   // 4. Check tile impassable. Water is normally impassable, but once you've
   //    caught Lapras you can surf straight across it.
   const tile = MAPS[currentZone][ny][nx];
@@ -2122,6 +2129,7 @@ function drawWorld(ts) {
     sprites.push({ y: prp.y + TILE_SIZE, o: 1, draw: () => drawPet(ts) });
   }
   sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
+  if (window.MP) MP.collectSprites(sprites, ts);
   sprites.sort((a, b) => a.y - b.y || a.o - b.o);
   sprites.forEach(s => s.draw());
 

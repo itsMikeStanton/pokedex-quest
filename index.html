@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2.43.0">
+  <link rel="stylesheet" href="style.css?v=2.44.0">
 </head>
 <body>
 
@@ -80,6 +80,7 @@
           <div id="message-box" class="hidden">
             <span id="message-text"></span>
           </div>
+          <div id="mp-badge" class="hidden"></div>
         </div>
 
         <!-- ENCOUNTER SCREEN -->
@@ -275,6 +276,22 @@
           <div id="notes-body"></div>
         </div>
 
+        <!-- FRIENDLY DUEL SCREEN (LAN multiplayer) -->
+        <div id="duel-screen" class="screen">
+          <div id="duel-topbar">
+            <span id="duel-title">⚔️ FRIENDLY DUEL</span>
+            <span id="duel-score"></span>
+          </div>
+          <div id="duel-stage">
+            <div id="duel-opp" class="duel-mon"></div>
+            <div id="duel-verdict" class="duel-verdict"></div>
+            <div id="duel-me" class="duel-mon"></div>
+          </div>
+          <div id="duel-prompt"></div>
+          <div id="duel-pick"></div>
+          <div id="duel-buttons"></div>
+        </div>
+
         <!-- MEWTWO BATTLE SCREEN -->
         <div id="battle-screen" class="screen">
           <div id="battle-foe" class="hidden">
@@ -396,10 +413,11 @@
     </div>
 
   </div><!-- /device -->
-  <div id="version">v2.43.0</div>
+  <div id="version">v2.44.0</div>
 
-  <script src="world.js?v=2.43.0"></script>
-  <script src="data.js?v=2.43.0"></script>
-  <script src="game.js?v=2.43.0"></script>
+  <script src="world.js?v=2.44.0"></script>
+  <script src="data.js?v=2.44.0"></script>
+  <script src="game.js?v=2.44.0"></script>
+  <script src="net.js?v=2.44.0"></script>
 </body>
 </html>

@@ -1,0 +1,12 @@
+{
+  "name": "lukeymon-party",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-network party server for Lukeymon (presence + friendly duels).",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
