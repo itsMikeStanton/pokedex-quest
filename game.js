@@ -274,14 +274,10 @@ const NPCS = [
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
             'Come home to visit whenever you like.'];
   } },
-  { zone: 9, x: 1, y: 1, emoji: '🛏️', name: 'Bed',   gift: 0, lines: ['Your cozy bed. A quick nap sounds nice… 😴'] },
-  { zone: 9, x: 9, y: 1, emoji: '📺', name: 'TV',    gift: 0, lines: ['A Lukeymon battle is on TV!'] },
-  { zone: 9, x: 9, y: 6, emoji: '🪴', name: 'Plant', gift: 0, lines: ['A leafy little houseplant.'] },
+  // (The home is now furnished with real décor props — see WORLD.decor zone 9.)
 
   // ── Inside the Poké Mart (zone 10) ──
   { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Poké Mart!'] },
-  { zone: 10, x: 2, y: 2, emoji: '🧴', name: 'Shelf',  gift: 0, lines: ['Shelves stocked with Potions and gear.'] },
-  { zone: 10, x: 8, y: 2, emoji: '🎒', name: 'Rack',   gift: 0, lines: ['Bags and balls, neatly racked.'] },
 
   // ── Inside the Pokémon Hospital (zone 11) ──
   // Resting gives a daily bundle of free PokéBalls (your team has no HP to heal).

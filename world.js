@@ -278,6 +278,20 @@ const WORLD = {
   },
   // Interior décor props — {x,y,s:spriteKey,solid?}. Sprites: art/interior/<s>.png.
   decor: {
+    "9": [
+      {"x":1,"y":1,"s":"household_01","solid":1}, {"x":2,"y":1,"s":"household_05","solid":1}, {"x":3,"y":1,"s":"household_04","solid":1},
+      {"x":5,"y":1,"s":"household_18"}, {"x":7,"y":1,"s":"household_15","solid":1}, {"x":8,"y":1,"s":"household_14","solid":1}, {"x":9,"y":1,"s":"household_06","solid":1},
+      {"x":1,"y":4,"s":"household_13","solid":1}, {"x":9,"y":3,"s":"household_09","solid":1}, {"x":8,"y":3,"s":"household_10","solid":1},
+      {"x":5,"y":4,"s":"household_11"},
+      {"x":1,"y":6,"s":"household_28"}, {"x":9,"y":6,"s":"household_19"}, {"x":3,"y":6,"s":"household_26"}, {"x":7,"y":6,"s":"household_27"}
+    ],
+    "10": [
+      {"x":1,"y":1,"s":"commercial_03","solid":1}, {"x":2,"y":1,"s":"commercial_14","solid":1}, {"x":3,"y":1,"s":"commercial_11"},
+      {"x":5,"y":1,"s":"commercial_13"}, {"x":7,"y":1,"s":"commercial_14","solid":1}, {"x":8,"y":1,"s":"commercial_14","solid":1}, {"x":9,"y":1,"s":"commercial_18","solid":1},
+      {"x":4,"y":3,"s":"commercial_01","solid":1}, {"x":6,"y":3,"s":"commercial_02","solid":1},
+      {"x":2,"y":5,"s":"commercial_06","solid":1}, {"x":8,"y":5,"s":"commercial_07","solid":1},
+      {"x":1,"y":6,"s":"commercial_04"}, {"x":9,"y":6,"s":"commercial_15"}
+    ],
     "11": [
       {"x":1,"y":1,"s":"vet_03"}, {"x":2,"y":1,"s":"vet_05"}, {"x":3,"y":1,"s":"vet_07"},
       {"x":7,"y":1,"s":"vet_09"}, {"x":8,"y":1,"s":"vet_11"}, {"x":9,"y":1,"s":"vet_13"},
