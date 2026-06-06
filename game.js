@@ -3022,9 +3022,8 @@ function nextBattleRound() {
   battleRoundNum++;
   document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / ${cfg.rounds}`;
 
-  // Options drawn from your caught roster; fall back to the full roster if too few.
-  let pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && caughtIds.has(p.id));
-  if (pool.length < 6) pool = POKEMON_DATA.filter(p => !p.legend && !p.boss);
+  // Options are drawn only from the Lukeymon you've actually caught.
+  const pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && caughtIds.has(p.id));
 
   // A lineup boss (Team Rocket) sends out one Pokémon per round — show its sprite
   // and make its type the thing you must counter. Otherwise use the static demand.
@@ -3053,14 +3052,9 @@ function nextBattleRound() {
       : 'Send out a Lukeymon of that type!';
   beep(150, 0.18, 0.3, 'square');
 
-  // Six options, guaranteeing at least one correct answer (solvable even if you
-  // haven't caught a counter yet — it's pulled from the full roster as a fallback).
+  // Up to six options from your roster. A counter only appears if you own one.
   const correctPool = pool.filter(p => correctTypes.includes(p.type));
-  let lead = correctPool[Math.floor(Math.random() * correctPool.length)];
-  if (!lead) {
-    const any = POKEMON_DATA.filter(p => !p.legend && !p.boss && correctTypes.includes(p.type));
-    lead = any[Math.floor(Math.random() * any.length)];
-  }
+  const lead = correctPool[Math.floor(Math.random() * correctPool.length)];
   const others = shuffle(pool.filter(p => p !== lead && !correctTypes.includes(p.type)));
   const opts = shuffle([lead, ...others.slice(0, 5)]).filter(Boolean);
 
