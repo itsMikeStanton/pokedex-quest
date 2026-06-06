@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.11';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.12';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -89,9 +89,10 @@ function startBoot() {
     document.removeEventListener('pointerdown', begin);
     document.removeEventListener('keydown', begin);
     wakeAudio();
+    sfx('select');                               // "start!" chime on the tap
     $('#boot-prompt').classList.add('hidden');
     $('#boot-seq').classList.remove('hidden');   // reveal → CSS animations run
-    playBootJingle();
+    playBootJingle();                            // power-on + loading blips + READY ding
     // let the sequence play (~3s), then go to title; tap again to skip ahead
     setTimeout(finish, 3000);
     setTimeout(() => {
@@ -590,7 +591,7 @@ function typeColor(type) {
 // switch ON, we also loop a SILENT <audio> element, which flips iOS into its
 // "playback" audio session so Web Audio output is heard.
 // ═══════════════════════════════════════════════════
-const SFX_VERSION = '2.10';     // bump when any .wav changes
+const SFX_VERSION = '2.12';     // bump when any .wav changes
 const SFX_FILES = {
   correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
   catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',
