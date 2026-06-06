@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.9';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.10';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -129,9 +129,9 @@ function bindEvents() {
     });
   });
 
-  // answer choices
+  // answer choices — pointerdown for instant feedback (no touch→click delay)
   $$('.choice-btn').forEach(btn => {
-    btn.addEventListener('click', () => onChoice(btn));
+    btn.addEventListener('pointerdown', () => onChoice(btn));
   });
 
   $('#quiz-quit').addEventListener('click', () => show('title'));
@@ -145,10 +145,12 @@ function bindEvents() {
     el.addEventListener('click', () => pikaDance(el));
   });
 
-  // a little sound on every button press (answer buttons keep their own sound)
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn || btn.classList.contains('choice-btn')) return;
+  // a little sound on every button press — on pointerdown so it's instant
+  // (no touch→click delay). Answer buttons keep their own correct/wrong sound.
+  document.addEventListener('pointerdown', (e) => {
+    const t = e.target;
+    const btn = t && t.closest ? t.closest('button') : null;
+    if (!btn || btn.disabled || btn.classList.contains('choice-btn')) return;
     wakeAudio();
     if (btn.matches('#mode-back, #dex-back, #quiz-quit, #reset-btn'))      sfx('back');
     else if (btn.matches('#start-btn, .mode-btn, #result-again'))          sfx('select');
@@ -589,7 +591,7 @@ function typeColor(type) {
 // plays. Kept lightweight (one element per clip, unlocked once on first tap)
 // to avoid the jank the earlier many-element version had.
 // ═══════════════════════════════════════════════════
-const SFX_VERSION = '2.7';     // audio files unchanged → keep their cache key
+const SFX_VERSION = '2.10';     // audio files unchanged → keep their cache key
 const SFX_FILES = {
   correct: 'sfx/correct.wav', wrong: 'sfx/wrong.wav', fanfare: 'sfx/fanfare.wav',
   catch:   'sfx/catch.wav',   pika:  'sfx/pika.wav',  boot:    'sfx/boot.wav',

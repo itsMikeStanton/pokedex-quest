@@ -18,7 +18,7 @@ const SFX = {
   ],
   pika: [{f:880,v:.10,d:.08,t:'triangle',s:0},{f:1175,v:.10,d:.12,t:'triangle',s:.09}],
   boot: [
-    ...[262,330,392,523].map((f,i)=>({f,v:.10,d:.12,t:'square',s:0.20+i*0.18})),
+    ...[262,330,392,523].map((f,i)=>({f,v:.10,d:.12,t:'square',s:i*0.16})),  // no leading silence
     {f:784,v:.14,d:.18,t:'square',s:2.25},
     {f:1047,v:.10,d:.18,t:'triangle',s:2.25},
   ],
