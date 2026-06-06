@@ -4863,6 +4863,23 @@ function setupDebugMenu() {
   section('TELEPORT');
   ZONE_INFO.forEach(z => btn(z.name, () => dbgTeleport(z.id)));
 
+  section('WEATHER (here)');
+  // Toggle buttons that show their own on/off state — handy on phone.
+  const toggleBtn = (label, get, set) => {
+    const b = document.createElement('button');
+    Object.assign(b.style, {
+      display: 'inline-block', margin: '2px 2px 0 0', padding: '2px 5px',
+      font: '9px monospace', background: '#1d2b40', color: '#dfe',
+      border: '1px solid #46688c', borderRadius: '3px', cursor: 'pointer',
+    });
+    const sync = () => { b.textContent = label + ': ' + (get() ? 'ON' : 'off'); b.style.background = get() ? '#2a5a3a' : '#1d2b40'; };
+    b.addEventListener('click', () => { set(!get()); sync(); });
+    sync();
+    p.appendChild(b);
+  };
+  toggleBtn('🌙 Night', () => nightMode, v => { nightMode = v; });
+  toggleBtn('🌧️ Rain',  () => rainMode,  v => { rainMode  = v; });
+
   section('MISC');
   btn('Clear NPC visits', () => { metNPCs.clear(); });
   btn('Copy map JSON', () => dbgCopyMaps());
