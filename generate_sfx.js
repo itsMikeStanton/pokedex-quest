@@ -23,6 +23,11 @@ const SFX = {
     {f:1047,v:.10,d:.18,t:'triangle',s:2.25},
   ],
   blip: [{f:640,v:.06,d:.03,t:'square',s:0}],
+
+  // soft UI feedback (triangle = gentle, good for frequent taps)
+  tap:    [{f:880,v:.08,d:.05,t:'triangle',s:0}],
+  select: [{f:660,v:.09,d:.06,t:'triangle',s:0},{f:990,v:.09,d:.09,t:'triangle',s:.06}],
+  back:   [{f:520,v:.08,d:.06,t:'triangle',s:0},{f:360,v:.08,d:.10,t:'triangle',s:.07}],
 };
 
 function wave(type, ph){ // ph in radians
