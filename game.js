@@ -2184,16 +2184,16 @@ function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
 function drawWeather(ts, renderPos) {
   if (ZONE_INFO[currentZone].base === T.CAVE) return;   // caves draw their own darkness
   if (nightMode) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';           // cool the whole scene to night-blue
-    ctx.fillStyle = '#44568c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    if (buddyLightsCave())                               // Fire type or Pikachu's spark lights the night
-      drawLightField(renderPos, ts, 0.0, 0.30, 0.52, '6,10,32', true, 6.0, 6.0);   // lantern bubble around you
+    // Same lantern logic as the cave (radius 1.3 → 4.3 with a Fire/Pikachu buddy,
+    // full-bright centre, 0.55 dim ring) — the ONLY difference is the outer night
+    // isn't pitch black like a cave. With no light buddy it's a uniform dark night.
+    if (buddyLightsCave())
+      drawLightField(renderPos, ts, 0.0, 0.55, 0.62, '10,15,42', true, 1.3, 4.3);
     else
-      { ctx.fillStyle = 'rgba(6,10,32,0.52)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }  // dark night — no buddy light
+      { ctx.fillStyle = 'rgba(10,15,42,0.62)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
   }
-  if (rainMode) {
+  const raining = rainMode || ZONE_INFO[currentZone].weather === 'rain';
+  if (raining) {
     drawLightField(renderPos, ts, 0.0, 0.05, 0.12, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
     drawRain(ts);
   }

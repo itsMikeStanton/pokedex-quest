@@ -9,7 +9,7 @@ const WORLD = {
     {"id":2,"name":"City","cols":20,"rows":14,"base":5,"wx":40,"wy":55,"mapCol":2,"mapRow":3,"icon":"🏙️"},
     {"id":3,"name":"Highlands","cols":20,"rows":14,"base":0,"wx":60,"wy":55,"mapCol":3,"mapRow":3,"icon":"⛰️"},
     {"id":4,"name":"Volcano","cols":20,"rows":28,"base":0,"wx":60,"wy":69,"mapCol":3,"mapRow":4,"icon":"🌋"},
-    {"id":5,"name":"Dark Forest","cols":40,"rows":14,"base":0,"wx":0,"wy":6,"mapCol":1,"mapRow":1,"icon":"🌲"},
+    {"id":5,"name":"Dark Forest","cols":40,"rows":14,"base":0,"wx":0,"wy":6,"mapCol":1,"mapRow":1,"icon":"🌲","weather":"rain"},
     {"id":6,"name":"Ice Cave","cols":20,"rows":14,"base":0,"wx":60,"wy":20,"mapCol":3,"mapRow":2,"icon":"❄️"},
     {"id":7,"name":"Desert","cols":40,"rows":14,"base":4,"wx":0,"wy":55,"mapCol":1,"mapRow":3,"icon":"🏜️"},
     {"id":8,"name":"Hidden Cave","cols":26,"rows":18,"base":10,"wx":120,"wy":120,"mapCol":null,"mapRow":null,"icon":"🕳️","cave":true},
