@@ -362,8 +362,12 @@ const STONE_EVOS = [
   { from: 120, stone: 'water',   to: 121 },  // Staryu     → Starmie
   { from: 61,  stone: 'water',   to: 62  },  // Poliwhirl  → Poliwrath
   { from: 70,  stone: 'leaf',    to: 71  },  // Weepinbell → Victreebel
+  { from: 44,  stone: 'leaf',    to: 45  },  // Gloom      → Vileplume
+  { from: 102, stone: 'leaf',    to: 103 },  // Exeggcute  → Exeggutor
   { from: 35,  stone: 'moon',    to: 36  },  // Clefairy   → Clefable
   { from: 39,  stone: 'moon',    to: 40  },  // Jigglypuff → Wigglytuff
+  { from: 30,  stone: 'moon',    to: 31  },  // Nidorina   → Nidoqueen
+  { from: 33,  stone: 'moon',    to: 34  },  // Nidorino   → Nidoking
 ];
 // Stones are REUSABLE keepsakes — one of each is hidden in a thematic zone (snaps
 // to the nearest walkable tile) and unlocks every evolution of that type.
@@ -5019,6 +5023,9 @@ function typeColor(type) {
     Flying:   '#5870b0', Normal:  '#505058',
     Electric: '#907000', Fairy:   '#9050a0',
     Ghost:    '#4030a0', Psychic: '#a02060',
+    Fighting: '#a03028', Poison:  '#803090',
+    Ground:   '#9a7028', Rock:    '#807838',
+    Ice:      '#3888a8', Dragon:  '#5028c0',
   };
   return map[type] || '#404050';
 }
