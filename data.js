@@ -59,6 +59,15 @@ const POKEMON_DATA = [
     light: true,   // its cheek sparks light up dark caves
   },
   {
+    id: 26, name: 'Raichu', sprite: 'sprites/026.png', emoji: '⚡',
+    color: '#F8A030', bgColor: '#fff0c0',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Electric',
+    description: 'Its long tail discharges electricity into the ground, protecting it from its own high voltage.',
+    zones: [],
+    light: true,   // its sparks light up dark caves, like Pikachu
+  },
+  {
     id: 35, name: 'Clefairy', sprite: 'sprites/035.png', emoji: '🌙',
     color: '#F4B8C0', bgColor: '#ffe8f0',
     action: 'pet', actionEmoji: '🤚',
@@ -347,6 +356,14 @@ const POKEMON_DATA = [
     zones: [3],
   },
   {
+    id: 38, name: 'Ninetales', sprite: 'sprites/038.png', emoji: '🦊',
+    color: '#E8C850', bgColor: '#fff4d0',
+    action: 'pet', actionEmoji: '🤚',
+    type: 'Fire',
+    description: 'Very smart and very vengeful. Grabbing one of its many tails could bring a 1000-year curse!',
+    zones: [],
+  },
+  {
     id: 56, name: 'Mankey', sprite: 'sprites/056.png', emoji: '🐵',
     color: '#F0C0B8', bgColor: '#ffe8e0',
     action: 'play', actionEmoji: '⚽',
@@ -535,6 +552,14 @@ const POKEMON_DATA = [
     zones: [5],
   },
   {
+    id: 71, name: 'Victreebel', sprite: 'sprites/071.png', emoji: '🌿',
+    color: '#70B030', bgColor: '#d8f0a0',
+    action: 'feed', actionEmoji: '🍎',
+    type: 'Grass',
+    description: 'Lures prey with a honey-sweet aroma, then snares them. Few who are caught ever escape its grasp.',
+    zones: [],
+  },
+  {
     id: 93, name: 'Haunter', sprite: 'sprites/093.png', emoji: '🌑',
     color: '#7840A0', bgColor: '#d8c0f0',
     action: 'play', actionEmoji: '⚽',
@@ -583,6 +608,14 @@ const POKEMON_DATA = [
     type: 'Water',
     description: 'The swirl on its belly hypnotizes anyone who stares too long! Capable of living on land or in water.',
     zones: [6],
+  },
+  {
+    id: 62, name: 'Poliwrath', sprite: 'sprites/062.png', emoji: '💪',
+    color: '#3070C0', bgColor: '#c0d8f8',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Water',
+    description: 'An incredibly strong swimmer — it can cross the entire Pacific Ocean without ever coming up to rest.',
+    zones: [],
   },
   {
     id: 73, name: 'Tentacruel', sprite: 'sprites/073.png', emoji: '🪼',
@@ -647,6 +680,15 @@ const POKEMON_DATA = [
     type: 'Water',
     description: 'It melts into water making enemies lose sight of it! It can also predict rainstorms by feeling the air.',
     zones: [6],
+  },
+  {
+    id: 135, name: 'Jolteon', sprite: 'sprites/135.png', emoji: '⚡',
+    color: '#F8D030', bgColor: '#fff8c0',
+    action: 'play', actionEmoji: '⚽',
+    type: 'Electric',
+    description: 'Its cells generate weak power that its fur amplifies, firing off lightning-fast bolts when it leaps.',
+    zones: [],
+    light: true,
   },
   {
     id: 144, name: 'Articuno', sprite: 'sprites/144.png', emoji: '🧊',
@@ -854,6 +896,11 @@ const DEX_INFO = {
   131: ['Transport',   2.5, 220.0],
   132: ['Transform',   0.3,   4.0],
   133: ['Evolution',   0.3,   6.5],
+  26:  ['Mouse',        0.8,  30.0],
+  38:  ['Fox',          1.1,  19.9],
+  62:  ['Tadpole',      1.3,  54.0],
+  71:  ['Flycatcher',   1.7,  15.5],
+  135: ['Lightning',    0.8,  24.5],
   134: ['Bubble Jet',  1.0,  29.0],
   136: ['Flame',       0.9,  25.0],
   137: ['Virtual',     0.8,  36.5],

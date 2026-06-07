@@ -338,6 +338,44 @@ function nearestOpenTile(zone, x, y) {
 NPCS.forEach(n => { [n.x, n.y] = nearestOpenTile(n.zone, n.x, n.y); });
 COLLECTIBLES.forEach(c => { if (!c.auto) [c.x, c.y] = nearestWalkable(c.zone, c.x, c.y); });
 
+// ═══════════════════════════════════════════════════
+// EVOLUTION STONES
+// ═══════════════════════════════════════════════════
+// Stones are hidden out in the world like badges. Show a caught Pokémon a
+// matching Stone from its Pokédex page to evolve it — the evolved form joins
+// your dex (and, since types change, can unlock new buddy abilities!).
+const STONES = {
+  thunder: { name: 'Thunder Stone', emoji: '⚡' },
+  fire:    { name: 'Fire Stone',    emoji: '🔥' },
+  water:   { name: 'Water Stone',   emoji: '💧' },
+  leaf:    { name: 'Leaf Stone',    emoji: '🍃' },
+};
+const STONE_EVOS = [
+  { from: 25,  stone: 'thunder', to: 26  },  // Pikachu    → Raichu
+  { from: 133, stone: 'thunder', to: 135 },  // Eevee      → Jolteon
+  { from: 37,  stone: 'fire',    to: 38  },  // Vulpix     → Ninetales
+  { from: 58,  stone: 'fire',    to: 59  },  // Growlithe  → Arcanine
+  { from: 133, stone: 'fire',    to: 136 },  // Eevee      → Flareon
+  { from: 133, stone: 'water',   to: 134 },  // Eevee      → Vaporeon
+  { from: 90,  stone: 'water',   to: 91  },  // Shellder   → Cloyster
+  { from: 120, stone: 'water',   to: 121 },  // Staryu     → Starmie
+  { from: 61,  stone: 'water',   to: 62  },  // Poliwhirl  → Poliwrath
+  { from: 70,  stone: 'leaf',    to: 71  },  // Weepinbell → Victreebel
+];
+// One Stone hidden in a thematic zone (snaps to the nearest walkable tile).
+const STONE_FINDS = [
+  { id: 'stone_fire',     zone: 4, x: 10, y: 13, stone: 'fire'    },  // Volcano
+  { id: 'stone_water',    zone: 1, x: 10, y: 30, stone: 'water'   },  // Beach
+  { id: 'stone_thunder',  zone: 3, x: 8,  y: 9,  stone: 'thunder' },  // Highlands (Zapdos country)
+  { id: 'stone_thunder2', zone: 2, x: 10, y: 8,  stone: 'thunder' },  // City (Pikachu's home)
+  { id: 'stone_leaf',     zone: 5, x: 28, y: 6,  stone: 'leaf'    },  // Dark Forest
+];
+STONE_FINDS.forEach(s => { [s.x, s.y] = nearestWalkable(s.zone, s.x, s.y); });
+function stoneFindAt(zone, x, y) {
+  return STONE_FINDS.find(s => s.zone === zone && s.x === x && s.y === y) || null;
+}
+function evolutionsFor(pokeId) { return STONE_EVOS.filter(r => r.from === pokeId); }
+
 function npcAt(zone, x, y) {
   return NPCS.find(n => n.zone === zone && n.x === x && n.y === y) || null;
 }
@@ -500,6 +538,8 @@ let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let collected = new Set();         // ids of badges/collectibles found
+let stones = {};                   // evolution-stone inventory { fire: n, water: n, … }
+let foundStones = new Set();       // ids of stone finds already picked up
 let lastHeal  = '';                // date key of the last free Hospital rest (daily PokéBalls)
 const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the Hospital
 function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
@@ -1646,6 +1686,17 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // Picked up a hidden evolution Stone?
+  const stoneFind = stoneFindAt(currentZone, playerX, playerY);
+  if (stoneFind && !foundStones.has(stoneFind.id)) {
+    foundStones.add(stoneFind.id);
+    stones[stoneFind.stone] = (stones[stoneFind.stone] || 0) + 1;
+    saveGame();
+    updateHud();
+    celebrateStone(stoneFind);
+    return;
+  }
+
   // Random grass pickup — chance to find a ball (more common) or a coin
   if (MAPS[currentZone][ny][nx] === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
     if (Math.random() < 0.6) {
@@ -1957,6 +2008,15 @@ function drawCollectibleE(c, ts) {
   ctx.textAlign = 'center';
   ctx.font = '12px serif'; ctx.fillText('✨', px, py - 10 + bob);
   ctx.font = '20px serif'; ctx.fillText(c.emoji, px, py + 18 + bob);
+}
+function drawStoneE(s, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const px = s.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = s.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 5, 8);
+  ctx.textAlign = 'center';
+  ctx.font = '11px serif'; ctx.fillText('💎', px, py - 10 + bob);
+  ctx.font = '20px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 18 + bob);
 }
 function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
@@ -2349,6 +2409,8 @@ function drawWorld(ts) {
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
+  for (const s of STONE_FINDS)
+    if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
   for (const n of NPCS)
     if (n.zone === currentZone) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
   for (const r of ROCKETS)
@@ -3606,6 +3668,11 @@ function dexLocationHint(poke) {
   if (poke.zones && poke.zones.length) {
     return '📍 ' + poke.zones.map(z => ZONE_INFO[z] ? ZONE_INFO[z].name : '?').join(' / ');
   }
+  const evo = STONE_EVOS.find(r => r.to === poke.id);
+  if (evo) {
+    const base = POKEMON_DATA.find(p => p.id === evo.from);
+    return `${STONES[evo.stone].emoji} Evolve ${base ? base.name : '?'}`;
+  }
   return '✨ Rare';
 }
 
@@ -3736,7 +3803,33 @@ function showDetail(poke) {
   buddyBtn.textContent = '❤️';
   buddyBtn.title = isBuddy ? 'Your buddy — tap to dismiss' : 'Make this my buddy';
   buddyBtn.classList.toggle('lit', isBuddy);
-  setNav([buddyBtn, document.getElementById('detail-back')], { onBack: closeDetail });
+
+  // Evolution: a button per Stone you own that this Pokémon can use; otherwise a
+  // hint of which Stone it's waiting for.
+  const evoWrap = document.getElementById('detail-evolve');
+  evoWrap.innerHTML = '';
+  const nav = [buddyBtn];
+  const rules = evolutionsFor(poke.id);
+  const usable = rules.filter(r => (stones[r.stone] || 0) > 0 && POKEMON_DATA.find(p => p.id === r.to));
+  usable.forEach(r => {
+    const target = POKEMON_DATA.find(p => p.id === r.to);
+    const b = document.createElement('button');
+    b.className = 'pixel-btn small green';
+    b.textContent = `${STONES[r.stone].emoji} Evolve → ${target.name}`;
+    b.addEventListener('click', () => evolveWithStone(poke, r));
+    evoWrap.appendChild(b);
+    nav.push(b);
+  });
+  if (!usable.length && rules.length) {
+    const hint = document.createElement('div');
+    hint.className = 'detail-evo-hint';
+    const need = [...new Set(rules.map(r => STONES[r.stone].name))].join(' / ');
+    hint.textContent = `✨ Evolves with a ${need}`;
+    evoWrap.appendChild(hint);
+  }
+
+  nav.push(document.getElementById('detail-back'));
+  setNav(nav, { onBack: closeDetail });
 }
 
 // Toggle the open Pokémon as the player's buddy.
@@ -4319,6 +4412,14 @@ function updateHud() {
   const zoneEl = document.getElementById('zone-name');
   if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
 
+  // Evolution stones (only shown once you own some).
+  const hs = document.getElementById('hud-stones');
+  if (hs) {
+    const owned = Object.keys(STONES).filter(k => (stones[k] || 0) > 0);
+    hs.innerHTML = owned.map(k => `${STONES[k].emoji}${stones[k] > 1 ? stones[k] : ''}`).join(' ');
+    hs.classList.toggle('hidden', owned.length === 0);
+  }
+
   // Current buddy chip (sprite + type), tap to cycle.
   const buddy = POKEMON_DATA.find(p => p.id === activePet);
   const bi = document.getElementById('hud-buddy-icon');
@@ -4443,6 +4544,8 @@ function saveGame() {
       masterBalls,
       coins,
       lastHeal,
+      stones,
+      foundStones: [...foundStones],
     }));
   } catch (_) {}
 }
@@ -4475,6 +4578,8 @@ function loadSlot(n) {
       masterBalls = data.masterBalls ?? 0;
       coins = data.coins ?? 0;
       lastHeal = data.lastHeal || '';
+      stones = data.stones || {};
+      foundStones = new Set(data.foundStones || []);
       activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
@@ -4808,6 +4913,44 @@ function celebrateBadge(item) {
   badgeConfetti();
 }
 
+// Picked up a hidden Stone — same celebratory result screen as a badge.
+function celebrateStone(s) {
+  clearWild();
+  clearTimeout(spawnTimerId);
+  const st = STONES[s.stone];
+  document.getElementById('result-stars').classList.remove('hidden');
+  document.getElementById('result-icon').innerHTML =
+    `<span style="font-size:76px;display:inline-block;animation:trophypop .5s ease-out both">${st.emoji}</span>`;
+  document.getElementById('result-title').textContent   = '💎 STONE FOUND!';
+  document.getElementById('result-name').textContent    = st.name;
+  document.getElementById('result-message').textContent =
+    'Show it to a Pokémon on its Pokédex page to evolve it!';
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active success';
+  showScreen('result');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// Use a Stone on a caught Pokémon → its evolved form joins the dex (base stays).
+function evolveWithStone(poke, rule) {
+  if ((stones[rule.stone] || 0) <= 0) return;
+  const target = POKEMON_DATA.find(p => p.id === rule.to);
+  if (!target) return;
+  stones[rule.stone]--;
+  seenIds.add(target.id);
+  caughtIds.add(target.id);
+  saveGame();
+  updateHud();
+  // Confetti + jingle right on the detail page, then reveal the evolved form.
+  playBadgeJingle();
+  beep(523, 0.1, 0.1);
+  setTimeout(() => beep(659, 0.1, 0.12), 120);
+  setTimeout(() => beep(784, 0.16, 0.2), 260);
+  badgeConfetti(document.getElementById('pokedex-detail'));
+  showDetail(target);
+}
+
 // A burst of celebratory emoji that fly outward from the centre and fade.
 function badgeConfetti(screen) {
   screen = screen || document.getElementById('result-screen');
@@ -4918,6 +5061,7 @@ function setupDebugMenu() {
   btn('+10 Balls',   () => { balls += 10; });
   btn('+5 Master',   () => { masterBalls += 5; });
   btn('+100 Coins',  () => { coins += 100; });
+  btn('All Stones',  () => { Object.keys(STONES).forEach(k => stones[k] = (stones[k] || 0) + 1); });
 
   section('CATCH');
   btn('Catch ALL',        () => { POKEMON_DATA.forEach(p => caughtIds.add(p.id)); awardTrioBadge(); refreshRoamers(); });

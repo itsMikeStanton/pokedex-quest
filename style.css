@@ -2009,3 +2009,26 @@ body.immersive #fullscreen-btn {
   background: rgba(0,0,0,.45);
   color: #fff;
 }
+
+/* ─── Evolution stones ─────────────────────────────────────────────── */
+#hud-stones {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+#detail-evolve {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+#detail-evolve:empty { display: none; }
+#detail-evolve .pixel-btn.small { font-size: 7px; padding: 7px 11px; }
+.detail-evo-hint {
+  font-size: 6px;
+  color: #c9a85a;
+  letter-spacing: .5px;
+}
