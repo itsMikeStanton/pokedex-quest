@@ -125,6 +125,9 @@
       case 'duel:decline': onDecline(m); break;
       case 'duel:pick':    onPick(m); break;
       case 'duel:bail':    if (duel && m.from === duel.oppId) endDuel(duel.oppName + ' left the duel.'); break;
+      case 'dance:invite':  onDanceInvite(m); break;
+      case 'dance:accept':  onDanceAccept(m); break;
+      case 'dance:decline': onDanceDecline(m); break;
     }
   }
   function now() { return (typeof performance !== 'undefined' ? performance.now() : Date.now()); }
@@ -196,8 +199,21 @@
     if (typeof gameState !== 'undefined' && gameState !== 'world') return false;
     const hit = peerAt(currentZone, nx, ny);
     if (!hit) return false;
-    startInvite(hit.id, hit.p.name);
+    openMeetChooser(hit.id, hit.p.name);
     return true;
+  }
+  // Meeting another trainer: battle, or throw a Dance Party (evolves the
+  // "dance" Pokémon — Kadabra/Machoke/Graveler/Haunter — with nobody losing a thing).
+  function openMeetChooser(oppId, oppName) {
+    if (typeof clearWild === 'function') clearWild();
+    duel = { oppId, oppName, phase: 'choosing', initiator: true, me: 0, opp: 0 };
+    openDuelScreen();
+    renderStatus(`You meet ${oppName}!`, '', false);
+    renderButtons([
+      { label: '⚔️ Battle', cls: 'green', fn: () => startInvite(oppId, oppName) },
+      { label: '🪩 Dance Party', cls: 'blue', fn: () => startDanceInvite(oppId, oppName) },
+      { label: 'Cancel', cls: 'red', fn: () => { duel = null; if (typeof showScreen === 'function') showScreen('world'); } },
+    ]);
   }
 
   // ── Duel state machine ─────────────────────────────────────────
@@ -231,6 +247,47 @@
   function declineDuel() { send({ t: 'duel:decline', to: duel.oppId }); endDuel(); }
   function onAccept(m) { if (duel && m.from === duel.oppId && duel.initiator) beginRounds(); }
   function onDecline(m) { if (duel && m.from === duel.oppId) endDuel(duel.oppName + ' isn’t up for it right now.'); }
+
+  // ── Dance Party (former trade evolutions) ──────────────────────
+  function startDanceInvite(oppId, oppName) {
+    duel = { oppId, oppName, mode: 'dance', initiator: true, phase: 'waiting', me: 0, opp: 0 };
+    send({ t: 'dance:invite', to: oppId });
+    if (typeof beep === 'function') beep(660, 0.08, 0.1);
+    renderStatus(`Inviting ${oppName} to a 🪩 Dance Party…`, '', false);
+    renderButtons([{ label: 'Cancel', cls: 'red', fn: () => { send({ t: 'dance:decline', to: oppId }); endDuel(); } }]);
+  }
+  function onDanceInvite(m) {
+    if (m.to !== myId) return;
+    if (duel && duel.phase !== 'choosing') { send({ t: 'dance:decline', to: m.from }); return; }
+    if (typeof gameState !== 'undefined' && gameState !== 'world' && (!duel || duel.phase !== 'choosing')) { send({ t: 'dance:decline', to: m.from }); return; }
+    const oppName = (peers.get(m.from) || {}).name || 'A trainer';
+    duel = { oppId: m.from, oppName, mode: 'dance', initiator: false, phase: 'prompt', me: 0, opp: 0 };
+    if (typeof clearWild === 'function') clearWild();
+    openDuelScreen();
+    if (typeof beep === 'function') beep(740, 0.1, 0.12);
+    renderStatus(`${oppName} invites you to a 🪩 Dance Party!`, '', false);
+    renderButtons([
+      { label: '🪩 Dance!', cls: 'green', fn: acceptDance },
+      { label: 'Not now', cls: 'red', fn: declineDance },
+    ]);
+  }
+  function acceptDance() { send({ t: 'dance:accept', to: duel.oppId }); doDance(); }
+  function declineDance() { send({ t: 'dance:decline', to: duel.oppId }); endDuel(); }
+  function onDanceAccept(m) { if (duel && m.from === duel.oppId && duel.initiator) doDance(); }
+  function onDanceDecline(m) { if (duel && m.from === duel.oppId) endDuel(duel.oppName + ' isn’t up for dancing right now.'); }
+  function doDance() {
+    if (!duel) return;
+    duel.phase = 'done';
+    const evolved = (typeof danceEvolve === 'function') ? danceEvolve() : [];
+    renderReveal(null, null, null);
+    const msg = evolved.length
+      ? '🪩 Dance Party! ' + evolved.map(e => `${e.from} → ${e.to}!`).join('  ')
+      : '🪩 What a dance! (None of your Lukéymon were ready to evolve.)';
+    renderStatus(msg, '', true);   // both sides shimmy
+    renderButtons([{ label: 'GG ▶', cls: 'green', fn: () => endDuel() }]);
+    if (typeof playCatchJingle === 'function') playCatchJingle();
+    else if (typeof beep === 'function') { beep(660, 0.1, 0.12); setTimeout(() => beep(880, 0.16, 0.18), 130); }
+  }
 
   function beginRounds() { duel.phase = 'picking'; startRound(); }
   function startRound() {

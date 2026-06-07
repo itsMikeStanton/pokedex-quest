@@ -5133,6 +5133,21 @@ function evolveByProgress(poke, rule) {
   if (!evoReady(rule)) return;
   performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
 }
+// Dance Party (multiplayer): every dance-method Pokémon you own evolves at once.
+// Called from net.js; the base is kept, the evolved form joins the dex. Returns the
+// list of {from, to} names so the dance screen can show what happened.
+function danceEvolve() {
+  const done = [];
+  for (const r of EVOS) {
+    if (r.method !== 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to)) continue;
+    const t = POKEMON_DATA.find(p => p.id === r.to), f = POKEMON_DATA.find(p => p.id === r.from);
+    if (!t) continue;
+    seenIds.add(t.id); caughtIds.add(t.id);
+    done.push({ from: f ? f.name : '?', to: t.name });
+  }
+  if (done.length) { saveGame(); updateHud(); if (typeof playBadgeJingle === 'function') playBadgeJingle(); }
+  return done;
+}
 
 // A burst of celebratory emoji that fly outward from the centre and fade.
 function badgeConfetti(screen) {
