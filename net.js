@@ -231,8 +231,8 @@
   }
   function onInvite(m) {
     if (m.to !== myId) return;
-    if (duel) { send({ t: 'duel:decline', to: m.from }); return; }
-    if (typeof gameState !== 'undefined' && gameState !== 'world') { send({ t: 'duel:decline', to: m.from }); return; }
+    if (duel && duel.phase !== 'choosing') { send({ t: 'duel:decline', to: m.from }); return; }
+    if (typeof gameState !== 'undefined' && gameState !== 'world' && (!duel || duel.phase !== 'choosing')) { send({ t: 'duel:decline', to: m.from }); return; }
     const oppName = (peers.get(m.from) || {}).name || 'A trainer';
     duel = { oppId: m.from, oppName, seed: m.seed | 0, initiator: false, round: 1, me: 0, opp: 0, myPick: null, oppPick: null, phase: 'prompt' };
     if (typeof beep === 'function') beep(740, 0.1, 0.12);

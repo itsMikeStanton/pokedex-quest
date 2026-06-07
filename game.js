@@ -1908,6 +1908,7 @@ function trainerAt(zone, x, y) {
 function spawnTrainer() {
   const z = ZONE_INFO[currentZone];
   if (z.interior || z.base === T.CAVE) return false;     // outdoors only
+  if (caughtIds.size === 0) return false;                // need a team before trainers appear
   const map = MAPS[currentZone], { cols, rows } = z, cands = [];
   for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
     const t = map[r][c];
@@ -3307,7 +3308,7 @@ function startBossBattle(cfg) {
   if (cfg.foeArt || cfg.foeEmoji) {
     if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/portrait/' + cfg.foeArt + '.png?v=' + ART_V + '" alt="">';
     else { foeEl.innerHTML = ''; foeEl.textContent = cfg.foeEmoji; }
-    document.getElementById('battle-foe-badge').textContent = 'R · ' + (cfg.grunt || '');
+    document.getElementById('battle-foe-badge').textContent = cfg.foeBadge != null ? cfg.foeBadge : (cfg.grunt || '');
     foe.classList.remove('hidden');
   } else {
     foe.classList.add('hidden');
@@ -3405,7 +3406,7 @@ function startRocketBattle(rkt) {
   clearTimeout(spawnTimerId);
   startBossBattle({
     title: `TEAM ROCKET: ${rkt.name}`, emoji: rkt.emoji, rounds: lineup.length, rule: 'beats',
-    grunt: rkt.name, lineup, foeEmoji: rkt.emoji, charArt: rkt.art, foeArt: rkt.art,
+    grunt: rkt.name, foeBadge: 'R · ' + rkt.name, lineup, foeEmoji: rkt.emoji, charArt: rkt.art, foeArt: rkt.art,
     motto: '“Prepare for trouble!”<br>“…and make it double!”<br>' +
            `<b>${rkt.name} of Team Rocket wants to battle!</b>`,
     intro: () => rocketIntro(),
@@ -3528,6 +3529,11 @@ function nextBattleRound() {
     demandPost = ' — counter it!';
   } else {
     battleType = cfg.pickDemand(pool);
+    // Keep it fair: if the player owns nothing that can answer this demand, re-roll
+    // a few times to a type they CAN counter (so practice/dojo rounds stay winnable).
+    const owned = new Set(pool.map(p => p.type));
+    const answerable = t => (cfg.rule === 'beats' ? (BEATEN_BY[t] || [t]) : [t]).some(ct => owned.has(ct));
+    for (let i = 0; i < 8 && !answerable(battleType); i++) battleType = cfg.pickDemand(pool);
   }
   // Which types count as a correct answer: the exact type (Mewtwo) or any type
   // that is super-effective against the demanded one (birds / Team Rocket).
@@ -4720,6 +4726,7 @@ function saveGame() {
       foundStones: [...foundStones],
       bondSteps,
       battleUses,
+      evoNotified: [...evoNotified],
     }));
   } catch (_) {}
 }
@@ -4756,6 +4763,7 @@ function loadSlot(n) {
       foundStones = new Set(data.foundStones || []);
       bondSteps = data.bondSteps || {};
       battleUses = data.battleUses || {};
+      evoNotified.clear(); (data.evoNotified || []).forEach(k => evoNotified.add(k));
       activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
