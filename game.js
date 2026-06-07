@@ -745,11 +745,19 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '4';   // bump to bust the image cache when art files change
+const ART_V = '5';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
   6: { 0: 3, 1: 3, 8: 3 }, 7: { 1: 3, 4: 3 },       8: { 9: 3, 10: 3, 11: 1 },
+  // New lands — their own distinct tile art (art/tiles/z13.. – z19..).
+  13: { 0: 3, 1: 3, 2: 3, 3: 3 },
+  14: { 0: 3, 1: 3, 3: 3, 9: 3 },
+  15: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3 },
+  16: { 0: 3, 1: 3, 2: 3, 3: 3, 8: 3 },
+  17: { 0: 3, 1: 3, 2: 3, 5: 3, 9: 3 },
+  18: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 8: 3 },
+  19: { 0: 3, 1: 3, 2: 3, 3: 3 },
 };
 const _tileArt = {};
 function tileArtImg(zone, tileId, variant) {
