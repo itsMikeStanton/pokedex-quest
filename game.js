@@ -300,6 +300,8 @@ const NPCS = [
     lines: () => collected.has('badge_gym')
       ? [`Good to see you again, ${saveName}!`, 'That Rumble Badge looks great on you. Keep training!']
       : ['So you want to challenge my Gym, eh?', 'Bring it on!'] },
+  { zone: 12, x: 2, y: 6, emoji: '🧑‍🏫', name: 'Dojo Master', gift: 0, dojo: true,
+    lines: ['Train as much as you like! Send out a Lukéymon each round — win or lose, the practice helps it grow.'] },
 ];
 
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
@@ -383,6 +385,69 @@ function stoneFindAt(zone, x, y) {
   return STONE_FINDS.find(s => s.zone === zone && s.x === x && s.y === y) || null;
 }
 function evolutionsFor(pokeId) { return STONE_EVOS.filter(r => r.from === pokeId); }
+
+// ── Non-stone evolutions ─────────────────────────────
+// method 'buddy'  → walk `cost` steps with it as your active buddy.
+// method 'battle' → send it out in `cost` battles (win OR lose — just being used).
+// method 'dance'  → a multiplayer "dance party" (handled separately; no step/use cost).
+const EVOS = [
+  // 3-stage lines: a quick bond for the first form, then proven in battle for the final.
+  { from: 1,  to: 2,  method: 'buddy',  cost: 15 }, { from: 2,  to: 3,  method: 'battle', cost: 2 }, // Bulbasaur line
+  { from: 4,  to: 5,  method: 'buddy',  cost: 15 }, { from: 5,  to: 6,  method: 'battle', cost: 2 }, // Charmander line
+  { from: 7,  to: 8,  method: 'buddy',  cost: 15 }, { from: 8,  to: 9,  method: 'battle', cost: 2 }, // Squirtle line
+  { from: 10, to: 11, method: 'buddy',  cost: 15 }, { from: 11, to: 12, method: 'buddy',  cost: 25 }, // Caterpie line
+  { from: 13, to: 14, method: 'buddy',  cost: 15 }, { from: 14, to: 15, method: 'buddy',  cost: 25 }, // Weedle line
+  { from: 16, to: 17, method: 'buddy',  cost: 15 }, { from: 17, to: 18, method: 'battle', cost: 2 }, // Pidgey line
+  { from: 147, to: 148, method: 'battle', cost: 1 }, { from: 148, to: 149, method: 'battle', cost: 2 }, // Dratini line
+  // level steps that then need a stone (the stone branch lives in STONE_EVOS)
+  { from: 29, to: 30, method: 'buddy', cost: 15 },  // Nidoran♀ → Nidorina
+  { from: 32, to: 33, method: 'buddy', cost: 15 },  // Nidoran♂ → Nidorino
+  { from: 43, to: 44, method: 'buddy', cost: 15 },  // Oddish    → Gloom
+  { from: 69, to: 70, method: 'buddy', cost: 15 },  // Bellsprout→ Weepinbell
+  { from: 60, to: 61, method: 'buddy', cost: 15 },  // Poliwag   → Poliwhirl
+  // single-step buddy evolutions (companions)
+  { from: 19, to: 20, method: 'buddy', cost: 15 }, { from: 21, to: 22, method: 'buddy', cost: 15 },
+  { from: 41, to: 42, method: 'buddy', cost: 15 }, { from: 46, to: 47, method: 'buddy', cost: 15 },
+  { from: 48, to: 49, method: 'buddy', cost: 15 }, { from: 50, to: 51, method: 'buddy', cost: 15 },
+  { from: 52, to: 53, method: 'buddy', cost: 15 }, { from: 54, to: 55, method: 'buddy', cost: 15 },
+  { from: 72, to: 73, method: 'buddy', cost: 15 }, { from: 79, to: 80, method: 'buddy', cost: 15 },
+  { from: 81, to: 82, method: 'buddy', cost: 15 }, { from: 84, to: 85, method: 'buddy', cost: 15 },
+  { from: 86, to: 87, method: 'buddy', cost: 15 }, { from: 88, to: 89, method: 'buddy', cost: 15 },
+  { from: 96, to: 97, method: 'buddy', cost: 15 }, { from: 100, to: 101, method: 'buddy', cost: 15 },
+  { from: 109, to: 110, method: 'buddy', cost: 15 }, { from: 116, to: 117, method: 'buddy', cost: 15 },
+  { from: 118, to: 119, method: 'buddy', cost: 15 },
+  // single-step battle evolutions (fighters, fierce ones, fossils)
+  { from: 129, to: 130, method: 'battle', cost: 1 }, { from: 138, to: 139, method: 'battle', cost: 1 },
+  { from: 140, to: 141, method: 'battle', cost: 1 }, { from: 111, to: 112, method: 'battle', cost: 1 },
+  { from: 104, to: 105, method: 'battle', cost: 1 }, { from: 56,  to: 57,  method: 'battle', cost: 1 },
+  { from: 23,  to: 24,  method: 'battle', cost: 1 }, { from: 27,  to: 28,  method: 'battle', cost: 1 },
+  { from: 77,  to: 78,  method: 'battle', cost: 1 }, { from: 98,  to: 99,  method: 'battle', cost: 1 },
+  // first step of the trade-mons = battle (their final form comes from the dance party)
+  { from: 66, to: 67, method: 'battle', cost: 1 }, { from: 74, to: 75, method: 'battle', cost: 1 },
+  { from: 63, to: 64, method: 'battle', cost: 1 }, { from: 92, to: 93, method: 'battle', cost: 1 },
+  // dance-party (former trade) evolutions — multiplayer, no battle, nothing lost
+  { from: 64, to: 65, method: 'dance' }, { from: 67, to: 68, method: 'dance' },
+  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance' },
+];
+function evosFor(pokeId) { return EVOS.filter(r => r.from === pokeId); }
+function evoProgress(r) { return r.method === 'buddy' ? (bondSteps[r.from] || 0) : r.method === 'battle' ? (battleUses[r.from] || 0) : 0; }
+function evoReady(r) { return r.method !== 'dance' && evoProgress(r) >= r.cost; }
+
+// One-time "ready to evolve!" nudge so you don't have to dig in the Pokédex to notice.
+const evoNotified = new Set();
+function checkEvoNotify() {
+  for (const r of EVOS) {
+    if (r.method === 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoReady(r)) continue;
+    const key = r.from + '>' + r.to;
+    if (evoNotified.has(key)) continue;
+    evoNotified.add(key);
+    const fp = POKEMON_DATA.find(p => p.id === r.from);
+    showMessage(`✨ ${fp ? fp.name : 'A Lukéymon'} is ready to evolve! Open its Pokédex.`);
+    beep(660, 0.1, 0.1); setTimeout(() => beep(880, 0.12, 0.12), 110);
+    break;   // one nudge at a time
+  }
+}
+function tickBond(id) { bondSteps[id] = (bondSteps[id] || 0) + 1; checkEvoNotify(); }
 
 function npcAt(zone, x, y) {
   return NPCS.find(n => n.zone === zone && n.x === x && n.y === y) || null;
@@ -548,6 +613,8 @@ let unlockedBarriers = new Set();  // barrier keys the player has physically cle
 let collected = new Set();         // ids of badges/collectibles found
 let stones = {};                   // evolution-stone inventory { fire: n, water: n, … }
 let foundStones = new Set();       // ids of stone finds already picked up
+let bondSteps = {};                // pokeId → steps walked as your buddy (buddy evolutions)
+let battleUses = {};               // pokeId → times sent out in a battle (battle evolutions)
 let lastHeal  = '';                // date key of the last free Hospital rest (daily PokéBalls)
 const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the Hospital
 function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
@@ -1555,6 +1622,7 @@ function move(dx, dy, ts) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     if (npc.gymLeader && !collected.has('badge_gym')) startGymBattle(npc);  // challenge → battle
+    else if (npc.dojo) startDojoBattle();   // repeatable practice battles (grows battle evolutions)
     else if (npc.shop) openShop();  // the Poké Mart clerk runs the shop
     else talkNPC(npc);
     return;
@@ -1653,6 +1721,7 @@ function move(dx, dy, ts) {
   playerY   = ny;
   playerStep ^= 1;
   petFollow(nx - dx, ny - dy, ts);   // buddy trails just behind (handles ice slides too)
+  if (activePet != null) tickBond(activePet);   // a step closer to a buddy evolution
 
   beep(220, 0.04, 0.04, 'square');
 
@@ -3086,6 +3155,7 @@ function returnToWorld() {
   showScreen('world');
   scheduleSpawn();
   if (pendingMsg) { showMessage(pendingMsg); pendingMsg = null; }
+  else checkEvoNotify();   // a battle may have just made something ready to evolve
 }
 
 // Initial victory: all four land badges earned. A "you won!" beat that leaves the
@@ -3319,6 +3389,20 @@ function awardGymBadge(leader) {
     () => { if (first) celebrateBadge(badge); else showScreen('world'); });
 }
 
+// Battle Dojo — endless practice. Each round you send out a Lukéymon (which counts
+// toward its battle evolution, win or lose); no stakes, just training.
+const DOJO_TYPES = ['Normal','Fire','Water','Electric','Grass','Ice','Fighting','Poison','Ground','Flying','Psychic','Bug','Rock','Ghost','Dragon','Fairy'];
+function startDojoBattle() {
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: 'BATTLE DOJO', emoji: '🥋', rounds: 3, rule: 'beats',
+    pickDemand: () => DOJO_TYPES[Math.floor(Math.random() * DOJO_TYPES.length)],
+    demandPre: 'Training partner uses ', demandPost: ' — counter it!',
+    onWin:  () => showBattleWin('🥋 Great training session!', 'Done ✓', true, returnToWorld),
+    onLose: () => showBattleWin('💪 Good effort — train again any time!', 'Done ✓', true, returnToWorld),
+  });
+}
+
 // Show the grunt + their Team Rocket motto, then begin the rounds on tap.
 function rocketIntro() {
   const cfg = currentBoss;
@@ -3425,6 +3509,7 @@ function shuffle(arr) {
 function chooseBattlePoke(poke, card, correctTypes) {
   if (gameState !== 'battle') return;
   document.querySelectorAll('.battle-opt').forEach(b => b.disabled = true);
+  battleUses[poke.id] = (battleUses[poke.id] || 0) + 1;   // used in battle (win or lose) → battle evolutions
 
   if (correctTypes.includes(poke.type)) {
     card.classList.add('correct');
@@ -3817,25 +3902,28 @@ function showDetail(poke) {
   const evoWrap = document.getElementById('detail-evolve');
   evoWrap.innerHTML = '';
   const nav = [buddyBtn];
-  const rules = evolutionsFor(poke.id);
-  const pending = rules.filter(r => POKEMON_DATA.find(p => p.id === r.to) && !caughtIds.has(r.to));
-  const usable = pending.filter(r => (stones[r.stone] || 0) > 0);
-  usable.forEach(r => {
-    const target = POKEMON_DATA.find(p => p.id === r.to);
+  const got = id => POKEMON_DATA.find(p => p.id === id) && !caughtIds.has(id);
+  const mkBtn = (label, fn) => {
     const b = document.createElement('button');
-    b.className = 'pixel-btn small green';
-    b.textContent = `${STONES[r.stone].emoji} Evolve → ${target.name}`;
-    b.addEventListener('click', () => evolveWithStone(poke, r));
-    evoWrap.appendChild(b);
-    nav.push(b);
+    b.className = 'pixel-btn small green'; b.textContent = label;
+    b.addEventListener('click', fn); evoWrap.appendChild(b); nav.push(b);
+  };
+  const mkHint = txt => { const h = document.createElement('div'); h.className = 'detail-evo-hint'; h.textContent = txt; evoWrap.appendChild(h); };
+
+  // Stone evolutions
+  evolutionsFor(poke.id).filter(r => got(r.to)).forEach(r => {
+    const t = POKEMON_DATA.find(p => p.id === r.to);
+    if ((stones[r.stone] || 0) > 0) mkBtn(`${STONES[r.stone].emoji} Evolve → ${t.name}`, () => evolveWithStone(poke, r));
+    else mkHint(`${STONES[r.stone].emoji} Needs a ${STONES[r.stone].name}`);
   });
-  if (!usable.length && pending.length) {
-    const hint = document.createElement('div');
-    hint.className = 'detail-evo-hint';
-    const need = [...new Set(pending.map(r => STONES[r.stone].name))].join(' / ');
-    hint.textContent = `✨ Evolves with a ${need}`;
-    evoWrap.appendChild(hint);
-  }
+  // Buddy / battle / dance evolutions
+  evosFor(poke.id).filter(r => got(r.to)).forEach(r => {
+    const t = POKEMON_DATA.find(p => p.id === r.to);
+    if (r.method === 'dance') { mkHint(`🔗 ${t.name}: Dance Party with another trainer`); return; }
+    if (evoReady(r)) mkBtn(`✨ Evolve → ${t.name}`, () => evolveByProgress(poke, r));
+    else if (r.method === 'buddy') mkHint(`🐾 Bond ${evoProgress(r)}/${r.cost} steps → ${t.name}`);
+    else mkHint(`🥊 Battles ${evoProgress(r)}/${r.cost} → ${t.name}`);
+  });
 
   nav.push(document.getElementById('detail-back'));
   setNav(nav, { onBack: closeDetail });
@@ -4555,6 +4643,8 @@ function saveGame() {
       lastHeal,
       stones,
       foundStones: [...foundStones],
+      bondSteps,
+      battleUses,
     }));
   } catch (_) {}
 }
@@ -4589,6 +4679,8 @@ function loadSlot(n) {
       lastHeal = data.lastHeal || '';
       stones = data.stones || {};
       foundStones = new Set(data.foundStones || []);
+      bondSteps = data.bondSteps || {};
+      battleUses = data.battleUses || {};
       activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
@@ -4941,23 +5033,30 @@ function celebrateStone(s) {
   badgeConfetti();
 }
 
-// Use a Stone on a caught Pokémon → its evolved form joins the dex (base stays).
-// Stones are reusable, so we don't consume them — having one is enough.
-function evolveWithStone(poke, rule) {
-  if ((stones[rule.stone] || 0) <= 0) return;
-  const target = POKEMON_DATA.find(p => p.id === rule.to);
+// The shared evolution moment — the evolved form joins the dex (the base is kept),
+// with confetti + jingle on the detail page, then the evolved form is revealed.
+function performEvolution(target) {
   if (!target || caughtIds.has(target.id)) return;
   seenIds.add(target.id);
   caughtIds.add(target.id);
   saveGame();
   updateHud();
-  // Confetti + jingle right on the detail page, then reveal the evolved form.
   playBadgeJingle();
   beep(523, 0.1, 0.1);
   setTimeout(() => beep(659, 0.1, 0.12), 120);
   setTimeout(() => beep(784, 0.16, 0.2), 260);
   badgeConfetti(document.getElementById('pokedex-detail'));
   showDetail(target);
+}
+// Stones are reusable, so we don't consume them — having one is enough.
+function evolveWithStone(poke, rule) {
+  if ((stones[rule.stone] || 0) <= 0) return;
+  performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
+}
+// Buddy / battle evolutions — only fire once the progress threshold is met.
+function evolveByProgress(poke, rule) {
+  if (!evoReady(rule)) return;
+  performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
 }
 
 // A burst of celebratory emoji that fly outward from the centre and fade.
@@ -5074,6 +5173,7 @@ function setupDebugMenu() {
   btn('+5 Master',   () => { masterBalls += 5; });
   btn('+100 Coins',  () => { coins += 100; });
   btn('All Stones',  () => { Object.keys(STONES).forEach(k => stones[k] = (stones[k] || 0) + 1); });
+  btn('Fill evo progress', () => { caughtIds.forEach(id => { bondSteps[id] = 99; battleUses[id] = 99; }); });
 
   section('CATCH');
   btn('Catch ALL',        () => { POKEMON_DATA.forEach(p => caughtIds.add(p.id)); awardTrioBadge(); refreshRoamers(); });
