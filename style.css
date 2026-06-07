@@ -1712,7 +1712,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   justify-content: center;
   align-items: center;
   gap: 24px;
-  padding: 6px 0 14px;
+  padding: 6px 0 22px;
   width: 100%;
 }
 .ss-btn {
@@ -1802,7 +1802,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
     font-size: min(6vw, 24px);
   }
 
-  #start-select-row { flex-shrink: 0; padding: 8px 0 16px; }
+  #start-select-row { flex-shrink: 0; padding: 8px 0 26px; }
   .ss-btn { font-size: min(3vw, 9px); padding: min(2.5vw, 10px) min(6vw, 26px); }
 
   .title-logo { font-size: 18px; }
