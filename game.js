@@ -209,6 +209,10 @@ const COLLECTIBLES = [
   { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', name: 'Thicket Badge' },
   { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', name: 'Glacier Badge' },
   { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', name: 'Dune Badge' },
+  // Optional badges hidden in the new lands (collectible — not needed to win).
+  { id: 'badge_safari',  zone: 15, x: 17, y: 11, emoji: '🦓', name: 'Savanna Badge' },
+  { id: 'badge_frost',   zone: 16, x: 10, y:  7, emoji: '❄️', name: 'Frost Badge' },
+  { id: 'badge_spirit',  zone: 19, x: 10, y:  7, emoji: '👻', name: 'Spirit Badge' },
   // Awarded automatically — not placed in the world.
   { id: 'badge_gym',  auto: true, emoji: '🥊', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
   { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
@@ -376,9 +380,9 @@ const STONE_EVOS = [
 const STONE_FINDS = [
   { id: 'stone_fire',    zone: 4, x: 10, y: 13, stone: 'fire'    },  // Volcano
   { id: 'stone_water',   zone: 1, x: 10, y: 30, stone: 'water'   },  // Beach
-  { id: 'stone_thunder', zone: 3, x: 8,  y: 9,  stone: 'thunder' },  // Highlands (Zapdos country)
+  { id: 'stone_thunder', zone: 17, x: 10, y: 7,  stone: 'thunder' },  // Voltage Works
   { id: 'stone_leaf',    zone: 5, x: 28, y: 6,  stone: 'leaf'    },  // Dark Forest
-  { id: 'stone_moon',    zone: 8, x: 12, y: 8,  stone: 'moon'    },  // Hidden Cave (Mt. Moon!)
+  { id: 'stone_moon',    zone: 14, x: 15, y: 7,  stone: 'moon'    },  // Lunar Pass (Mt. Moon!)
 ];
 STONE_FINDS.forEach(s => { [s.x, s.y] = nearestWalkable(s.zone, s.x, s.y); });
 function stoneFindAt(zone, x, y) {
@@ -2433,7 +2437,7 @@ function drawWeather(ts, renderPos) {
   if (z.interior || z.base === T.CAVE) return;    // …but the sky only shows outdoors
 
   // ── Time of day ──  (cave-identical lantern when lit; only the outer night is lighter)
-  const nf = nightMode ? 1 : (nightCycle ? autoNight(ts) : 0);
+  const nf = z.night ? 1 : (nightMode ? 1 : (nightCycle ? autoNight(ts) : 0));   // some zones are always night
   if (nf > 0.01) {
     if (buddyLightsCave())
       drawLightField(renderPos, ts, 0.0, 0.55 * nf, 0.62 * nf, '10,15,42', true, 1.3, 4.3);
@@ -2511,6 +2515,12 @@ function drawWorld(ts) {
     5: 'rgba(0,30,0,0.22)',
     6: 'rgba(160,210,255,0.16)',
     7: 'rgba(220,170,50,0.08)',
+    14: 'rgba(70,70,130,0.12)',   // Lunar Pass — moonlit
+    15: 'rgba(210,180,90,0.07)',  // Safari Savanna — warm
+    16: 'rgba(170,215,255,0.16)', // Frostpeak Ridge — icy
+    17: 'rgba(240,220,80,0.07)',  // Voltage Works — electric
+    18: 'rgba(120,180,220,0.08)', // Seafoam Shore — sea
+    19: 'rgba(80,40,120,0.12)',   // Haunted Hollow — eerie
   };
   if (zoneTints[currentZone]) {
     ctx.fillStyle = zoneTints[currentZone];
@@ -4170,9 +4180,14 @@ function renderMap() {
   document.getElementById('map-notes-total').textContent = allTips().length;
   document.getElementById('map-notes').classList.toggle('has-new', notesUnread);
 
-  // Cell centres in the 400×400 SVG viewBox (4×4 grid → 100px cells).
-  const cx = id => (ZONE_MAP[id].col - 0.5) * 100;
-  const cy = id => (ZONE_MAP[id].row - 0.5) * 100;
+  // Dynamic grid bounds so the world map scales as the world grows.
+  const _cols = Object.values(ZONE_MAP).map(p => p.col), _rows = Object.values(ZONE_MAP).map(p => p.row);
+  const minC = Math.min(..._cols), maxC = Math.max(..._cols), minR = Math.min(..._rows), maxR = Math.max(..._rows);
+  const nC = maxC - minC + 1, nR = maxR - minR + 1;
+  const _ml = document.getElementById('map-lines'); if (_ml) _ml.setAttribute('viewBox', `0 0 ${nC * 100} ${nR * 100}`);
+  const cx = id => (ZONE_MAP[id].col - minC + 0.5) * 100;
+  const cy = id => (ZONE_MAP[id].row - minR + 0.5) * 100;
+  const useRoutes = (minC === 1 && maxC === 3 && minR === 1 && maxR === 4);
 
   // Draw each connection once. A link is "open" when its barrier is unlocked.
   const drawn = new Set();
@@ -4188,7 +4203,7 @@ function renderMap() {
     const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
 
     // Build the path: straight by default, or via waypoints for routed edges.
-    let wp = EDGE_ROUTES[key];
+    let wp = useRoutes ? EDGE_ROUTES[key] : null;
     if (wp && Math.hypot(wp[wp.length - 1][0] - x1, wp[wp.length - 1][1] - y1)
            < Math.hypot(wp[0][0] - x1, wp[0][1] - y1)) {
       wp = wp.slice().reverse(); // orient waypoints to start nearest (x1,y1)
@@ -4216,8 +4231,10 @@ function renderMap() {
 
     const tile = document.createElement('div');
     tile.className = 'map-zone' + (isOpen ? ' open' : ' locked') + (here ? ' here' : '');
-    tile.style.left = ((pos.col - 1) * 25) + '%';
-    tile.style.top  = ((pos.row - 1) * 25) + '%';
+    tile.style.left   = ((pos.col - minC) * (100 / nC)) + '%';
+    tile.style.top    = ((pos.row - minR) * (100 / nR)) + '%';
+    tile.style.width  = (100 / nC) + '%';
+    tile.style.height = (100 / nR) + '%';
 
     const icon = document.createElement('div');
     icon.className = 'map-zone-icon';

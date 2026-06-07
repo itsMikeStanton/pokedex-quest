@@ -31,7 +31,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Bug',
     description: 'Its short feet are tipped with suction pads that let it tirelessly climb slopes and walls.',
-    zones: [0,5],
+    zones: [0,5,13],
   },
   {
     id: 16, name: 'Pidgey', sprite: 'sprites/016.png', emoji: '🐦',
@@ -47,7 +47,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Will chew on anything with its very sharp fangs. You can hear it gnawing through the night.',
-    zones: [0],
+    zones: [0,15],
   },
   {
     id: 25, name: 'Pikachu', sprite: 'sprites/025.png', emoji: '⚡',
@@ -55,7 +55,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'When several of these Pokémon gather, their electricity can build up and cause lightning storms!',
-    zones: [2],
+    zones: [2,17],
     light: true,   // its cheek sparks light up dark caves
   },
   {
@@ -73,7 +73,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Fairy',
     description: 'Its magical and cute appeal has many admirers. It is rare and found only in certain places.',
-    zones: [3],
+    zones: [3,13,14],
   },
   {
     id: 36, name: 'Clefable', sprite: 'sprites/036.png', emoji: '🧚',
@@ -89,7 +89,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'When its huge eyes light up, it sings a mysteriously soothing melody that lulls its enemies to sleep.',
-    zones: [2],
+    zones: [2,13],
   },
   {
     id: 40, name: 'Wigglytuff', sprite: 'sprites/040.png', emoji: '🎈',
@@ -105,7 +105,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Adores round and shiny things. It wanders the streets at night to look for dropped coins.',
-    zones: [2],
+    zones: [2,15],
   },
   {
     id: 54, name: 'Psyduck', sprite: 'sprites/054.png', emoji: '🐤',
@@ -113,7 +113,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'While lulling its enemies with its vacant look, this clever Pokémon uses its psychic powers.',
-    zones: [0,6],
+    zones: [0,6,18],
   },
   {
     id: 94, name: 'Gengar', sprite: 'sprites/094.png', emoji: '👻',
@@ -129,7 +129,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'In the distant past, it was somewhat stronger. Today it is the weakest — but it never gives up!',
-    zones: [1],
+    zones: [1,18],
   },
   {
     id: 133, name: 'Eevee', sprite: 'sprites/133.png', emoji: '🦊',
@@ -163,7 +163,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Bug',
     description: 'Often found in forests eating leaves. It has a poisonous spike on its head.',
-    zones: [0,5],
+    zones: [0,5,13],
   },
   {
     id: 43, name: 'Oddish', sprite: 'sprites/043.png', emoji: '🌱',
@@ -171,7 +171,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Grass',
     description: 'During the day it buries itself in soil and absorbs nutrients through its feet like a plant.',
-    zones: [0,5],
+    zones: [0,5,13],
   },
   {
     id: 46, name: 'Paras', sprite: 'sprites/046.png', emoji: '🍄',
@@ -179,7 +179,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Bug',
     description: 'Mushrooms grow on its back from spores attached at birth. They drain the host\'s energy.',
-    zones: [5],
+    zones: [5,13],
   },
   {
     id: 63, name: 'Abra', sprite: 'sprites/063.png', emoji: '🔮',
@@ -187,7 +187,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Psychic',
     description: 'It sleeps 18 hours a day. Even while sleeping it senses danger and can teleport to safety.',
-    zones: [0],
+    zones: [0,19],
   },
 
   // ── Zone 1 additions (Beach) ──────────────────────────
@@ -197,7 +197,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Its spiral belly is transparent skin — you can see its insides! It prefers swampy areas.',
-    zones: [0,6],
+    zones: [0,6,18],
   },
   {
     id: 72, name: 'Tentacool', sprite: 'sprites/072.png', emoji: '🔵',
@@ -205,7 +205,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Its body is almost entirely water. It floats in warm seas and stings with its tentacles.',
-    zones: [1],
+    zones: [1,18],
   },
   {
     id: 79, name: 'Slowpoke', sprite: 'sprites/079.png', emoji: '🦦',
@@ -221,7 +221,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Loves to sleep in icy water. The colder the weather, the more active and lively it becomes!',
-    zones: [6],
+    zones: [6,16],
   },
   {
     id: 90, name: 'Shellder', sprite: 'sprites/090.png', emoji: '🐚',
@@ -229,7 +229,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Its hard shell deflects any attack. The tongue that hangs from its mouth can snap shut fast.',
-    zones: [1,6],
+    zones: [1,6,16],
   },
   {
     id: 98, name: 'Krabby', sprite: 'sprites/098.png', emoji: '🦀',
@@ -237,7 +237,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Its pincers are both weapons and communication tools — it waves them to send signals.',
-    zones: [1],
+    zones: [1,18],
   },
   {
     id: 116, name: 'Horsea', sprite: 'sprites/116.png', emoji: '🐠',
@@ -245,7 +245,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'It can swim in any direction including upside down. It squirts ink to escape enemies.',
-    zones: [1,6],
+    zones: [1,6,16],
   },
   {
     id: 118, name: 'Goldeen', sprite: 'sprites/118.png', emoji: '🐡',
@@ -253,7 +253,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Beautiful but ferocious. One flap of its powerful fin can knock a person clean off their feet.',
-    zones: [1],
+    zones: [1,18],
   },
   {
     id: 120, name: 'Staryu', sprite: 'sprites/120.png', emoji: '⭐',
@@ -261,7 +261,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'The red gem at its center glows at night. It can regenerate any part of its body that breaks off.',
-    zones: [1,6],
+    zones: [1,6,18],
   },
   {
     id: 131, name: 'Lapras', sprite: 'sprites/131.png', emoji: '🦕',
@@ -269,7 +269,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'A gentle giant that understands human speech and happily carries people across the sea.',
-    zones: [6],
+    zones: [6,18],
   },
   {
     id: 138, name: 'Omanyte', sprite: 'sprites/138.png', emoji: '🐌',
@@ -277,7 +277,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Water',
     description: 'An ancient Pokémon revived from a fossil. It uses its tentacles to capture prey in the sea.',
-    zones: [1],
+    zones: [1,14],
   },
 
   // ── Zone 2 additions (City) ───────────────────────────
@@ -287,7 +287,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Flying',
     description: 'It flaps its small wings rapidly to stay airborne. Its loud, shrill cry can be heard far away.',
-    zones: [1],
+    zones: [1,16],
   },
   {
     id: 41, name: 'Zubat', sprite: 'sprites/041.png', emoji: '🦇',
@@ -295,7 +295,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Poison',
     description: 'Hangs upside down in dark places during the day. Has no eyes but navigates perfectly by ultrasound.',
-    zones: [7,5],
+    zones: [7,5,14],
   },
   {
     id: 66, name: 'Machop', sprite: 'sprites/066.png', emoji: '💪',
@@ -303,7 +303,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Fighting',
     description: 'Its whole body is composed of pure muscle. Child-sized, but strong enough to throw 100 adults.',
-    zones: [2,4],
+    zones: [2,4,14],
   },
   {
     id: 74, name: 'Geodude', sprite: 'sprites/074.png', emoji: '🪨',
@@ -311,7 +311,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Rock',
     description: 'Sleeps deeply in fields and on mountain paths. Hikers often trip over them by mistake.',
-    zones: [7,4],
+    zones: [7,4,14],
   },
   {
     id: 81, name: 'Magnemite', sprite: 'sprites/081.png', emoji: '🧲',
@@ -319,7 +319,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'Floats using magnetism. It is drawn toward people and pets by their body\'s electrical charge.',
-    zones: [2],
+    zones: [2,17],
   },
   {
     id: 92, name: 'Gastly', sprite: 'sprites/092.png', emoji: '💨',
@@ -327,7 +327,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Ghost',
     description: 'Almost invisible, this gaseous Pokémon wraps its opponent in poisonous gas and puts it to sleep.',
-    zones: [2,5],
+    zones: [2,5,19],
   },
   {
     id: 96, name: 'Drowzee', sprite: 'sprites/096.png', emoji: '😵',
@@ -335,7 +335,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Psychic',
     description: 'If your nose itches while you sleep, a Drowzee is probably nearby, nibbling on your dreams.',
-    zones: [2],
+    zones: [2,19],
   },
   {
     id: 100, name: 'Voltorb', sprite: 'sprites/100.png', emoji: '💣',
@@ -343,7 +343,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'Looks exactly like a PokéBall. It was first discovered in a power plant. Explodes at the slightest touch.',
-    zones: [2],
+    zones: [2,17],
   },
   {
     id: 132, name: 'Ditto', sprite: 'sprites/132.png', emoji: '💜',
@@ -359,7 +359,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Normal',
     description: 'A Pokémon made entirely of programming code. The only artificial Pokémon ever created.',
-    zones: [2],
+    zones: [2,19],
   },
 
   // ── Zone 3 additions (Highlands) ─────────────────────
@@ -417,7 +417,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'The baby in the pouch leaves after three years. The mother fiercely protects it at all costs.',
-    zones: [3],
+    zones: [3,15],
   },
   {
     id: 123, name: 'Scyther', sprite: 'sprites/123.png', emoji: '⚔️',
@@ -425,7 +425,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Bug',
     description: 'So blindingly fast it becomes invisible. Its razor-sharp scythes can slice through thick logs.',
-    zones: [3,5],
+    zones: [3,5,15],
   },
   {
     id: 127, name: 'Pinsir', sprite: 'sprites/127.png', emoji: '🦂',
@@ -433,7 +433,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Bug',
     description: 'It grabs prey with its huge pincers and will not let go until the prey splits in two.',
-    zones: [3,5],
+    zones: [3,5,15],
   },
   {
     id: 148, name: 'Dragonair', sprite: 'sprites/148.png', emoji: '🐉',
@@ -491,7 +491,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'Its armor-like hide is so tough it ignores any hit. It can even crumble a building just by charging!',
-    zones: [4],
+    zones: [4,15],
   },
   {
     id: 112, name: 'Rhydon', sprite: 'sprites/112.png', emoji: '🏔️',
@@ -597,7 +597,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'Lays high-nutrition eggs every day. It is kind and shares its eggs generously with injured Pokémon.',
-    zones: [5],
+    zones: [5,15],
   },
   {
     id: 114, name: 'Tangela', sprite: 'sprites/114.png', emoji: '💚',
@@ -613,7 +613,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Ice',
     description: 'It moves with a rhythmic sway and sings a strange melody that makes everyone around it want to dance!',
-    zones: [5],
+    zones: [5,16],
   },
 
   // ── Zone 6: Ice Cave ─────────────────────────────────────────────────────
@@ -738,7 +738,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'It digs burrows to sleep in and curls into a ball when threatened. It can also bowl into enemies!',
-    zones: [1],
+    zones: [1,16],
   },
   {
     id: 28, name: 'Sandslash', sprite: 'sprites/028.png', emoji: '🌵',
@@ -770,7 +770,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'Lives most of its life underground. It loosens soil for plants to grow, making farmers very happy!',
-    zones: [2],
+    zones: [2,14],
   },
   {
     id: 51, name: 'Dugtrio', sprite: 'sprites/051.png', emoji: '🔱',
@@ -786,7 +786,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Rock',
     description: 'A massive rock snake that tunnels underground at 50 mph. Its body hardens into black diamonds over years!',
-    zones: [7,4],
+    zones: [7,4,14],
   },
   {
     id: 105, name: 'Marowak', sprite: 'sprites/105.png', emoji: '🦴',
@@ -910,7 +910,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Poison',
     description: 'Small and gentle, it twitches its whiskers to sense danger, ready to fend off attackers.',
-    zones: [2,3],
+    zones: [2,3,13],
   },
   {
     id: 30, name: 'Nidorina', sprite: 'sprites/030.png', emoji: '🐭',
@@ -926,7 +926,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Poison',
     description: 'It uses its large ears to detect danger from afar; its horn is for protection.',
-    zones: [2,3],
+    zones: [2,3,13],
   },
   {
     id: 33, name: 'Nidorino', sprite: 'sprites/033.png', emoji: '🐭',
@@ -1022,7 +1022,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Grass',
     description: 'A thin body lets it bend and sway to avoid attacks, then lash out with its vine-like arms.',
-    zones: [5],
+    zones: [5,13],
   },
   {
     id: 76, name: 'Golem', sprite: 'sprites/076.png', emoji: '🪨',
@@ -1054,7 +1054,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Flying',
     description: 'Its two heads never sleep at once, watching for enemies even as it sprints across the plains.',
-    zones: [7,0],
+    zones: [7,0,15],
   },
   {
     id: 85, name: 'Dodrio', sprite: 'sprites/085.png', emoji: '🐦',
@@ -1070,7 +1070,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Poison',
     description: 'Born from sludge, it thrives on filth. Wherever it slithers, germ-ridden grime is left behind.',
-    zones: [2],
+    zones: [2,17,19],
   },
   {
     id: 89, name: 'Muk', sprite: 'sprites/089.png', emoji: '🟪',
@@ -1134,7 +1134,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'Its long tongue, twice its body length, can grab things; a lick may leave a tingle.',
-    zones: [0],
+    zones: [0,15],
   },
   {
     id: 109, name: 'Koffing', sprite: 'sprites/109.png', emoji: '💨',
@@ -1142,7 +1142,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Poison',
     description: 'It floats by filling itself with toxic gases. The thinner its skin, the more dangerous it is.',
-    zones: [4,2],
+    zones: [4,2,17,19],
   },
   {
     id: 110, name: 'Weezing', sprite: 'sprites/110.png', emoji: '💨',
@@ -1158,7 +1158,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Psychic',
     description: 'A master of mime, it can shape invisible walls in the air that even fire and water cannot pass.',
-    zones: [2],
+    zones: [2,19],
   },
   {
     id: 125, name: 'Electabuzz', sprite: 'sprites/125.png', emoji: '⚡',
@@ -1166,7 +1166,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Electric',
     description: 'When a storm nears, it gathers on tall towers to feed on the lightning, glowing faintly.',
-    zones: [2,3],
+    zones: [2,3,17],
   },
   {
     id: 128, name: 'Tauros', sprite: 'sprites/128.png', emoji: '🐂',
@@ -1174,7 +1174,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Normal',
     description: 'It charges at over 30 miles per hour, whipping itself with its three tails to stay furious.',
-    zones: [7,0],
+    zones: [7,0,15],
   },
   {
     id: 130, name: 'Gyarados', sprite: 'sprites/130.png', emoji: '🐉',
@@ -1198,7 +1198,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Rock',
     description: 'Revived from a fossil, it has barely changed in three hundred million years of existence.',
-    zones: [1,7],
+    zones: [1,7,14],
   },
   {
     id: 141, name: 'Kabutops', sprite: 'sprites/141.png', emoji: '🦐',
@@ -1222,7 +1222,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Dragon',
     description: 'Long thought a mere legend, it was found in water. It sheds its skin as it slowly grows.',
-    zones: [6,1],
+    zones: [6,1,16],
   },
   {
     id: 149, name: 'Dragonite', sprite: 'sprites/149.png', emoji: '🐉',
