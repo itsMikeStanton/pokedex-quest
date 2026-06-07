@@ -750,30 +750,44 @@ const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
   6: { 0: 3, 1: 3, 8: 3 }, 7: { 1: 3, 4: 3 },       8: { 9: 3, 10: 3, 11: 1 },
-  // New lands — their own distinct tile art (art/tiles/z13.. – z19..).
-  13: { 0: 3, 1: 3, 2: 3, 3: 3 },
+  // New lands — reuse received tile art via NEW_TILE_SRC (trees use treeArtImg).
+  13: { 0: 3, 1: 3, 3: 3 },
   14: { 0: 3, 1: 3, 3: 3, 9: 3 },
-  15: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3 },
-  16: { 0: 3, 1: 3, 2: 3, 3: 3, 8: 3 },
-  17: { 0: 3, 1: 3, 2: 3, 5: 3, 9: 3 },
-  18: { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 8: 3 },
-  19: { 0: 3, 1: 3, 2: 3, 3: 3 },
+  15: { 0: 3, 1: 3, 3: 3, 4: 3 },
+  16: { 0: 3, 1: 3, 3: 3, 8: 3 },
+  17: { 0: 3, 1: 3, 5: 3, 9: 3 },
+  18: { 0: 3, 1: 3, 3: 3, 4: 3, 8: 3 },
+  19: { 0: 3, 1: 3, 3: 3 },
 };
+// The new lands reuse the original received tile art, mapped per tile to a
+// biome-matching source zone (no procedurally-generated tiles).
+const NEW_TILE_SRC = {
+  13: { 0: 0, 1: 0, 3: 0 },                 // Sunpetal ← Meadow
+  14: { 0: 3, 1: 3, 3: 3, 9: 8 },           // Lunar Pass ← Highlands + Hidden Cave rock
+  15: { 0: 3, 1: 7, 3: 1, 4: 7 },           // Safari ← Desert + Beach water
+  16: { 0: 6, 1: 6, 3: 1, 8: 6 },           // Frostpeak ← Ice Cave + Beach water
+  17: { 0: 5, 1: 2, 5: 2, 9: 8 },           // Voltage Works ← City + rock
+  18: { 0: 0, 1: 1, 3: 1, 4: 1, 8: 6 },     // Seafoam ← Beach + Ice Cave ice
+  19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
+};
+const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5 };   // (Lunar Pass has no trees)
 const _tileArt = {};
 function tileArtImg(zone, tileId, variant) {
   const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
   if (!cnt) return null;
+  const src = (NEW_TILE_SRC[zone] && NEW_TILE_SRC[zone][tileId] != null) ? NEW_TILE_SRC[zone][tileId] : zone;
   const v = ((variant % cnt) + cnt) % cnt;
-  const key = zone + '_' + tileId + '_' + v;
+  const key = src + '_' + tileId + '_' + v;
   let img = _tileArt[key];
   if (!img) { img = new Image(); img.src = 'art/tiles/z' + key + '.png?v=' + ART_V; _tileArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
 const _treeArt = {};
 function treeArtImg(zone) {
-  if (zone > 7) return null;                       // no trees in the hidden cave
-  let img = _treeArt[zone];
-  if (!img) { img = new Image(); img.src = 'art/tree/z' + zone + '.png?v=' + ART_V; _treeArt[zone] = img; }
+  const src = NEW_TREE_SRC[zone] != null ? NEW_TREE_SRC[zone] : (zone <= 7 ? zone : null);
+  if (src == null) return null;                    // no tree sprite (hidden cave / Lunar Pass)
+  let img = _treeArt[src];
+  if (!img) { img = new Image(); img.src = 'art/tree/z' + src + '.png?v=' + ART_V; _treeArt[src] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
 const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png?v=' + ART_V; return i; })();
