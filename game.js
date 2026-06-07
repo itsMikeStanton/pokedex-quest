@@ -1822,6 +1822,7 @@ function move(dx, dy, ts) {
 // point-portals (cave mouths). The buddy is teleported along too.
 function warpTo(zone, x, y, dirKey) {
   clearTrainer();                     // any wandering trainer stays in the zone you left
+  visited.add(zone);                  // fog of war: this zone is now discovered
   beginZoneSlide(dirKey || 'down');   // snapshot the old zone, then scroll into the new one
   currentZone = zone;
   playerX     = x;
@@ -4077,54 +4078,119 @@ function reachableZones() {
 }
 
 let atlasMode = false;   // world-map view: false = icon grid, true = true-shape atlas
+let visited = new Set([0]);   // zones the player has actually entered (fog of war)
+let atlasPanX = 0, atlasPanY = 0, _atlasInit = false;
+const ATLAS_WIN_W = 64, ATLAS_WIN_H = 58;   // pan-window size in world tiles (≈2× zoom)
+let _atlasBounds = null;
 
 function openMap() {
   clearTimeout(spawnTimerId);
+  _atlasInit = false;            // re-centre the atlas on the current zone each open
   renderMap();
   showScreen('map');
 }
 
+// D-pad / arrows scroll the atlas (clamped to the world bounds).
+function atlasPan(dir) {
+  if (!_atlasBounds) return;
+  const step = 8;
+  if (dir === 'left')  atlasPanX -= step;
+  if (dir === 'right') atlasPanX += step;
+  if (dir === 'up')    atlasPanY -= step;
+  if (dir === 'down')  atlasPanY += step;
+  clampAtlasPan();
+  const svg = document.getElementById('map-atlas');
+  if (svg) svg.setAttribute('viewBox', `${atlasPanX} ${atlasPanY} ${ATLAS_WIN_W} ${ATLAS_WIN_H}`);
+}
+function clampAtlasPan() {
+  const b = _atlasBounds, pad = 4;
+  const wW = (b.maxX - b.minX) + 2 * pad, wH = (b.maxY - b.minY) + 2 * pad;
+  const loX = b.minX - pad, loY = b.minY - pad;
+  atlasPanX = wW <= ATLAS_WIN_W ? loX - (ATLAS_WIN_W - wW) / 2 : Math.max(loX, Math.min(atlasPanX, loX + wW - ATLAS_WIN_W));
+  atlasPanY = wH <= ATLAS_WIN_H ? loY - (ATLAS_WIN_H - wH) / 2 : Math.max(loY, Math.min(atlasPanY, loY + wH - ATLAS_WIN_H));
+}
+
 // Experimental "atlas" view: draw every surface zone as its real rectangle
-// (sized by cols×rows, placed at its planar wx/wy), so you see the world's true
-// shape. Connections are drawn between zone centres; locked ones are dashed red.
-const ATLAS_BIO = { 0: '#c2a85a', 1: '#4a9a3a', 4: '#d8c070', 5: '#27502a', 8: '#bcdcf0' };
+// (sized by cols×rows at its planar wx/wy), with low-res terrain detail, doorways
+// at the actual seams, and fog of war over places you haven't reached. Scroll with
+// the d-pad. Tile palette (matches the in-game tiles):
+const ATLAS_TC = { 0:'#cdb06a',1:'#4fa83f',2:'#1f5a24',3:'#2f6fd0',4:'#e2cf86',5:'#8b8b97',
+                   6:'#c83a78',7:'#d8431a',8:'#bfe3f2',9:'#7a7a86',10:'#3a3744',11:'#181520',
+                   12:'#c0432f',16:'#e8403a',17:'#7a5230' };
+function doorSeg(z, dir, pos) {
+  const a = Math.min(...pos), b = Math.max(...pos) + 1;
+  if (dir === 'north') return [z.wx + a, z.wy, z.wx + b, z.wy];
+  if (dir === 'south') return [z.wx + a, z.wy + z.rows, z.wx + b, z.wy + z.rows];
+  if (dir === 'west')  return [z.wx, z.wy + a, z.wx, z.wy + b];
+  return [z.wx + z.cols, z.wy + a, z.wx + z.cols, z.wy + b];   // east
+}
 function renderAtlas(open) {
   const svg = document.getElementById('map-atlas');
   if (!svg) return;
   const surf = ZONE_INFO.filter(z => z.mapCol != null && z.wx != null);
-  const minX = Math.min(...surf.map(z => z.wx)), maxX = Math.max(...surf.map(z => z.wx + z.cols));
-  const minY = Math.min(...surf.map(z => z.wy)), maxY = Math.max(...surf.map(z => z.wy + z.rows));
-  const pad = 3;
-  svg.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`);
-  const cxy = z => [z.wx + z.cols / 2, z.wy + z.rows / 2];
-  let lineSvg = '', gateSvg = '', zoneSvg = '';
+  _atlasBounds = {
+    minX: Math.min(...surf.map(z => z.wx)), maxX: Math.max(...surf.map(z => z.wx + z.cols)),
+    minY: Math.min(...surf.map(z => z.wy)), maxY: Math.max(...surf.map(z => z.wy + z.rows)),
+  };
+  // Discovered = visited zones plus their immediate neighbours (you glimpse the next area).
+  const disc = new Set(visited);
+  EXITS.forEach(e => { if (visited.has(e.from)) disc.add(e.to); if (visited.has(e.to)) disc.add(e.from); });
+
+  let terrain = '', zoneSvg = '', doorSvg = '', gateSvg = '';
+  surf.forEach(z => {
+    const seen = visited.has(z.id), known = disc.has(z.id), here = z.id === currentZone;
+    const [cx, cy] = [z.wx + z.cols / 2, z.wy + z.rows / 2];
+    const travel = (open.has(z.id) && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
+    zoneSvg += `<g class="atlas-zone" data-zone="${z.id}"${travel}>`;
+    if (!known) {                                   // unexplored → fog
+      zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="#191922" opacity="0.85"/>`;
+      zoneSvg += `<text x="${cx}" y="${cy + 1.4}" text-anchor="middle" font-size="4" fill="#3a3a4a">?</text></g>`;
+      return;
+    }
+    // biome base
+    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="${ATLAS_TC[z.base] || '#5a6a7a'}"/>`;
+    if (seen) {                                     // real terrain detail (feature tiles)
+      const m = MAPS[z.id];
+      for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
+        const t = m[r][c];
+        if (t === z.base || t === 0) continue;       // base + path show through
+        terrain += `<rect x="${z.wx + c}" y="${z.wy + r}" width="1" height="1" fill="${ATLAS_TC[t] || '#888'}"/>`;
+      }
+    } else {                                         // known-but-unvisited → dim
+      zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" fill="#0a0a12" opacity="0.55"/>`;
+    }
+    const stroke = here ? '#f8d030' : 'rgba(0,0,0,.55)';
+    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="none" stroke="${stroke}" stroke-width="${here ? 1.3 : 0.5}"/>`;
+    const icon = open.has(z.id) ? (z.icon || '') : '🔒';
+    zoneSvg += `<text x="${cx}" y="${cy + 1.2}" text-anchor="middle" font-size="${Math.min(z.cols, z.rows) >= 12 ? 4.5 : 3.2}">${icon}</text>`;
+    if (seen && Math.min(z.cols, z.rows) >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.3}" text-anchor="middle" font-size="2.2" fill="#fff">${z.name}</text>`;
+    if (here) zoneSvg += `<text x="${cx}" y="${z.wy + 2.6}" text-anchor="middle" font-size="2.4" fill="#f8d030">📍</text>`;
+    zoneSvg += `</g>`;
+  });
+
+  // Doorways at the real seams (drawn once per connection, only where you can see).
   const drawn = new Set();
   EXITS.forEach(e => {
     const a = ZONE_INFO[e.from], b = ZONE_INFO[e.to];
     if (!a || !b || a.mapCol == null || b.mapCol == null) return;
+    if (!disc.has(e.from) && !disc.has(e.to)) return;
     const key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to);
     if (drawn.has(key)) return; drawn.add(key);
     const gate = EXITS.find(x => ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
     const passable = isBarrierUnlocked(gate ? gate.barrier : null);
-    const [x1, y1] = cxy(a), [x2, y2] = cxy(b);
-    lineSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${passable ? '#5ad85a' : '#d05050'}" stroke-width="0.7" stroke-dasharray="${passable ? '' : '1.6,1'}" opacity="0.8"/>`;
-    if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.4}" text-anchor="middle" font-size="3.6">${BARRIERS[gate.barrier].sign}</text>`;
+    const [x1, y1, x2, y2] = doorSeg(a, e.dir, e.pos);
+    doorSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${passable ? '#f8e030' : '#d85050'}" stroke-width="1.4" stroke-linecap="round"/>`;
+    if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.3}" text-anchor="middle" font-size="3.4">${BARRIERS[gate.barrier].sign}</text>`;
   });
-  surf.forEach(z => {
-    const isOpen = open.has(z.id), here = z.id === currentZone;
-    const fill = isOpen ? (ATLAS_BIO[z.base] || '#5a6a7a') : '#26262e';
-    const stroke = here ? '#f8d030' : (isOpen ? 'rgba(0,0,0,.5)' : 'rgba(120,120,140,.5)');
-    const small = Math.min(z.cols, z.rows);
-    const [cx, cy] = cxy(z);
-    const travel = (isOpen && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
-    zoneSvg += `<g class="atlas-zone" data-zone="${z.id}"${travel}>`;
-    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="${fill}" stroke="${stroke}" stroke-width="${here ? 1.3 : 0.5}" opacity="${isOpen ? 0.95 : 0.55}"/>`;
-    zoneSvg += `<text x="${cx}" y="${cy + 1.4}" text-anchor="middle" font-size="${small >= 12 ? 5 : 3.6}">${isOpen ? (z.icon || '') : '🔒'}</text>`;
-    if (isOpen && small >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.4}" text-anchor="middle" font-size="2.3" fill="#fff">${z.name}</text>`;
-    if (here) zoneSvg += `<text x="${cx}" y="${z.wy + 2.8}" text-anchor="middle" font-size="2.6" fill="#f8d030">📍</text>`;
-    zoneSvg += `</g>`;
-  });
-  svg.innerHTML = lineSvg + zoneSvg + gateSvg;   // lines under, zones, then gate signs on top
+
+  svg.innerHTML = terrain + zoneSvg + doorSvg + gateSvg;
+  if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
+  if (!_atlasInit) {   // centre the pan window on the current zone the first time
+    const z = ZONE_INFO[currentZone];
+    if (z && z.wx != null) { atlasPanX = z.wx + z.cols / 2 - ATLAS_WIN_W / 2; atlasPanY = z.wy + z.rows / 2 - ATLAS_WIN_H / 2; }
+    clampAtlasPan(); _atlasInit = true;
+  }
+  svg.setAttribute('viewBox', `${atlasPanX} ${atlasPanY} ${ATLAS_WIN_W} ${ATLAS_WIN_H}`);
 }
 
 function closeMap() {
@@ -4602,6 +4668,10 @@ function uiPress(action) {
     else if (action === 'b') openMap();
     return;
   }
+  // Atlas view: d-pad scrolls the map instead of moving a cursor.
+  if (gameState === 'map' && atlasMode && (action === 'up' || action === 'down' || action === 'left' || action === 'right')) {
+    atlasPan(action); return;
+  }
   if (action === 'a')      navActivate();
   else if (action === 'b') navBack();
   else                     navMove(action);
@@ -4802,6 +4872,7 @@ function saveGame() {
       bondSteps,
       battleUses,
       evoNotified: [...evoNotified],
+      visited: [...visited],
     }));
   } catch (_) {}
 }
@@ -4839,6 +4910,7 @@ function loadSlot(n) {
       bondSteps = data.bondSteps || {};
       battleUses = data.battleUses || {};
       evoNotified.clear(); (data.evoNotified || []).forEach(k => evoNotified.add(k));
+      visited = new Set([0, ...(data.visited || []), data.zone ?? 0]);
       activePet = data.activePet ?? null;
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
