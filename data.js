@@ -76,12 +76,28 @@ const POKEMON_DATA = [
     zones: [3],
   },
   {
+    id: 36, name: 'Clefable', sprite: 'sprites/036.png', emoji: '🧚',
+    color: '#F4B8C0', bgColor: '#ffe8f0',
+    action: 'pet', actionEmoji: '🤚',
+    type: 'Fairy',
+    description: 'A timid fairy rarely seen by people. It walks on air to escape detection and skips along on moonlit nights.',
+    zones: [],
+  },
+  {
     id: 39, name: 'Jigglypuff', sprite: 'sprites/039.png', emoji: '🎵',
     color: '#F8A8C8', bgColor: '#ffe0f0',
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'When its huge eyes light up, it sings a mysteriously soothing melody that lulls its enemies to sleep.',
     zones: [2],
+  },
+  {
+    id: 40, name: 'Wigglytuff', sprite: 'sprites/040.png', emoji: '🎈',
+    color: '#F8A8C8', bgColor: '#ffe0f0',
+    action: 'pet', actionEmoji: '🤚',
+    type: 'Normal',
+    description: 'Its fur is the finest of any Pokémon. Bouncy and soft, it inflates by inhaling to float up and away.',
+    zones: [],
   },
   {
     id: 52, name: 'Meowth', sprite: 'sprites/052.png', emoji: '🐱',
@@ -451,7 +467,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Fire',
     description: 'A legendary Pokémon admired for its beauty. It runs agilely as if on wings, covering 6,200 miles per day!',
-    zones: [4],
+    zones: [],   // evolve-only: Growlithe + Fire Stone
   },
   {
     id: 75, name: 'Graveler', sprite: 'sprites/075.png', emoji: '🧱',
@@ -499,7 +515,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Fire',
     description: 'It stores thermal energy in its fluffy fur, then exhales fire that can reach 3,000 degrees!',
-    zones: [4],
+    zones: [],   // evolve-only: Eevee + Fire Stone
   },
   {
     id: 146, name: 'Moltres', sprite: 'sprites/146.png', emoji: '☀️',
@@ -647,7 +663,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Water',
     description: 'It shoots spikes from inside its shell at enemies. Its powerful shell cannot be opened from outside!',
-    zones: [6],
+    zones: [],   // evolve-only: Shellder + Water Stone
   },
   {
     id: 117, name: 'Seadra', sprite: 'sprites/117.png', emoji: '🌊',
@@ -671,7 +687,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Its core glows in seven colors like a rainbow jewel! Nobody knows what the glowing center gem is for.',
-    zones: [6],
+    zones: [],   // evolve-only: Staryu + Water Stone
   },
   {
     id: 134, name: 'Vaporeon', sprite: 'sprites/134.png', emoji: '💦',
@@ -679,7 +695,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'It melts into water making enemies lose sight of it! It can also predict rainstorms by feeling the air.',
-    zones: [6],
+    zones: [],   // evolve-only: Eevee + Water Stone
   },
   {
     id: 135, name: 'Jolteon', sprite: 'sprites/135.png', emoji: '⚡',
@@ -897,7 +913,9 @@ const DEX_INFO = {
   132: ['Transform',   0.3,   4.0],
   133: ['Evolution',   0.3,   6.5],
   26:  ['Mouse',        0.8,  30.0],
+  36:  ['Fairy',        1.3,  40.0],
   38:  ['Fox',          1.1,  19.9],
+  40:  ['Balloon',      1.0,  12.0],
   62:  ['Tadpole',      1.3,  54.0],
   71:  ['Flycatcher',   1.7,  15.5],
   135: ['Lightning',    0.8,  24.5],

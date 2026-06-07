@@ -349,6 +349,7 @@ const STONES = {
   fire:    { name: 'Fire Stone',    emoji: '🔥' },
   water:   { name: 'Water Stone',   emoji: '💧' },
   leaf:    { name: 'Leaf Stone',    emoji: '🍃' },
+  moon:    { name: 'Moon Stone',    emoji: '🌙' },
 };
 const STONE_EVOS = [
   { from: 25,  stone: 'thunder', to: 26  },  // Pikachu    → Raichu
@@ -361,14 +362,17 @@ const STONE_EVOS = [
   { from: 120, stone: 'water',   to: 121 },  // Staryu     → Starmie
   { from: 61,  stone: 'water',   to: 62  },  // Poliwhirl  → Poliwrath
   { from: 70,  stone: 'leaf',    to: 71  },  // Weepinbell → Victreebel
+  { from: 35,  stone: 'moon',    to: 36  },  // Clefairy   → Clefable
+  { from: 39,  stone: 'moon',    to: 40  },  // Jigglypuff → Wigglytuff
 ];
-// One Stone hidden in a thematic zone (snaps to the nearest walkable tile).
+// Stones are REUSABLE keepsakes — one of each is hidden in a thematic zone (snaps
+// to the nearest walkable tile) and unlocks every evolution of that type.
 const STONE_FINDS = [
-  { id: 'stone_fire',     zone: 4, x: 10, y: 13, stone: 'fire'    },  // Volcano
-  { id: 'stone_water',    zone: 1, x: 10, y: 30, stone: 'water'   },  // Beach
-  { id: 'stone_thunder',  zone: 3, x: 8,  y: 9,  stone: 'thunder' },  // Highlands (Zapdos country)
-  { id: 'stone_thunder2', zone: 2, x: 10, y: 8,  stone: 'thunder' },  // City (Pikachu's home)
-  { id: 'stone_leaf',     zone: 5, x: 28, y: 6,  stone: 'leaf'    },  // Dark Forest
+  { id: 'stone_fire',    zone: 4, x: 10, y: 13, stone: 'fire'    },  // Volcano
+  { id: 'stone_water',   zone: 1, x: 10, y: 30, stone: 'water'   },  // Beach
+  { id: 'stone_thunder', zone: 3, x: 8,  y: 9,  stone: 'thunder' },  // Highlands (Zapdos country)
+  { id: 'stone_leaf',    zone: 5, x: 28, y: 6,  stone: 'leaf'    },  // Dark Forest
+  { id: 'stone_moon',    zone: 8, x: 12, y: 8,  stone: 'moon'    },  // Hidden Cave (Mt. Moon!)
 ];
 STONE_FINDS.forEach(s => { [s.x, s.y] = nearestWalkable(s.zone, s.x, s.y); });
 function stoneFindAt(zone, x, y) {
@@ -3810,7 +3814,8 @@ function showDetail(poke) {
   evoWrap.innerHTML = '';
   const nav = [buddyBtn];
   const rules = evolutionsFor(poke.id);
-  const usable = rules.filter(r => (stones[r.stone] || 0) > 0 && POKEMON_DATA.find(p => p.id === r.to));
+  const pending = rules.filter(r => POKEMON_DATA.find(p => p.id === r.to) && !caughtIds.has(r.to));
+  const usable = pending.filter(r => (stones[r.stone] || 0) > 0);
   usable.forEach(r => {
     const target = POKEMON_DATA.find(p => p.id === r.to);
     const b = document.createElement('button');
@@ -3820,10 +3825,10 @@ function showDetail(poke) {
     evoWrap.appendChild(b);
     nav.push(b);
   });
-  if (!usable.length && rules.length) {
+  if (!usable.length && pending.length) {
     const hint = document.createElement('div');
     hint.className = 'detail-evo-hint';
-    const need = [...new Set(rules.map(r => STONES[r.stone].name))].join(' / ');
+    const need = [...new Set(pending.map(r => STONES[r.stone].name))].join(' / ');
     hint.textContent = `✨ Evolves with a ${need}`;
     evoWrap.appendChild(hint);
   }
@@ -4415,8 +4420,8 @@ function updateHud() {
   // Evolution stones (only shown once you own some).
   const hs = document.getElementById('hud-stones');
   if (hs) {
-    const owned = Object.keys(STONES).filter(k => (stones[k] || 0) > 0);
-    hs.innerHTML = owned.map(k => `${STONES[k].emoji}${stones[k] > 1 ? stones[k] : ''}`).join(' ');
+    const owned = Object.keys(STONES).filter(k => (stones[k] || 0) > 0);  // reusable → show icons, no counts
+    hs.innerHTML = owned.map(k => STONES[k].emoji).join('');
     hs.classList.toggle('hidden', owned.length === 0);
   }
 
@@ -4924,7 +4929,7 @@ function celebrateStone(s) {
   document.getElementById('result-title').textContent   = '💎 STONE FOUND!';
   document.getElementById('result-name').textContent    = st.name;
   document.getElementById('result-message').textContent =
-    'Show it to a Pokémon on its Pokédex page to evolve it!';
+    'Yours to keep! Show it to a Pokémon on its Pokédex page to evolve it.';
   const rs = document.getElementById('result-screen');
   rs.className = 'screen active success';
   showScreen('result');
@@ -4933,11 +4938,11 @@ function celebrateStone(s) {
 }
 
 // Use a Stone on a caught Pokémon → its evolved form joins the dex (base stays).
+// Stones are reusable, so we don't consume them — having one is enough.
 function evolveWithStone(poke, rule) {
   if ((stones[rule.stone] || 0) <= 0) return;
   const target = POKEMON_DATA.find(p => p.id === rule.to);
-  if (!target) return;
-  stones[rule.stone]--;
+  if (!target || caughtIds.has(target.id)) return;
   seenIds.add(target.id);
   caughtIds.add(target.id);
   saveGame();
