@@ -1249,6 +1249,15 @@ function bindEvents() {
   // World map + guide
   document.getElementById('map-back').addEventListener('click', closeMap);
   document.getElementById('map-help').addEventListener('click', () => openHelp('map'));
+  document.getElementById('map-atlas-toggle').addEventListener('click', () => {
+    atlasMode = !atlasMode;
+    document.getElementById('map-atlas-toggle').textContent = atlasMode ? '⊞ Grid' : '🗺️ Shapes';
+    renderMap();
+  });
+  document.getElementById('map-atlas').addEventListener('click', e => {
+    const g = e.target.closest && e.target.closest('.atlas-zone');
+    if (g && g.getAttribute('data-travel') === '1') fastTravel(+g.getAttribute('data-zone'));
+  });
   document.getElementById('help-back').addEventListener('click', closeHelp);
 
   // Settings
@@ -4067,10 +4076,55 @@ function reachableZones() {
   return seen;
 }
 
+let atlasMode = false;   // world-map view: false = icon grid, true = true-shape atlas
+
 function openMap() {
   clearTimeout(spawnTimerId);
   renderMap();
   showScreen('map');
+}
+
+// Experimental "atlas" view: draw every surface zone as its real rectangle
+// (sized by cols×rows, placed at its planar wx/wy), so you see the world's true
+// shape. Connections are drawn between zone centres; locked ones are dashed red.
+const ATLAS_BIO = { 0: '#c2a85a', 1: '#4a9a3a', 4: '#d8c070', 5: '#27502a', 8: '#bcdcf0' };
+function renderAtlas(open) {
+  const svg = document.getElementById('map-atlas');
+  if (!svg) return;
+  const surf = ZONE_INFO.filter(z => z.mapCol != null && z.wx != null);
+  const minX = Math.min(...surf.map(z => z.wx)), maxX = Math.max(...surf.map(z => z.wx + z.cols));
+  const minY = Math.min(...surf.map(z => z.wy)), maxY = Math.max(...surf.map(z => z.wy + z.rows));
+  const pad = 3;
+  svg.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`);
+  const cxy = z => [z.wx + z.cols / 2, z.wy + z.rows / 2];
+  let lineSvg = '', gateSvg = '', zoneSvg = '';
+  const drawn = new Set();
+  EXITS.forEach(e => {
+    const a = ZONE_INFO[e.from], b = ZONE_INFO[e.to];
+    if (!a || !b || a.mapCol == null || b.mapCol == null) return;
+    const key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to);
+    if (drawn.has(key)) return; drawn.add(key);
+    const gate = EXITS.find(x => ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
+    const passable = isBarrierUnlocked(gate ? gate.barrier : null);
+    const [x1, y1] = cxy(a), [x2, y2] = cxy(b);
+    lineSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${passable ? '#5ad85a' : '#d05050'}" stroke-width="0.7" stroke-dasharray="${passable ? '' : '1.6,1'}" opacity="0.8"/>`;
+    if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.4}" text-anchor="middle" font-size="3.6">${BARRIERS[gate.barrier].sign}</text>`;
+  });
+  surf.forEach(z => {
+    const isOpen = open.has(z.id), here = z.id === currentZone;
+    const fill = isOpen ? (ATLAS_BIO[z.base] || '#5a6a7a') : '#26262e';
+    const stroke = here ? '#f8d030' : (isOpen ? 'rgba(0,0,0,.5)' : 'rgba(120,120,140,.5)');
+    const small = Math.min(z.cols, z.rows);
+    const [cx, cy] = cxy(z);
+    const travel = (isOpen && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
+    zoneSvg += `<g class="atlas-zone" data-zone="${z.id}"${travel}>`;
+    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="${fill}" stroke="${stroke}" stroke-width="${here ? 1.3 : 0.5}" opacity="${isOpen ? 0.95 : 0.55}"/>`;
+    zoneSvg += `<text x="${cx}" y="${cy + 1.4}" text-anchor="middle" font-size="${small >= 12 ? 5 : 3.6}">${isOpen ? (z.icon || '') : '🔒'}</text>`;
+    if (isOpen && small >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.4}" text-anchor="middle" font-size="2.3" fill="#fff">${z.name}</text>`;
+    if (here) zoneSvg += `<text x="${cx}" y="${z.wy + 2.8}" text-anchor="middle" font-size="2.6" fill="#f8d030">📍</text>`;
+    zoneSvg += `</g>`;
+  });
+  svg.innerHTML = lineSvg + zoneSvg + gateSvg;   // lines under, zones, then gate signs on top
 }
 
 function closeMap() {
@@ -4294,6 +4348,10 @@ function renderMap() {
     b.title = have ? c.name : '???';
     tray.appendChild(b);
   });
+
+  // Experimental true-shape atlas overlay (CSS shows it when atlas mode is on).
+  document.getElementById('map-board').classList.toggle('atlas-on', atlasMode);
+  renderAtlas(open);
 }
 
 // ─── Badge Case ──────────────────────────────────────

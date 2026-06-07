@@ -2032,3 +2032,12 @@ body.immersive #fullscreen-btn {
   color: #c9a85a;
   letter-spacing: .5px;
 }
+
+/* ─── Atlas (true-shape) map view ──────────────────────────────────── */
+#map-atlas { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+#map-board.atlas-on #map-lines,
+#map-board.atlas-on #map-zones { display: none; }
+#map-board.atlas-on #map-atlas { display: block; }
+.atlas-zone[data-travel="1"] { cursor: pointer; }
+.atlas-zone[data-travel="1"]:hover rect { stroke: #8fd0ff; stroke-width: 1.2; }
+.atlas-zone text { pointer-events: none; user-select: none; }
