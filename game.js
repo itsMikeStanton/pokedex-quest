@@ -601,6 +601,8 @@ let encTries       = 0;       // wrong guesses this encounter (one gentle retry 
 let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
 let spawnTimerId   = null;   // next spawn setTimeout id
 let expireTimerId  = null;   // current wild's disappear setTimeout id
+let wildTrainer    = null;   // { x, y, zone, name, emoji } — a wandering trainer to battle
+let trainerTimerId = null;   // wandering trainer's wander-off setTimeout id
 let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
@@ -1628,6 +1630,14 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3c2. A wandering trainer on the destination tile → a quick battle.
+  if (trainerAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    startTrainerBattle();
+    return;
+  }
+
   // 3d. Another player (LAN multiplayer) on the destination tile → friendly duel.
   if (window.MP && MP.maybeBump(nx, ny, ts)) {
     bumpVec = { dx, dy };
@@ -1798,6 +1808,7 @@ function move(dx, dy, ts) {
 // Move the player to (x, y) of another zone — used by both edge exits and
 // point-portals (cave mouths). The buddy is teleported along too.
 function warpTo(zone, x, y, dirKey) {
+  clearTrainer();                     // any wandering trainer stays in the zone you left
   beginZoneSlide(dirKey || 'down');   // snapshot the old zone, then scroll into the new one
   currentZone = zone;
   playerX     = x;
@@ -1888,6 +1899,36 @@ function clearWild() {
   wildPoke = null;
 }
 
+// ── Wandering trainers ───────────────────────────────
+const TRAINER_NAMES  = ['Hiker Joe', 'Bug Catcher Lia', 'Camper Sam', 'Picnicker Mae', 'Youngster Tim', 'Lass Ivy', 'Fisher Gil', 'Bird Keeper Ann', 'Sailor Moe', 'Painter Bea'];
+const TRAINER_EMOJIS = ['🧗', '🧒', '🎒', '🧺', '👦', '👧', '🎣', '🦅', '⚓', '🎨'];
+function trainerAt(zone, x, y) {
+  return (wildTrainer && wildTrainer.zone === zone && wildTrainer.x === x && wildTrainer.y === y) ? wildTrainer : null;
+}
+function spawnTrainer() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return false;     // outdoors only
+  const map = MAPS[currentZone], { cols, rows } = z, cands = [];
+  for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
+    const t = map[r][c];
+    if (isObstacleTile(t) || t === T.GRASS || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) continue;
+    if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r)) continue;
+    if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r)) continue;
+    const d = Math.abs(c - playerX) + Math.abs(r - playerY);
+    if (d >= 3 && d <= 8) cands.push({ x: c, y: r });
+  }
+  if (!cands.length) return false;
+  const tile = cands[Math.floor(Math.random() * cands.length)];
+  const i = Math.floor(Math.random() * TRAINER_NAMES.length);
+  wildTrainer = { x: tile.x, y: tile.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i] };
+  beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
+  showMessage(`❗ ${wildTrainer.name} wants to battle! Walk up to them.`);
+  clearTimeout(trainerTimerId);
+  trainerTimerId = setTimeout(() => { wildTrainer = null; scheduleSpawn(); }, 24000);  // wanders off if ignored
+  return true;
+}
+function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
+
 function spawnWild() {
   // Not in the overworld (menu/encounter)? Try again later — never let the
   // spawn loop die.
@@ -1895,6 +1936,9 @@ function spawnWild() {
   if (ZONE_INFO[currentZone].interior) return;   // no wild Lukeymon indoors
 
   clearWild();
+
+  // Now and then a wandering trainer turns up instead, looking for a quick battle.
+  if (!wildTrainer && Math.random() < 0.18 && spawnTrainer()) return;
 
   // Pick a random uncaught Pokémon for the current zone
   const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id) && !p.boss && !p.legend);
@@ -2102,6 +2146,15 @@ function drawNPCE(n, ts) {
   if (n.art && drawCharField(n.art, 'down', px, py, 42)) return;
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+}
+function drawTrainerE(t, ts) {
+  const px = t.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = t.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
+  const bob = Math.sin(ts * 0.004) * 2;
+  ctx.textAlign = 'center'; ctx.font = '22px serif';
+  ctx.fillText(t.emoji, px, py + 24 + bob);
+  ctx.font = '14px serif'; ctx.fillText('❗', px, py - 4 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
 }
 function drawRocketE(r, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
@@ -2490,6 +2543,8 @@ function drawWorld(ts) {
     if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
   for (const n of NPCS)
     if (n.zone === currentZone) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+  if (wildTrainer && wildTrainer.zone === currentZone)
+    sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
   for (const r of ROCKETS)
     if (r.zone === currentZone && !caughtIds.has(r.bird)) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRocketE(r, ts) });
   for (const r of roamers)
@@ -3400,6 +3455,26 @@ function startDojoBattle() {
     demandPre: 'Training partner uses ', demandPost: ' — counter it!',
     onWin:  () => showBattleWin('🥋 Great training session!', 'Done ✓', true, returnToWorld),
     onLose: () => showBattleWin('💪 Good effort — train again any time!', 'Done ✓', true, returnToWorld),
+  });
+}
+
+// A wandering trainer's quick 2-round battle: they send out a couple of common
+// Lukéymon; counter the type. A small reward on a win; either way it grows your
+// battle evolutions. (battleUses is credited per pick in chooseBattlePoke.)
+function startTrainerBattle() {
+  const t = wildTrainer;
+  if (!t) return;
+  clearTimeout(trainerTimerId);
+  const pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && p.zones && p.zones.length);
+  const pick = () => pool[Math.floor(Math.random() * pool.length)].id;
+  const lineup = [pick(), pick()];
+  startBossBattle({
+    title: t.name, emoji: t.emoji, rounds: 2, rule: 'beats',
+    grunt: t.name, lineup, foeEmoji: t.emoji,
+    motto: `<b>${t.name} wants to battle!</b><br>“Let’s see what your team can do!”`,
+    intro: () => rocketIntro(),
+    onWin:  () => { coins += 8; balls += 1; updateHud(); saveGame(); clearTrainer(); showBattleWin('🏆 You won the battle! +8 💰 +1 ball', 'Done ✓', true, returnToWorld); },
+    onLose: () => { clearTrainer(); showBattleWin('💪 They got the better of you this time!', 'Done ✓', true, returnToWorld); },
   });
 }
 
