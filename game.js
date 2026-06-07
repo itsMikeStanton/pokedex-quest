@@ -4136,7 +4136,7 @@ function renderAtlas(open) {
   const disc = new Set(visited);
   EXITS.forEach(e => { if (visited.has(e.from)) disc.add(e.to); if (visited.has(e.to)) disc.add(e.from); });
 
-  let terrain = '', zoneSvg = '', doorSvg = '', gateSvg = '';
+  let zoneSvg = '', doorSvg = '', gateSvg = '';
   surf.forEach(z => {
     const seen = visited.has(z.id), known = disc.has(z.id), here = z.id === currentZone;
     const [cx, cy] = [z.wx + z.cols / 2, z.wy + z.rows / 2];
@@ -4147,24 +4147,25 @@ function renderAtlas(open) {
       zoneSvg += `<text x="${cx}" y="${cy + 1.4}" text-anchor="middle" font-size="4" fill="#3a3a4a">?</text></g>`;
       return;
     }
-    // biome base
+    // biome base, then the real terrain detail painted ON TOP of it
     zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="${ATLAS_TC[z.base] || '#5a6a7a'}"/>`;
     if (seen) {                                     // real terrain detail (feature tiles)
       const m = MAPS[z.id];
       for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
         const t = m[r][c];
         if (t === z.base || t === 0) continue;       // base + path show through
-        terrain += `<rect x="${z.wx + c}" y="${z.wy + r}" width="1" height="1" fill="${ATLAS_TC[t] || '#888'}"/>`;
+        zoneSvg += `<rect x="${z.wx + c}" y="${z.wy + r}" width="1.04" height="1.04" fill="${ATLAS_TC[t] || '#888'}"/>`;
       }
     } else {                                         // known-but-unvisited → dim
       zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" fill="#0a0a12" opacity="0.55"/>`;
     }
     const stroke = here ? '#f8d030' : 'rgba(0,0,0,.55)';
     zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="none" stroke="${stroke}" stroke-width="${here ? 1.3 : 0.5}"/>`;
+    // a small icon tucked in the corner so it doesn't cover the terrain
     const icon = open.has(z.id) ? (z.icon || '') : '🔒';
-    zoneSvg += `<text x="${cx}" y="${cy + 1.2}" text-anchor="middle" font-size="${Math.min(z.cols, z.rows) >= 12 ? 4.5 : 3.2}">${icon}</text>`;
-    if (seen && Math.min(z.cols, z.rows) >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.3}" text-anchor="middle" font-size="2.2" fill="#fff">${z.name}</text>`;
-    if (here) zoneSvg += `<text x="${cx}" y="${z.wy + 2.6}" text-anchor="middle" font-size="2.4" fill="#f8d030">📍</text>`;
+    zoneSvg += `<text x="${z.wx + 1.8}" y="${z.wy + 3.2}" text-anchor="middle" font-size="3">${icon}</text>`;
+    if (seen && Math.min(z.cols, z.rows) >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.3}" text-anchor="middle" font-size="2.2" fill="#fff" stroke="#000" stroke-width="0.18" paint-order="stroke">${z.name}</text>`;
+    if (here) zoneSvg += `<text x="${z.wx + z.cols - 1.8}" y="${z.wy + 3.4}" text-anchor="middle" font-size="3.2" fill="#f8d030">📍</text>`;
     zoneSvg += `</g>`;
   });
 
@@ -4183,7 +4184,7 @@ function renderAtlas(open) {
     if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.3}" text-anchor="middle" font-size="3.4">${BARRIERS[gate.barrier].sign}</text>`;
   });
 
-  svg.innerHTML = terrain + zoneSvg + doorSvg + gateSvg;
+  svg.innerHTML = zoneSvg + doorSvg + gateSvg;
   if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
   if (!_atlasInit) {   // centre the pan window on the current zone the first time
     const z = ZONE_INFO[currentZone];
