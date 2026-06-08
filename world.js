@@ -26,6 +26,7 @@ const WORLD = {
     {"id":19,"name":"Haunted Hollow","cols":40,"rows":13,"base":0,"wx":0,"wy":42,"mapCol":1,"mapRow":3,"icon":"👻","night":true},
     {"id":20,"name":"Coral Coast","cols":14,"rows":88,"base":4,"wx":-14,"wy":-1,"mapCol":0,"mapRow":2,"icon":"🏝️"},
     {"id":21,"name":"Champion's Cove","cols":14,"rows":11,"base":1,"wx":-14,"wy":-12,"mapCol":0,"mapRow":0,"icon":"🏡","weather":"norain"},
+    {"id":22,"name":"Dad's House","cols":9,"rows":7,"base":13,"mapCol":null,"mapRow":null,"icon":"🏡","interior":true},
   ],
   exits: [
     {"from":0,"dir":"south","pos":[6,7,8],"to":1,"entryX":7,"entryY":1,"barrier":"log","seam":true},
@@ -40,7 +41,7 @@ const WORLD = {
     {"from":3,"dir":"west","pos":[6,7,8],"to":2,"entryX":18,"entryY":7,"barrier":null,"seam":true},
     {"from":3,"dir":"south","pos":[4,5,6],"to":4,"entryX":5,"entryY":1,"barrier":"lava","seam":true},
     {"from":4,"dir":"north","pos":[4,5,6],"to":3,"entryX":5,"entryY":12,"barrier":null,"seam":true},
-    {"from":0,"dir":"north","pos":[16,17,18],"to":13,"entryX":27,"entryY":12,"barrier":null,"seam":true},
+    {"from":0,"dir":"north","pos":[16,17,18],"to":13,"entryX":27,"entryY":12,"barrier":"rock","seam":true},
     {"from":13,"dir":"south","pos":[26,27,28],"to":0,"entryX":17,"entryY":1,"barrier":null,"seam":true},
     {"from":5,"dir":"north","pos":[24,25,26],"to":14,"entryX":25,"entryY":12,"barrier":null,"seam":true},
     {"from":14,"dir":"south","pos":[24,25,26],"to":5,"entryX":25,"entryY":1,"barrier":null,"seam":true},
@@ -78,6 +79,8 @@ const WORLD = {
     {"from":11,"fx":5,"fy":8,"to":2,"tx":4,"ty":3},
     {"from":2,"fx":13,"fy":2,"to":12,"tx":6,"ty":9},
     {"from":12,"fx":6,"fy":10,"to":2,"tx":13,"ty":3},
+    {"from":21,"fx":6,"fy":3,"to":22,"tx":4,"ty":5},
+    {"from":22,"fx":4,"fy":6,"to":21,"tx":6,"ty":4},
   ],
   maps: {
     "0": [
@@ -554,12 +557,22 @@ const WORLD = {
       [2,1,2,1,1,1,1,1,1,1,1,1,1,2],
       [2,1,1,1,1,1,1,1,1,1,1,1,1,2],
       [2,2,2,2,2,2,2,2,2,2,1,1,1,2]
+    ],
+    "22": [
+      [14,14,14,14,14,14,14,14,14],
+      [14,13,13,13,13,13,13,13,14],
+      [14,13,13,13,13,13,13,13,14],
+      [14,13,13,13,13,13,13,13,14],
+      [14,13,13,13,13,13,13,13,14],
+      [14,13,13,13,13,13,13,13,14],
+      [14,14,14,14,15,14,14,14,14]
     ]
   },
   decor: {
     "9": [{"x":1,"y":1,"s":"household_01","solid":1}, {"x":2,"y":1,"s":"household_05","solid":1}, {"x":3,"y":1,"s":"household_04","solid":1}, {"x":5,"y":1,"s":"household_18"}, {"x":7,"y":1,"s":"household_15","solid":1}, {"x":8,"y":1,"s":"household_14","solid":1}, {"x":9,"y":1,"s":"household_06","solid":1}, {"x":1,"y":4,"s":"household_13","solid":1}, {"x":9,"y":3,"s":"household_09","solid":1}, {"x":8,"y":3,"s":"household_10","solid":1}, {"x":5,"y":4,"s":"household_11"}, {"x":1,"y":6,"s":"household_28"}, {"x":9,"y":6,"s":"household_19"}, {"x":3,"y":6,"s":"household_26"}, {"x":7,"y":6,"s":"household_27"}],
     "10": [{"x":1,"y":1,"s":"commercial_03","solid":1}, {"x":2,"y":1,"s":"commercial_14","solid":1}, {"x":3,"y":1,"s":"commercial_11"}, {"x":5,"y":1,"s":"commercial_13"}, {"x":7,"y":1,"s":"commercial_14","solid":1}, {"x":8,"y":1,"s":"commercial_14","solid":1}, {"x":9,"y":1,"s":"commercial_18","solid":1}, {"x":4,"y":3,"s":"commercial_01","solid":1}, {"x":6,"y":3,"s":"commercial_02","solid":1}, {"x":2,"y":5,"s":"commercial_06","solid":1}, {"x":8,"y":5,"s":"commercial_07","solid":1}, {"x":1,"y":6,"s":"commercial_04"}, {"x":9,"y":6,"s":"commercial_15"}],
     "11": [{"x":1,"y":1,"s":"vet_03"}, {"x":2,"y":1,"s":"vet_05"}, {"x":3,"y":1,"s":"vet_07"}, {"x":7,"y":1,"s":"vet_09"}, {"x":8,"y":1,"s":"vet_11"}, {"x":9,"y":1,"s":"vet_13"}, {"x":5,"y":2,"s":"commercial_05","solid":1}, {"x":1,"y":4,"s":"vet_15"}, {"x":9,"y":4,"s":"vet_17"}, {"x":2,"y":6,"s":"vet_19"}, {"x":8,"y":6,"s":"vet_01"}, {"x":1,"y":6,"s":"other_03"}, {"x":9,"y":6,"s":"other_05"}],
-    "12": [{"x":1,"y":1,"s":"battle_gym_01"}, {"x":2,"y":1,"s":"battle_gym_03"}, {"x":10,"y":1,"s":"battle_gym_05"}, {"x":11,"y":1,"s":"battle_gym_07"}, {"x":4,"y":1,"s":"sports_gym_09"}, {"x":8,"y":1,"s":"sports_gym_11"}, {"x":1,"y":5,"s":"sports_gym_01"}, {"x":11,"y":5,"s":"sports_gym_03"}, {"x":1,"y":8,"s":"sports_gym_05"}, {"x":11,"y":8,"s":"sports_gym_07"}, {"x":3,"y":8,"s":"battle_gym_09","solid":1}, {"x":9,"y":8,"s":"battle_gym_11","solid":1}]
+    "12": [{"x":1,"y":1,"s":"battle_gym_01"}, {"x":2,"y":1,"s":"battle_gym_03"}, {"x":10,"y":1,"s":"battle_gym_05"}, {"x":11,"y":1,"s":"battle_gym_07"}, {"x":4,"y":1,"s":"sports_gym_09"}, {"x":8,"y":1,"s":"sports_gym_11"}, {"x":1,"y":5,"s":"sports_gym_01"}, {"x":11,"y":5,"s":"sports_gym_03"}, {"x":1,"y":8,"s":"sports_gym_05"}, {"x":11,"y":8,"s":"sports_gym_07"}, {"x":3,"y":8,"s":"battle_gym_09","solid":1}, {"x":9,"y":8,"s":"battle_gym_11","solid":1}],
+    "22": [{"x":1,"y":1,"s":"household_01","solid":1}, {"x":2,"y":1,"s":"household_05","solid":1}, {"x":7,"y":1,"s":"household_06","solid":1}, {"x":7,"y":2,"s":"household_09","solid":1}, {"x":1,"y":4,"s":"household_28"}, {"x":7,"y":4,"s":"household_19"}]
   },
 };

@@ -225,9 +225,9 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
-  // ── The final NPC: Dad, waiting at the blue house in Champion's Cove. ──
+  // ── The final NPC: Dad, waiting inside the blue house in Champion's Cove. ──
   // You can only reach him after befriending all 151 (Mewtwo opens the seal).
-  { zone: 21, x: 6, y: 6, emoji: '🧔', name: 'Dad', art: 'dad', lines: () => [
+  { zone: 22, x: 4, y: 2, emoji: '🧔', name: 'Dad', art: 'dad', lines: () => [
     `...${saveName}? You made it. You actually made it all the way up here. 🥹`,
     `You befriended every single Lukeymon — all 151 of them. Even Mewtwo chose to walk beside you.`,
     `I built this whole island just for you, kiddo — every meadow, every cave, every beach and mountain.`,
@@ -4280,7 +4280,7 @@ function renderAtlas(open) {
   surf.forEach(z => {
     const seen = visited.has(z.id), known = disc.has(z.id), here = z.id === currentZone;
     const [cx, cy] = [z.wx + z.cols / 2, z.wy + z.rows / 2];
-    const travel = (open.has(z.id) && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
+    const travel = (visited.has(z.id) && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
     zoneSvg += `<g class="atlas-zone" data-zone="${z.id}"${travel}>`;
     if (!known) {                                   // unexplored → fog
       zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="#191922" opacity="0.85"/>`;
@@ -4350,6 +4350,7 @@ function zoneLanding(zone) {
 
 function fastTravel(zone) {
   if (zone === currentZone) return;
+  if (!visited.has(zone)) return;        // only to places you've actually walked to
   const land = zoneLanding(zone);
   if (!land) return;
   const [x, y] = land;
