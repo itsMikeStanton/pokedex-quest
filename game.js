@@ -10,6 +10,11 @@ const WILD_TIMEOUT   = 11000;  // ms a wild Pokémon stays on its tile before fl
 const TIMER_MS       = 9000;   // seconds to choose during a taming encounter
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
 const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
+// Speedster buddies (built for running) let you traverse the world faster:
+// a quicker step cadence and a matching faster slide.
+const SWIFT_MOVE_INTERVAL = 108;
+const SWIFT_MOVE_ANIM_MS  = 100;
+const SWIFT_BUDDIES  = new Set([78, 85]);   // Rapidash (150 mph!) & Dodrio
 const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
 const SAVE_KEY       = 'lukeymon_v3';
 
@@ -100,6 +105,8 @@ const STATIC_TIPS = [
     text:'Deep water blocks the way — unless a Water-type buddy is following. Then you hop on and surf right across.' },
   { id:'cave', cat:'Exploring', icon:'🕯️', title:'Dark caves',
     text:'Caves are pitch black. Bring a glowing buddy (a Fire-type works well) to light up the path around you.' },
+  { id:'swift', cat:'Exploring', icon:'💨', title:'Speed runners',
+    text:'A few Lukeymon are built for speed — Rapidash and Dodrio. Set one as your buddy and you DASH across the world, covering ground much faster.' },
 ];
 const TIP_CATEGORIES = ['Training', 'Battles', 'Barriers', 'Ice', 'Water', 'Exploring'];
 function barrierTip(key) {
@@ -1554,13 +1561,14 @@ function loop(ts) {
         petFollow(r.toX + r.dx, r.toY + r.dy, ts, r.dur + r.lag);
       }
     }
-    if (ts - lastMoveTs >= MOVE_INTERVAL) {
+    const stepInterval = buddyIsSwift() ? SWIFT_MOVE_INTERVAL : MOVE_INTERVAL;
+    if (ts - lastMoveTs >= stepInterval) {
       let moved = false;
       if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1, ts); moved = true; }
       else if (keys['ArrowDown']  || keys['s'] || keys['S']) { move( 0, 1, ts); moved = true; }
       else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { move(-1, 0, ts); moved = true; }
       else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0, ts); moved = true; }
-      if (moved) lastMoveTs = ts;
+      if (moved) { lastMoveTs = ts; if (buddyIsSwift()) learnTip('swift'); }
     }
     if (zoneSlide) drawZoneSlide(ts);
     else           drawWorld(ts);
@@ -1598,6 +1606,9 @@ function buddyHasType(type) {
 
 // A Water-type buddy (Lapras, Squirtle, …) lets the player surf across water.
 function canSurf() { return buddyHasType('Water'); }
+
+// A few buddies famous for speed (Rapidash, Dodrio) let you dash — faster steps.
+function buddyIsSwift() { return activePet != null && SWIFT_BUDDIES.has(activePet); }
 
 // Does the current buddy glow brightly enough to light a cave? Fire types carry
 // a flame; a few others (marked light:true) also shine.
@@ -1823,7 +1834,8 @@ function move(dx, dy, ts) {
 
   // 5. Normal move
   moveLinear  = (tile === T.ICE && !buddyHasType('Ice')); // uncontrolled ice slides glide at constant speed
-  moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * MOVE_ANIM_MS;
+  const stepMs = (!moveLinear && buddyIsSwift()) ? SWIFT_MOVE_ANIM_MS : MOVE_ANIM_MS;
+  moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * stepMs;
   const cur = getRenderPos(ts);
   fromPx.x   = cur.x;
   fromPx.y   = cur.y;
