@@ -3509,14 +3509,20 @@ function startTrainerBattle() {
   if (!t) return;
   clearTimeout(trainerTimerId);
   const pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && p.zones && p.zones.length);
-  const pick = () => pool[Math.floor(Math.random() * pool.length)].id;
+  // Send out Lukéymon your team can actually counter, so the battle is winnable
+  // (and the small reward is reachable).
+  const owned = new Set([...caughtIds].map(id => (POKEMON_DATA.find(p => p.id === id) || {}).type).filter(Boolean));
+  const beatable = pool.filter(m => (BEATEN_BY[m.type] || [m.type]).some(ct => owned.has(ct)));
+  const src = beatable.length ? beatable : pool;
+  const pick = () => src[Math.floor(Math.random() * src.length)].id;
   const lineup = [pick(), pick()];
+  const reward = 6 + Math.floor(Math.random() * 7);   // a small coin reward (6–12)
   startBossBattle({
     title: t.name, emoji: t.emoji, rounds: 2, rule: 'beats',
     grunt: t.name, lineup, foeEmoji: t.emoji,
     motto: `<b>${t.name} wants to battle!</b><br>“Let’s see what your team can do!”`,
     intro: () => rocketIntro(),
-    onWin:  () => { coins += 8; balls += 1; updateHud(); saveGame(); clearTrainer(); showBattleWin('🏆 You won the battle! +8 💰 +1 ball', 'Done ✓', true, returnToWorld); },
+    onWin:  () => { coins += reward; balls += 1; updateHud(); saveGame(); clearTrainer(); showBattleWin(`🏆 You won! +${reward} 💰 +1 ball`, 'Done ✓', true, returnToWorld); },
     onLose: () => { clearTrainer(); showBattleWin('💪 They got the better of you this time!', 'Done ✓', true, returnToWorld); },
   });
 }
