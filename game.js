@@ -4570,7 +4570,33 @@ function renderAtlas(open) {
         `<text x="${hx}" y="${hy + 1.5}" text-anchor="middle" font-size="4">✨</text></g>`;
     }
   }
-  svg.innerHTML = zoneSvg + doorSvg + gateSvg + hintSvg;
+  // Island shoreline: a jaggy sand (and occasional cliff-stone) fringe drawn in
+  // the OCEAN just outside every zone edge that faces open water and isn't already
+  // beach/water — so the landmass reads as an island instead of hard rectangles.
+  let fringeSvg = '';
+  const rects = surf.map(z => [z.wx, z.wy, z.wx + z.cols, z.wy + z.rows]);
+  const covered = (x, y) => { for (const r of rects) if (x >= r[0] && x < r[2] && y >= r[1] && y < r[3]) return true; return false; };
+  const fr = (x, y) => { let h = (Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663)) >>> 0; return (h % 997) / 997; };
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  surf.forEach(z => {
+    const m = MAPS[z.id]; if (!m) return;
+    for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
+      if (r > 0 && r < z.rows - 1 && c > 0 && c < z.cols - 1) continue;   // perimeter only
+      const t = m[r][c]; if (t === 3 || t === 4) continue;                // already sand/water → natural
+      const wx = z.wx + c, wy = z.wy + r;
+      for (const [dx, dy] of DIRS) {
+        if (covered(wx + dx, wy + dy)) continue;                          // neighbour is land → no shore
+        const rv = fr(wx * 3 + dx, wy * 3 + dy), depth = rv < 0.32 ? 0 : rv < 0.82 ? 1 : 2;  // jaggy bites
+        const col = fr(wx, wy) < 0.16 ? '#8d8678' : '#e2cf86';            // a little cliff-stone, mostly sand
+        for (let d = 1; d <= depth; d++) {
+          const fx = wx + dx * d, fy = wy + dy * d;
+          if (covered(fx, fy)) break;
+          fringeSvg += `<rect x="${fx}" y="${fy}" width="1.05" height="1.05" fill="${col}"/>`;
+        }
+      }
+    }
+  });
+  svg.innerHTML = fringeSvg + zoneSvg + doorSvg + gateSvg + hintSvg;
   if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
   if (!_atlasInit) {   // centre the pan window on the current zone the first time
     const z = ZONE_INFO[currentZone];
