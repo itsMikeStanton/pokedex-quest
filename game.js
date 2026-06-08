@@ -2490,18 +2490,22 @@ function drawRain(ts, rf) {
     const n = Math.round(W * H / 2000);     // plenty of drops — a real downpour
     for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 9 + Math.random() * 12, s: 9 + Math.random() * 7 });
   }
-  ctx.save();
-  ctx.strokeStyle = `rgba(190,210,245,${0.55 * rf})`; ctx.lineWidth = 1.1;
   const slant = 2.2;
+  ctx.save();
+  ctx.lineCap = 'round';
+  // Build the streaks once, then stroke twice: a dark wider pass for contrast on
+  // light ground (sand/snow), and a bright thin core on top.
   ctx.beginPath();
+  for (const d of rainDrops) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - slant, d.y + d.l); }
+  ctx.strokeStyle = `rgba(30,55,110,${0.5 * rf})`;  ctx.lineWidth = 2.2; ctx.stroke();
+  ctx.strokeStyle = `rgba(225,238,255,${0.9 * rf})`; ctx.lineWidth = 1.0; ctx.stroke();
+  ctx.restore();
+  // advance the drops
   for (const d of rainDrops) {
-    ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - slant, d.y + d.l);
     d.y += d.s; d.x -= slant * 0.4;
     if (d.y > H) { d.y = -d.l; d.x = Math.random() * W; }
     if (d.x < 0) d.x += W;
   }
-  ctx.stroke();
-  ctx.restore();
 }
 // Console/debug helpers — force night or rain on/off for previewing.
 function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return nightMode; }
