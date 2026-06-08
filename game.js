@@ -82,6 +82,9 @@ const BARRIERS = {
   psychic: { needsType: 'Psychic', needsBuddyId: 150,
     hint: '🔮 A barrier of pure psychic force seals the path north. Only an ULTRA-POWERFUL Psychic-type — the very strongest of all — may pass.',
     cleared: '🔮 Mewtwo flares with unimaginable psychic power... the barrier dissolves!', sign: '🔮' },
+  lullaby: { needsType: 'Normal', needsBuddyId: 39,
+    hint: '😱 A COLOSSAL beast slumbers across the path — and it stirs and growls if you creep too close. You\'d need to lull it into a far DEEPER sleep to slip by... (a singing buddy, perhaps?)',
+    cleared: '🎵 Jigglypuff\'s lullaby drifts over the titan... it yawns, curls up, and sinks into a deep, deep sleep. 😴 You tiptoe right past!', sign: '😴' },
 };
 
 // ── FIELD NOTES ──────────────────────────────────────
@@ -90,7 +93,7 @@ const BARRIERS = {
 const BARRIER_LABEL = {
   log:'Fallen logs', rock:'River rocks', fence:'Electric fence',
   lava:'Lava flow', vine:'Thick vines', frost:'Ice wall', sand:'Sand wall',
-  psychic:'Psychic seal',
+  psychic:'Psychic seal', lullaby:'Slumbering titan',
 };
 const STATIC_TIPS = [
   { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
@@ -229,6 +232,7 @@ const COLLECTIBLES = [
   { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', name: 'Tunnel Badge' },
   { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', name: 'Crystal Badge' },
   { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', name: 'Echo Badge' },
+  { id: 'badge_lullaby', zone: 29, x:  9, y:  6, emoji: '😴', name: 'Lullaby Badge' },
   // Awarded automatically — not placed in the world.
   { id: 'badge_gym',  auto: true, emoji: '🥊', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
   { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
@@ -816,6 +820,7 @@ const TILE_ART = {
   20: { 1: 3, 3: 3, 4: 3, 8: 3 },
   21: { 1: 3, 3: 3, 4: 3 },
   26: { 9: 3, 10: 3, 11: 1 }, 27: { 9: 3, 10: 3, 11: 1 }, 28: { 9: 3, 10: 3, 11: 1 },  // new caves ← Hidden Cave art
+  29: { 0: 3, 1: 3 },                                                                    // Lullaby Hollow ← Meadow grass
 };
 // The new lands reuse the original received tile art, mapped per tile to a
 // biome-matching source zone (no procedurally-generated tiles).
@@ -830,8 +835,9 @@ const NEW_TILE_SRC = {
   20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
   21: { 1: 0, 3: 1, 4: 1 },                 // Champion's Cove ← Meadow grass + Beach water/sand
   26: { 9: 8, 10: 8, 11: 8 }, 27: { 9: 8, 10: 8, 11: 8 }, 28: { 9: 8, 10: 8, 11: 8 },  // caves ← Hidden Cave (8) art
+  29: { 0: 0, 1: 0 },                                                                    // Lullaby Hollow ← Meadow
 };
-const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0 };   // (Lunar Pass has no trees)
+const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0, 29: 0 };   // (Lunar Pass has no trees)
 const _tileArt = {};
 function tileArtImg(zone, tileId, variant) {
   const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
@@ -2879,6 +2885,7 @@ function drawBarriers(ts) {
     const signEmoji = BARRIERS[exit.barrier].sign;
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+    if (exit.barrier === 'lullaby') { drawSlumberingTitan(exit, zc, zr, ts); continue; }
     for (const p of exit.pos) {
       let bx, by;
       if      (exit.dir === 'south') { bx = p * TILE_SIZE - camX; by = (zr - 1) * TILE_SIZE - camY; }
@@ -2898,6 +2905,66 @@ function drawBarriers(ts) {
     ctx.textAlign = 'left';
     ctx.fillText(signEmoji, sx, sy + bob + 20);
   }
+}
+
+// A colossal slumbering guardian beast — drawn once, looming across the whole
+// seam opening. Sing it to sleep (Jigglypuff buddy) to clear the barrier.
+function drawSlumberingTitan(exit, zc, zr, ts) {
+  const ps = exit.pos, midP = ps[Math.floor(ps.length / 2)];
+  const lo = Math.min(...ps), hi = Math.max(...ps) + 1;
+  // dark trampled "lair" ground over each blocked tile
+  for (const p of ps) {
+    let bx, by;
+    if      (exit.dir === 'south') { bx = p * TILE_SIZE - camX; by = (zr - 1) * TILE_SIZE - camY; }
+    else if (exit.dir === 'north') { bx = p * TILE_SIZE - camX; by = 0 - camY; }
+    else if (exit.dir === 'west')  { bx = 0 - camX; by = p * TILE_SIZE - camY; }
+    else                           { bx = (zc - 1) * TILE_SIZE - camX; by = p * TILE_SIZE - camY; }
+    ctx.fillStyle = '#2a2620'; ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(bx + 3, by + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+  }
+  // centre of the opening
+  const vert = (exit.dir === 'east' || exit.dir === 'west');
+  let cx, cy;
+  if (exit.dir === 'east')  { cx = (zc - 1) * TILE_SIZE - camX - TILE_SIZE * 0.25; cy = (lo + hi) / 2 * TILE_SIZE - camY; }
+  else if (exit.dir === 'west')  { cx = TILE_SIZE * 1.25 - camX; cy = (lo + hi) / 2 * TILE_SIZE - camY; }
+  else if (exit.dir === 'south') { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = (zr - 1) * TILE_SIZE - camY - TILE_SIZE * 0.25; }
+  else                           { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = TILE_SIZE * 1.25 - camY; }
+
+  const breathe = Math.sin(ts * 0.0022) * 2;
+  const W = TILE_SIZE * 1.9, H = TILE_SIZE * 2.6 + breathe;
+  const x0 = Math.round(cx - W / 2), y0 = Math.round(cy - H / 2);
+  ctx.save();
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x0 - 2, y0 + H - 6, W + 4, 8);
+  // back spikes
+  ctx.fillStyle = '#16210f';
+  for (let i = 0; i < 5; i++) { const sx = x0 + 10 + i * (W - 20) / 4; ctx.beginPath(); ctx.moveTo(sx - 6, y0 + 16); ctx.lineTo(sx, y0 - 2); ctx.lineTo(sx + 6, y0 + 16); ctx.closePath(); ctx.fill(); }
+  // body
+  ctx.fillStyle = '#2e3b27'; ctx.fillRect(x0 + 4, y0 + 12, W - 8, H - 18);
+  ctx.fillStyle = '#3f5236'; ctx.fillRect(x0 + W * 0.32, y0 + H * 0.42, W * 0.36, H * 0.5);  // belly
+  // arms/claws
+  ctx.fillStyle = '#26301f'; ctx.fillRect(x0 - 2, y0 + H * 0.45, 12, 18); ctx.fillRect(x0 + W - 10, y0 + H * 0.45, 12, 18);
+  // head
+  ctx.fillStyle = '#2e3b27'; ctx.fillRect(x0 + W * 0.18, y0 + 6, W * 0.64, H * 0.34);
+  // angry brows
+  ctx.fillStyle = '#10160c';
+  ctx.beginPath(); ctx.moveTo(x0 + W * 0.24, y0 + 18); ctx.lineTo(x0 + W * 0.44, y0 + 26); ctx.lineTo(x0 + W * 0.44, y0 + 20); ctx.lineTo(x0 + W * 0.26, y0 + 13); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x0 + W * 0.76, y0 + 18); ctx.lineTo(x0 + W * 0.56, y0 + 26); ctx.lineTo(x0 + W * 0.56, y0 + 20); ctx.lineTo(x0 + W * 0.74, y0 + 13); ctx.closePath(); ctx.fill();
+  // glowing menacing eyes
+  const glow = 0.55 + 0.45 * Math.sin(ts * 0.005);
+  ctx.fillStyle = `rgba(255,${70 + 90 * glow | 0},30,1)`;
+  ctx.fillRect(x0 + W * 0.28, y0 + 22, 8, 6); ctx.fillRect(x0 + W * 0.62, y0 + 22, 8, 6);
+  ctx.fillStyle = '#fff2'; ctx.fillRect(x0 + W * 0.28, y0 + 22, 3, 2); ctx.fillRect(x0 + W * 0.62, y0 + 22, 3, 2);
+  // snarling mouth + fangs
+  ctx.fillStyle = '#0c0f08'; ctx.fillRect(x0 + W * 0.30, y0 + H * 0.30, W * 0.40, 6);
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 4; i++) { const fx = x0 + W * 0.32 + i * W * 0.10; ctx.beginPath(); ctx.moveTo(fx, y0 + H * 0.30 + 6); ctx.lineTo(fx + 3, y0 + H * 0.30 + 11); ctx.lineTo(fx + 6, y0 + H * 0.30 + 6); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  // floating sleep-hint sign so the puzzle reads
+  const bob = Math.sin(ts * 0.003) * 3;
+  ctx.font = '20px serif'; ctx.textAlign = 'left';
+  ctx.fillText('😴', cx + (vert ? -10 : 0), y0 - 6 + bob);
+  ctx.fillText('💢', cx + W * 0.3, y0 + 4 + bob);
 }
 
 function drawBarrierTile(ctx, key, bx, by, ts) {

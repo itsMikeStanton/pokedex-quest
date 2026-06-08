@@ -145,7 +145,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Normal',
     description: 'Very lazy. Just eats and sleeps. As its huge body gets bigger, it becomes steadily more sleepy.',
-    zones: [2],
+    zones: [2,29],
   },
 
   // ── Zone 0 additions ─────────────────────────────────
@@ -597,7 +597,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'Lays high-nutrition eggs every day. It is kind and shares its eggs generously with injured Pokémon.',
-    zones: [5,15],
+    zones: [5,15,29],
   },
   {
     id: 114, name: 'Tangela', sprite: 'sprites/114.png', emoji: '💚',
@@ -1134,7 +1134,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Normal',
     description: 'Its long tongue, twice its body length, can grab things; a lick may leave a tingle.',
-    zones: [0,15],
+    zones: [0,15,29],
   },
   {
     id: 109, name: 'Koffing', sprite: 'sprites/109.png', emoji: '💨',
