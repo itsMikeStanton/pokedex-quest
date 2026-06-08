@@ -4586,11 +4586,12 @@ function renderAtlas(open) {
       const wx = z.wx + c, wy = z.wy + r;
       for (const [dx, dy] of DIRS) {
         if (covered(wx + dx, wy + dy)) continue;                          // neighbour is land → no shore
-        const rv = fr(wx * 3 + dx, wy * 3 + dy), depth = rv < 0.32 ? 0 : rv < 0.82 ? 1 : 2;  // jaggy bites
-        const col = fr(wx, wy) < 0.16 ? '#8d8678' : '#e2cf86';            // a little cliff-stone, mostly sand
+        const rv = fr(wx * 3 + dx, wy * 3 + dy);
+        const depth = 2 + (rv < 0.45 ? 0 : rv < 0.80 ? 1 : 2);            // solid 2-cell beach + jaggy outer (2..4)
         for (let d = 1; d <= depth; d++) {
           const fx = wx + dx * d, fy = wy + dy * d;
           if (covered(fx, fy)) break;
+          const col = (d === 1 && fr(wx, wy) < 0.16) ? '#8d8678' : '#e2cf86';  // a little cliff at the land edge, sand beyond
           fringeSvg += `<rect x="${fx}" y="${fy}" width="1.05" height="1.05" fill="${col}"/>`;
         }
       }
