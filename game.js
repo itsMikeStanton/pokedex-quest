@@ -1294,6 +1294,26 @@ function bindEvents() {
     });
   }
 
+  // Hard refresh — clear any caches and re-fetch a fresh index.html so the
+  // latest deploy loads even if the browser is holding a stale copy.
+  const hrBtn = document.getElementById('hard-refresh');
+  if (hrBtn) hrBtn.addEventListener('click', async () => {
+    hrBtn.textContent = '…';
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch (_) {}
+    const u = new URL(location.href);
+    u.searchParams.set('r', Date.now());      // bust the cached HTML
+    location.replace(u.toString());
+  });
+
   // Pokédex
   document.getElementById('pokedex-back').addEventListener('click', closePokedex);
   document.getElementById('detail-back').addEventListener('click', closeDetail);

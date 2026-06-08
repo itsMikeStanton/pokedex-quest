@@ -1736,16 +1736,34 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 }
 
 /* Version stamp — fixed to page bottom-right, tiny */
-#version {
+#version-bar {
   position: fixed;
   bottom: 4px;
   right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 999;
+}
+#version {
   font-family: monospace;
   font-size: 9px;
   color: #555;
   pointer-events: none;
-  z-index: 999;
 }
+#hard-refresh {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: #555;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#hard-refresh:hover { color: #ccc; border-color: #ccc; }
+#hard-refresh:active { transform: scale(0.92); }
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
 @media (max-width: 500px) {
@@ -1980,7 +1998,7 @@ body.immersive #device {
 body.immersive #brand,
 body.immersive #controls-row,
 body.immersive #start-select-row,
-body.immersive #version { display: none; }
+body.immersive #version-bar { display: none; }
 body.immersive #screen-bezel {
   padding: 0;
   background: #000;
