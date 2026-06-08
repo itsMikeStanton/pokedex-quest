@@ -4415,8 +4415,8 @@ function renderAtlas(open) {
     } else {                                         // known-but-unvisited → dim
       zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" fill="#0a0a12" opacity="0.55"/>`;
     }
-    const stroke = here ? '#f8d030' : 'rgba(0,0,0,.55)';
-    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="none" stroke="${stroke}" stroke-width="${here ? 1.3 : 0.5}"/>`;
+    // Highlight only the current zone; no outline on the others.
+    if (here) zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="none" stroke="#f8d030" stroke-width="1.3"/>`;
     // a small icon tucked in the corner so it doesn't cover the terrain
     const icon = open.has(z.id) ? (z.icon || '') : '🔒';
     zoneSvg += `<text x="${z.wx + 1.8}" y="${z.wy + 3.2}" text-anchor="middle" font-size="3">${icon}</text>`;
