@@ -4214,13 +4214,6 @@ function renderAtlas(open) {
   EXITS.forEach(e => { if (visited.has(e.from)) disc.add(e.to); if (visited.has(e.to)) disc.add(e.from); });
 
   let zoneSvg = '', doorSvg = '', gateSvg = '';
-  // Island coastline: a sand beach halo behind every surface zone reveals the
-  // full landmass silhouette (even land you haven't reached), ringed by ocean.
-  let coastSvg = '';
-  surf.forEach(z => {                                // beach
-    const S = 1.5;
-    coastSvg += `<rect x="${z.wx - S}" y="${z.wy - S}" width="${z.cols + 2 * S}" height="${z.rows + 2 * S}" rx="2.4" fill="#e2cf86"/>`;
-  });
   surf.forEach(z => {
     const seen = visited.has(z.id), known = disc.has(z.id), here = z.id === currentZone;
     const [cx, cy] = [z.wx + z.cols / 2, z.wy + z.rows / 2];
@@ -4268,7 +4261,7 @@ function renderAtlas(open) {
     if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.3}" text-anchor="middle" font-size="3.4">${BARRIERS[gate.barrier].sign}</text>`;
   });
 
-  svg.innerHTML = coastSvg + zoneSvg + doorSvg + gateSvg;
+  svg.innerHTML = zoneSvg + doorSvg + gateSvg;
   if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
   if (!_atlasInit) {   // centre the pan window on the current zone the first time
     const z = ZONE_INFO[currentZone];
