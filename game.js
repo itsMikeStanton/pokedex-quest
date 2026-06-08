@@ -4154,7 +4154,7 @@ function reachableZones() {
   return seen;
 }
 
-let atlasMode = false;   // world-map view: false = icon grid, true = true-shape atlas
+let atlasMode = true;    // world-map view: true = true-shape atlas (default), false = icon grid
 let visited = new Set([0]);   // zones the player has actually entered (fog of war)
 let atlasPanX = 0, atlasPanY = 0, _atlasInit = false;
 const ATLAS_WIN_W = 64, ATLAS_WIN_H = 58;   // pan-window size in world tiles (≈2× zoom)
@@ -4214,13 +4214,9 @@ function renderAtlas(open) {
   EXITS.forEach(e => { if (visited.has(e.from)) disc.add(e.to); if (visited.has(e.to)) disc.add(e.from); });
 
   let zoneSvg = '', doorSvg = '', gateSvg = '';
-  // Island coastline: a surf + sand halo behind every surface zone reveals the
+  // Island coastline: a sand beach halo behind every surface zone reveals the
   // full landmass silhouette (even land you haven't reached), ringed by ocean.
   let coastSvg = '';
-  surf.forEach(z => {                                // outer wet-sand / surf line
-    const F = 2.6;
-    coastSvg += `<rect x="${z.wx - F}" y="${z.wy - F}" width="${z.cols + 2 * F}" height="${z.rows + 2 * F}" rx="3.2" fill="#aee0f0"/>`;
-  });
   surf.forEach(z => {                                // beach
     const S = 1.5;
     coastSvg += `<rect x="${z.wx - S}" y="${z.wy - S}" width="${z.cols + 2 * S}" height="${z.rows + 2 * S}" rx="2.4" fill="#e2cf86"/>`;
