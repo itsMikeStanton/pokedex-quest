@@ -224,6 +224,11 @@ const COLLECTIBLES = [
   { id: 'badge_safari',  zone: 15, x: 17, y: 11, emoji: '🦓', name: 'Savanna Badge' },
   { id: 'badge_frost',   zone: 16, x: 10, y:  7, emoji: '❄️', name: 'Frost Badge' },
   { id: 'badge_spirit',  zone: 19, x: 10, y:  7, emoji: '👻', name: 'Spirit Badge' },
+  // Cavern treasures — one hidden deep in each cave (bring a glowing buddy!).
+  { id: 'badge_cavern',  zone: 8,  x: 13, y:  9, emoji: '🕳️', name: 'Cavern Badge' },
+  { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', name: 'Tunnel Badge' },
+  { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', name: 'Crystal Badge' },
+  { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', name: 'Echo Badge' },
   // Awarded automatically — not placed in the world.
   { id: 'badge_gym',  auto: true, emoji: '🥊', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
   { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
@@ -317,6 +322,34 @@ const NPCS = [
             'Come see me again tomorrow for more free PokéBalls!'];
   } },
   { zone: 11, x: 1, y: 1, emoji: '🪑', name: 'Waiting Bench', gift: 0, lines: ['A comfy bench for resting trainers.'] },
+
+  // ── Oasis Mart (zone 23) — a second shop out in the Desert ──
+  { zone: 23, x: 5, y: 3, emoji: '🧑‍💼', name: 'Oasis Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Oasis Mart! Stock up before the dunes. 🏜️'] },
+  // ── Ranger's Lodge (zone 24) in Safari Savanna ──
+  { zone: 24, x: 5, y: 3, emoji: '🧑‍🌾', name: 'Ranger', gift: 30, lines: () => [
+    `Welcome to the lodge, ${saveName}! I watch over the savanna critters.`,
+    'Plenty of rock & ground Lukéymon hide in the caves — bring a glowing buddy to explore them!' ] },
+  // ── Summit Aid Station (zone 25) in Frostpeak Ridge — free daily PokéBalls ──
+  { zone: 25, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Summit Medic', gift: 0, lines: () => {
+    const today = todayKey();
+    if (lastHeal !== today) {
+      lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      return ['Welcome to the Summit Aid Station! ❄️',
+              'You made it all the way up here — wonderful.',
+              `Warm up and take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
+    }
+    return ['Stay warm out there! 💗', 'Come back tomorrow for more free PokéBalls.']; } },
+
+  // ── Seaside hamlet (Beach, zone 1) ──
+  { zone: 1, x: 7, y: 11, emoji: '🎣', name: 'Fisher', gift: 20, lines: () => [
+    `Mornin', ${saveName}! The fish are biting today.`,
+    'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
+  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', gift: 0, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
+  // ── Sunpetal village (zone 13) ──
+  { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', gift: 20, lines: () => [
+    `These sunpetals only bloom for kind hearts like yours, ${saveName}. 🌻`,
+    'Grass Lukéymon adore it here.' ] },
+  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', gift: 0, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
 
   // ── Inside the Gym (zone 12) ──
   { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', gift: 0, gymLeader: true,
@@ -782,6 +815,7 @@ const TILE_ART = {
   19: { 0: 3, 1: 3, 3: 3 },
   20: { 1: 3, 3: 3, 4: 3, 8: 3 },
   21: { 1: 3, 3: 3, 4: 3 },
+  26: { 9: 3, 10: 3, 11: 1 }, 27: { 9: 3, 10: 3, 11: 1 }, 28: { 9: 3, 10: 3, 11: 1 },  // new caves ← Hidden Cave art
 };
 // The new lands reuse the original received tile art, mapped per tile to a
 // biome-matching source zone (no procedurally-generated tiles).
@@ -795,6 +829,7 @@ const NEW_TILE_SRC = {
   19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
   20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
   21: { 1: 0, 3: 1, 4: 1 },                 // Champion's Cove ← Meadow grass + Beach water/sand
+  26: { 9: 8, 10: 8, 11: 8 }, 27: { 9: 8, 10: 8, 11: 8 }, 28: { 9: 8, 10: 8, 11: 8 },  // caves ← Hidden Cave (8) art
 };
 const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0 };   // (Lunar Pass has no trees)
 const _tileArt = {};

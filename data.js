@@ -295,7 +295,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Poison',
     description: 'Hangs upside down in dark places during the day. Has no eyes but navigates perfectly by ultrasound.',
-    zones: [7,5,14],
+    zones: [7,5,14,8,26,27,28],
   },
   {
     id: 66, name: 'Machop', sprite: 'sprites/066.png', emoji: '💪',
@@ -303,7 +303,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Fighting',
     description: 'Its whole body is composed of pure muscle. Child-sized, but strong enough to throw 100 adults.',
-    zones: [2,4,14],
+    zones: [2,4,14,8,26,27,28],
   },
   {
     id: 74, name: 'Geodude', sprite: 'sprites/074.png', emoji: '🪨',
@@ -311,7 +311,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Rock',
     description: 'Sleeps deeply in fields and on mountain paths. Hikers often trip over them by mistake.',
-    zones: [7,4,14],
+    zones: [7,4,14,8,26,27,28],
   },
   {
     id: 81, name: 'Magnemite', sprite: 'sprites/081.png', emoji: '🧲',
@@ -409,7 +409,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Ground',
     description: 'It always wears the skull of its dead mother. On the night of a full moon, it cries for her.',
-    zones: [7,4],
+    zones: [7,4,8,26,27,28],
   },
   {
     id: 115, name: 'Kangaskhan', sprite: 'sprites/115.png', emoji: '🦘',
@@ -491,7 +491,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'Its armor-like hide is so tough it ignores any hit. It can even crumble a building just by charging!',
-    zones: [4,15],
+    zones: [4,15,8,26,27,28],
   },
   {
     id: 112, name: 'Rhydon', sprite: 'sprites/112.png', emoji: '🏔️',
@@ -738,7 +738,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'It digs burrows to sleep in and curls into a ball when threatened. It can also bowl into enemies!',
-    zones: [1,16],
+    zones: [1,16,8,26,27,28],
   },
   {
     id: 28, name: 'Sandslash', sprite: 'sprites/028.png', emoji: '🌵',
@@ -770,7 +770,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Ground',
     description: 'Lives most of its life underground. It loosens soil for plants to grow, making farmers very happy!',
-    zones: [2,14],
+    zones: [2,14,8,26,27,28],
   },
   {
     id: 51, name: 'Dugtrio', sprite: 'sprites/051.png', emoji: '🔱',
@@ -786,7 +786,7 @@ const POKEMON_DATA = [
     action: 'feed', actionEmoji: '🍎',
     type: 'Rock',
     description: 'A massive rock snake that tunnels underground at 50 mph. Its body hardens into black diamonds over years!',
-    zones: [7,4,14],
+    zones: [7,4,14,8,26,27,28],
   },
   {
     id: 105, name: 'Marowak', sprite: 'sprites/105.png', emoji: '🦴',
