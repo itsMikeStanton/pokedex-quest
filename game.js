@@ -1467,14 +1467,16 @@ function activateKami() {
 // ═══════════════════════════════════════════════════
 // RENDER POSITION  (interpolated between tiles)
 // ═══════════════════════════════════════════════════
-function getRenderPos(ts) {
+function getRenderPos(ts, bobless) {
   const destX = playerX * TILE_SIZE;
   const destY = playerY * TILE_SIZE;
 
-  // Wall-bump: nudge toward obstacle and spring back
+  // Wall-bump: nudge toward obstacle and spring back. Purely cosmetic, so the
+  // camera (bobless) ignores it and stays locked to the grid.
   if (bumpVec) {
     const t = Math.min((ts - bumpAnimTs) / BUMP_ANIM_MS, 1);
     if (t < 1) {
+      if (bobless) return { x: destX, y: destY };
       const dist = Math.sin(t * Math.PI) * 5; // 5 px max nudge
       return { x: destX + bumpVec.dx * dist, y: destY + bumpVec.dy * dist };
     }
@@ -1485,15 +1487,16 @@ function getRenderPos(ts) {
   const mt = Math.min((ts - moveAnimTs) / moveAnimDur, 1);
   if (mt < 1) {
     const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
-    const hopY = moveLinear ? 0 : Math.sin(mt * Math.PI) * -3;
+    // The running "hop" is cosmetic — exclude it from the camera anchor.
+    const hopY = (bobless || moveLinear) ? 0 : Math.sin(mt * Math.PI) * -3;
     return {
       x: fromPx.x + (destX - fromPx.x) * ease,
       y: fromPx.y + (destY - fromPx.y) * ease + hopY,
     };
   }
 
-  // Idle gentle bob
-  const bob = Math.sin(ts * 0.0025) * 2.5;
+  // Idle gentle bob — sprite only, never the camera.
+  const bob = bobless ? 0 : Math.sin(ts * 0.0025) * 2.5;
   return { x: destX, y: destY + bob };
 }
 
@@ -2614,7 +2617,7 @@ function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  retur
 
 function drawWorld(ts) {
   const renderPos = getRenderPos(ts);
-  updateCamera(renderPos);
+  updateCamera(getRenderPos(ts, true));   // centre on the true grid position, not the bob/hop
 
   ctx.fillStyle = '#000';                                  // letterbox around small interiors
   ctx.fillRect(0, 0, canvas.width, canvas.height);
