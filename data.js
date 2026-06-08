@@ -23,7 +23,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'After birth, its back swells and hardens into a shell. It powerfully sprays foam from its mouth.',
-    zones: [1],
+    zones: [1,20],
   },
   {
     id: 10, name: 'Caterpie', sprite: 'sprites/010.png', emoji: '🐛',
@@ -113,7 +113,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'While lulling its enemies with its vacant look, this clever Pokémon uses its psychic powers.',
-    zones: [0,6,18],
+    zones: [0,6,18,20],
   },
   {
     id: 94, name: 'Gengar', sprite: 'sprites/094.png', emoji: '👻',
@@ -129,7 +129,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'In the distant past, it was somewhat stronger. Today it is the weakest — but it never gives up!',
-    zones: [1,18],
+    zones: [1,18,20],
   },
   {
     id: 133, name: 'Eevee', sprite: 'sprites/133.png', emoji: '🦊',
@@ -197,7 +197,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Its spiral belly is transparent skin — you can see its insides! It prefers swampy areas.',
-    zones: [0,6,18],
+    zones: [0,6,18,20],
   },
   {
     id: 72, name: 'Tentacool', sprite: 'sprites/072.png', emoji: '🔵',
@@ -205,7 +205,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Its body is almost entirely water. It floats in warm seas and stings with its tentacles.',
-    zones: [1,18],
+    zones: [1,18,20],
   },
   {
     id: 79, name: 'Slowpoke', sprite: 'sprites/079.png', emoji: '🦦',
@@ -229,7 +229,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'Its hard shell deflects any attack. The tongue that hangs from its mouth can snap shut fast.',
-    zones: [1,6,16],
+    zones: [1,6,16,20],
   },
   {
     id: 98, name: 'Krabby', sprite: 'sprites/098.png', emoji: '🦀',
@@ -237,7 +237,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Its pincers are both weapons and communication tools — it waves them to send signals.',
-    zones: [1,18],
+    zones: [1,18,20],
   },
   {
     id: 116, name: 'Horsea', sprite: 'sprites/116.png', emoji: '🐠',
@@ -245,7 +245,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'It can swim in any direction including upside down. It squirts ink to escape enemies.',
-    zones: [1,6,16],
+    zones: [1,6,16,20],
   },
   {
     id: 118, name: 'Goldeen', sprite: 'sprites/118.png', emoji: '🐡',
@@ -253,7 +253,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'Beautiful but ferocious. One flap of its powerful fin can knock a person clean off their feet.',
-    zones: [1,18],
+    zones: [1,18,20],
   },
   {
     id: 120, name: 'Staryu', sprite: 'sprites/120.png', emoji: '⭐',
@@ -261,7 +261,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Water',
     description: 'The red gem at its center glows at night. It can regenerate any part of its body that breaks off.',
-    zones: [1,6,18],
+    zones: [1,6,18,20],
   },
   {
     id: 131, name: 'Lapras', sprite: 'sprites/131.png', emoji: '🦕',
@@ -269,7 +269,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Water',
     description: 'A gentle giant that understands human speech and happily carries people across the sea.',
-    zones: [6,18],
+    zones: [6,18,20],
   },
   {
     id: 138, name: 'Omanyte', sprite: 'sprites/138.png', emoji: '🐌',
@@ -1222,7 +1222,7 @@ const POKEMON_DATA = [
     action: 'pet', actionEmoji: '🤚',
     type: 'Dragon',
     description: 'Long thought a mere legend, it was found in water. It sheds its skin as it slowly grows.',
-    zones: [6,1,16],
+    zones: [6,1,16,20],
   },
   {
     id: 149, name: 'Dragonite', sprite: 'sprites/149.png', emoji: '🐉',

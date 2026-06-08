@@ -760,6 +760,7 @@ const TILE_ART = {
   17: { 0: 3, 1: 3, 5: 3, 9: 3 },
   18: { 0: 3, 1: 3, 3: 3, 4: 3, 8: 3 },
   19: { 0: 3, 1: 3, 3: 3 },
+  20: { 1: 3, 3: 3, 4: 3, 8: 3 },
 };
 // The new lands reuse the original received tile art, mapped per tile to a
 // biome-matching source zone (no procedurally-generated tiles).
@@ -771,8 +772,9 @@ const NEW_TILE_SRC = {
   17: { 0: 5, 1: 2, 5: 2, 9: 8 },           // Voltage Works ← City + rock
   18: { 0: 0, 1: 1, 3: 1, 4: 1, 8: 6 },     // Seafoam ← Beach + Ice Cave ice
   19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
+  20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
 };
-const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5 };   // (Lunar Pass has no trees)
+const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1 };   // (Lunar Pass has no trees)
 const _tileArt = {};
 function tileArtImg(zone, tileId, variant) {
   const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
