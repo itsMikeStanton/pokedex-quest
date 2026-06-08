@@ -774,7 +774,7 @@ const TILE_ART = {
   18: { 0: 3, 1: 3, 3: 3, 4: 3, 8: 3 },
   19: { 0: 3, 1: 3, 3: 3 },
   20: { 1: 3, 3: 3, 4: 3, 8: 3 },
-  21: { 0: 3, 1: 3 },
+  21: { 1: 3, 3: 3, 4: 3 },
 };
 // The new lands reuse the original received tile art, mapped per tile to a
 // biome-matching source zone (no procedurally-generated tiles).
@@ -787,7 +787,7 @@ const NEW_TILE_SRC = {
   18: { 0: 0, 1: 1, 3: 1, 4: 1, 8: 6 },     // Seafoam ← Beach + Ice Cave ice
   19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
   20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
-  21: { 0: 0, 1: 0 },                       // Champion's Cove ← Meadow
+  21: { 1: 0, 3: 1, 4: 1 },                 // Champion's Cove ← Meadow grass + Beach water/sand
 };
 const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0 };   // (Lunar Pass has no trees)
 const _tileArt = {};
@@ -4443,7 +4443,20 @@ function renderAtlas(open) {
     if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.3}" text-anchor="middle" font-size="3.4">${BARRIERS[gate.barrier].sign}</text>`;
   });
 
-  svg.innerHTML = zoneSvg + doorSvg + gateSvg;
+  // Secret hint: once Mewtwo is yours, a pulsing marker appears at the very top
+  // of the west coast — go up there to find the hidden cove.
+  let hintSvg = '';
+  if (caughtIds.has(150)) {
+    const cz = ZONE_INFO[20];
+    if (cz && cz.wx != null) {
+      const hx = cz.wx + 17.5, hy = cz.wy + 0.5;
+      hintSvg = `<g><circle cx="${hx}" cy="${hy}" r="2.5" fill="rgba(248,216,96,.25)" stroke="#f8d860" stroke-width="0.5">` +
+        `<animate attributeName="r" values="2;4.5;2" dur="1.5s" repeatCount="indefinite"/>` +
+        `<animate attributeName="opacity" values="1;.25;1" dur="1.5s" repeatCount="indefinite"/></circle>` +
+        `<text x="${hx}" y="${hy + 1.5}" text-anchor="middle" font-size="4">✨</text></g>`;
+    }
+  }
+  svg.innerHTML = zoneSvg + doorSvg + gateSvg + hintSvg;
   if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
   if (!_atlasInit) {   // centre the pan window on the current zone the first time
     const z = ZONE_INFO[currentZone];
@@ -4995,6 +5008,10 @@ function updateHud() {
   }
   const zoneEl = document.getElementById('zone-name');
   if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
+
+  // Once Mewtwo is caught, badge the map button until you've found the cove.
+  const mb = document.getElementById('map-btn');
+  if (mb) mb.classList.toggle('map-hint', caughtIds.has(150) && !visited.has(21));
 
   // Evolution stones (only shown once you own some).
   const hs = document.getElementById('hud-stones');
