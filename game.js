@@ -1319,9 +1319,10 @@ function bindEvents() {
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
   document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip => {
-    chip.addEventListener('click', () => { dexFilter.status = chip.dataset.status; refreshDexFilters(); });
+    chip.addEventListener('click', () => { dexFilter.status = chip.dataset.status; showDexView('grid'); refreshDexFilters(); });
   });
-  document.getElementById('dexf-type').addEventListener('click', cycleDexType);
+  document.getElementById('dexf-type').addEventListener('click', () => { showDexView('grid'); cycleDexType(); });
+  document.getElementById('dexf-quest').addEventListener('click', () => showDexView(dexView === 'quest' ? 'grid' : 'quest'));
 
   // World map + guide
   document.getElementById('map-back').addEventListener('click', closeMap);
@@ -4010,10 +4011,125 @@ function dexLocationHint(poke) {
 
 function openPokedex() {
   clearTimeout(spawnTimerId);
-  renderPokedexGrid();
+  showDexView('grid');
   document.getElementById('pokedex-detail').classList.add('hidden');
-  document.getElementById('pokedex-grid').classList.remove('hidden');
   showScreen('pokedex');
+}
+
+// Switch the Pokédex between the species grid and the overall Quest Log.
+let dexView = 'grid';
+function showDexView(view) {
+  dexView = view;
+  const grid = document.getElementById('pokedex-grid');
+  const quest = document.getElementById('pokedex-quest');
+  const title = document.getElementById('pokedex-title');
+  const qChip = document.getElementById('dexf-quest');
+  if (view === 'quest') {
+    grid.classList.add('hidden'); quest.classList.remove('hidden');
+    if (title) title.textContent = 'QUEST LOG';
+    if (qChip) qChip.classList.add('active');
+    renderQuestPage();
+  } else {
+    quest.classList.add('hidden'); grid.classList.remove('hidden');
+    if (title) title.textContent = 'POKÉDEX';
+    if (qChip) qChip.classList.remove('active');
+    renderPokedexGrid();
+  }
+}
+
+// ─── Quest Log: one page with EVERYTHING there is to chase ────────────
+function renderQuestPage() {
+  const P = id => POKEMON_DATA.find(p => p.id === id) || { name: '?', emoji: '?' };
+  const pct = (n, t) => t ? Math.round(100 * n / t) : 0;
+  const bar = (n, t) => `<div class="q-bar"><div class="q-bar-fill" style="width:${pct(n, t)}%"></div></div>`;
+  const row = (icon, label, done, sub) =>
+    `<div class="q-row ${done ? 'q-done' : 'q-todo'}"><span class="q-tick">${done ? '✓' : '○'}</span>` +
+    `<span class="q-ic">${icon}</span><span class="q-lbl">${label}${sub ? `<span class="q-sub">${sub}</span>` : ''}</span></div>`;
+  const section = (icon, title, n, t, body) =>
+    `<div class="q-section"><div class="q-head"><span class="q-htitle">${icon} ${title}</span>` +
+    `<span class="q-count">${n}/${t}</span></div>${bar(n, t)}<div class="q-body">${body}</div></div>`;
+
+  // ── Pokédex ──
+  const dexN = caughtIds.size, dexT = POKEMON_DATA.length;
+
+  // ── Legendary Lukeymon ──
+  const legendIds = [144, 145, 146, 151, 150];
+  const legN = legendIds.filter(id => caughtIds.has(id)).length;
+  const legBody = legendIds.map(id => {
+    const p = P(id), got = caughtIds.has(id);
+    const sub = id === 150 ? 'the apex — appears once all others are caught'
+            : id === 151 ? 'the mythical one'
+            : 'a legendary bird';
+    return row(p.emoji, got ? p.name : (seenIds.has(id) ? p.name : '???'), got, sub);
+  }).join('');
+
+  // ── Badges ──
+  const badgeN = COLLECTIBLES.filter(b => collected.has(b.id)).length;
+  const badgeBody = COLLECTIBLES.map(b => {
+    const got = collected.has(b.id);
+    const where = b.auto ? b.hint : (b.zone != null && ZONE_INFO[b.zone] ? 'Hidden in ' + ZONE_INFO[b.zone].name : '');
+    return row(b.emoji, b.name, got, got ? '' : where);
+  }).join('');
+
+  // ── Evolution Stones ──
+  const stoneN = STONE_FINDS.filter(s => foundStones.has(s.id)).length;
+  const stoneBody = STONE_FINDS.map(s => {
+    const got = foundStones.has(s.id), info = STONES[s.stone];
+    return row(info.emoji, info.name, got, got ? 'in your bag — reusable' : (ZONE_INFO[s.zone] ? 'Hidden in ' + ZONE_INFO[s.zone].name : ''));
+  }).join('');
+
+  // ── Areas explored ──
+  const areaZones = ZONE_INFO.filter(z => z.name);
+  const areaN = areaZones.filter(z => visited.has(z.id)).length, areaT = areaZones.length;
+  const seenAreas = areaZones.filter(z => visited.has(z.id)).map(z => `<span class="q-chip">${z.icon || ''} ${z.name}</span>`).join('');
+  const areaBody = seenAreas + (areaN < areaT ? `<span class="q-chip q-locked">＋${areaT - areaN} undiscovered</span>` : '');
+
+  // ── Characters met ──
+  const npcN = NPCS.filter(n => metNPCs.has(n.name)).length, npcT = NPCS.length;
+  const npcBody = NPCS.map(n => row(n.emoji, metNPCs.has(n.name) ? n.name : '???', metNPCs.has(n.name), '')).join('');
+
+  // ── Field notes & barriers ──
+  const tipN = knownTips.size, tipT = allTips().length;
+  const barrierKeys = Object.keys(BARRIERS);
+  const barrN = barrierKeys.filter(k => unlockedBarriers.has(k)).length, barrT = barrierKeys.length;
+  const barrBody = barrierKeys.map(k => row(BARRIERS[k].sign, BARRIER_LABEL[k] || k, unlockedBarriers.has(k),
+    unlockedBarriers.has(k) ? '' : 'needs a ' + BARRIERS[k].needsType + ' buddy')).join('');
+
+  // ── Achievements (milestones) ──
+  const birds = [144, 145, 146].every(id => caughtIds.has(id));
+  const ach = [
+    ['🥾', 'First Friend', 'Befriend your first Lukeymon', dexN >= 1],
+    ['🏆', 'Champion', 'Earn all 4 land badges', wonGame],
+    ['🎖️', 'Badge Collector', 'Find every badge', badgeN === COLLECTIBLES.length],
+    ['💎', 'Stone Seeker', 'Find every evolution stone', stoneN === STONE_FINDS.length],
+    ['🦅', 'Bird Tamer', 'Befriend all three legendary birds', birds],
+    ['🌸', 'Mythical Meeting', 'Befriend Mew', caughtIds.has(151)],
+    ['🧬', 'Apex Bond', 'Befriend Mewtwo', caughtIds.has(150)],
+    ['🗺️', 'Explorer', 'Set foot in every area', areaN === areaT],
+    ['📖', 'Lorekeeper', 'Discover every field note', tipN === tipT],
+    ['💙', 'Homecoming', 'Find the secret cove and come home', metNPCs.has('Dad')],
+    ['🌟', 'Lukeymon Master', 'Befriend all 151', dexN === dexT],
+  ];
+  const achN = ach.filter(a => a[3]).length;
+  const achBody = ach.map(a => row(a[0], a[1], a[3], a[2])).join('');
+
+  // ── Overall ──
+  const fracs = [dexN / dexT, badgeN / COLLECTIBLES.length, stoneN / STONE_FINDS.length,
+                 areaN / areaT, npcN / npcT, tipN / Math.max(1, tipT), barrN / barrT, achN / ach.length];
+  const overall = Math.round(100 * fracs.reduce((a, b) => a + b, 0) / fracs.length);
+
+  document.getElementById('pokedex-quest').innerHTML =
+    `<div class="q-overall"><div class="q-overall-num">${overall}%</div>` +
+    `<div class="q-overall-lbl">ISLAND COMPLETION</div>${bar(overall, 100)}</div>` +
+    section('🔰', 'Pokédex', dexN, dexT, `<div class="q-note">Open the All / Caught / Missing tabs above to track every species.</div>`) +
+    section('👑', 'Legendary Lukeymon', legN, legendIds.length, legBody) +
+    section('🎖️', 'Badges', badgeN, COLLECTIBLES.length, badgeBody) +
+    section('💎', 'Evolution Stones', stoneN, STONE_FINDS.length, stoneBody) +
+    section('🗺️', 'Areas Explored', areaN, areaT, `<div class="q-chips">${areaBody}</div>`) +
+    section('👥', 'Characters Met', npcN, npcT, npcBody) +
+    section('🚧', 'Barriers Cleared', barrN, barrT, barrBody) +
+    section('📖', 'Field Notes', tipN, tipT, `<div class="q-note">Tips you've discovered out in the world.</div>`) +
+    section('🏅', 'Achievements', achN, ach.length, achBody);
 }
 
 function closePokedex() {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2.77.0">
+  <link rel="stylesheet" href="style.css?v=2.78.0">
 </head>
 <body>
 
@@ -155,12 +155,14 @@
             <span id="pokedex-counter"><span id="dex-count">0</span>/<span id="dex-total">90</span></span>
           </div>
           <div id="pokedex-filters">
+            <button id="dexf-quest" class="dexf-chip quest-chip">🏆 Quest</button>
             <button class="dexf-chip active" data-status="all">All</button>
             <button class="dexf-chip" data-status="caught">Caught</button>
             <button class="dexf-chip" data-status="missing">Missing</button>
             <button id="dexf-type" class="dexf-chip">Type: All</button>
           </div>
           <div id="pokedex-grid"></div>
+          <div id="pokedex-quest" class="hidden"></div>
 
           <div id="pokedex-detail" class="hidden">
             <button id="detail-back" class="pixel-btn small red">◀</button>
@@ -420,12 +422,12 @@
   </div><!-- /device -->
   <div id="version-bar">
     <button id="hard-refresh" title="Hard refresh — force reload the latest version">⟳</button>
-    <span id="version">v2.77.0</span>
+    <span id="version">v2.78.0</span>
   </div>
 
-  <script src="world.js?v=2.77.0"></script>
-  <script src="data.js?v=2.77.0"></script>
-  <script src="game.js?v=2.77.0"></script>
-  <script src="net.js?v=2.77.0"></script>
+  <script src="world.js?v=2.78.0"></script>
+  <script src="data.js?v=2.78.0"></script>
+  <script src="game.js?v=2.78.0"></script>
+  <script src="net.js?v=2.78.0"></script>
 </body>
 </html>
