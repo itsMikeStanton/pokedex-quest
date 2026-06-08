@@ -1968,6 +1968,40 @@ function spawnTrainer() {
 }
 function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
 
+// ── Time/weather-specific wild spawns ────────────────
+// SPAWN_COND[id] = { night?: 'only'|'more', rain?: 'only'|'more' }.
+//   'only' → appears ONLY under that condition;  'more' → appears 3× as often then.
+const SPAWN_COND = {
+  35:  { night: 'only' },   // Clefairy — only comes out at night
+  96:  { night: 'only' },   // Drowzee  — only comes out at night
+  39:  { night: 'more' }, 41: { night: 'more' }, 43: { night: 'more' }, 48: { night: 'more' }, 52: { night: 'more' },
+  131: { rain: 'only' },    // Lapras   — only surfaces in the rain
+  54:  { rain: 'more' }, 60: { rain: 'more' }, 72: { rain: 'more' }, 90: { rain: 'more' },
+  98:  { rain: 'more' }, 116: { rain: 'more' }, 118: { rain: 'more' }, 120: { rain: 'more' }, 129: { rain: 'more' },
+};
+function isNightNow() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return false;
+  return nightMode || !!z.night || (nightCycle && autoNight(performance.now()) >= 0.5);
+}
+function isRainNow() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return false;
+  return rainMode || zoneRain() >= 0.5;
+}
+function spawnAllowed(id, night, rain) {
+  const c = SPAWN_COND[id]; if (!c) return true;
+  if (c.night === 'only' && !night) return false;
+  if (c.rain === 'only' && !rain) return false;
+  return true;
+}
+function weightedPick(pool, night, rain) {
+  const wof = p => { const c = SPAWN_COND[p.id]; let w = 1; if (c && night && c.night) w *= 3; if (c && rain && c.rain) w *= 3; return w; };
+  let total = pool.reduce((s, p) => s + wof(p), 0), r = Math.random() * total;
+  for (const p of pool) { r -= wof(p); if (r <= 0) return p; }
+  return pool[pool.length - 1];
+}
+
 function spawnWild() {
   // Not in the overworld (menu/encounter)? Try again later — never let the
   // spawn loop die.
@@ -1979,10 +2013,12 @@ function spawnWild() {
   // Now and then a wandering trainer turns up instead, looking for a quick battle.
   if (!wildTrainer && Math.random() < 0.18 && spawnTrainer()) return;
 
-  // Pick a random uncaught Pokémon for the current zone
-  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id) && !p.boss && !p.legend);
+  // Pick an uncaught Pokémon for the current zone — respecting night & rain.
+  const night = isNightNow(), rain = isRainNow();
+  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id) && !p.boss && !p.legend
+    && spawnAllowed(p.id, night, rain));
   if (pool.length === 0) { scheduleSpawn(); return; }
-  const poke = pool[Math.floor(Math.random() * pool.length)];
+  const poke = weightedPick(pool, night, rain);
 
   // Find all grass tiles in this zone (excluding edges)
   const map = MAPS[currentZone];
@@ -3894,7 +3930,10 @@ let dexFilter = { status: 'all', type: 'all' };
 function dexLocationHint(poke) {
   if (poke.legend) return '✨ Legendary';
   if (poke.zones && poke.zones.length) {
-    return '📍 ' + poke.zones.map(z => ZONE_INFO[z] ? ZONE_INFO[z].name : '?').join(' / ');
+    const c = SPAWN_COND[poke.id];
+    const tag = c ? (c.night ? (c.night === 'only' ? ' · 🌙 night only' : ' · 🌙 more at night') : '') +
+                    (c.rain ? (c.rain === 'only' ? ' · 🌧️ rain only' : ' · 🌧️ more in rain') : '') : '';
+    return '📍 ' + poke.zones.map(z => ZONE_INFO[z] ? ZONE_INFO[z].name : '?').join(' / ') + tag;
   }
   const evo = STONE_EVOS.find(r => r.to === poke.id);
   if (evo) {

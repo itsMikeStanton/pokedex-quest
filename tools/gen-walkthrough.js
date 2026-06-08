@@ -25,7 +25,12 @@ const grabArr = n => vm.runInContext(g.match(new RegExp('const ' + n + '\\s*=\\s
 const grabObj = n => vm.runInContext('(' + g.match(new RegExp('const ' + n + '\\s*=\\s*(\\{[\\s\\S]*?\\n\\});'))[1] + ')', ctx);
 const STONES = grabObj('STONES'), STONE_EVOS = grabArr('STONE_EVOS'), EVOS = grabArr('EVOS'),
       STONE_FINDS = grabArr('STONE_FINDS'), COLLECTIBLES = grabArr('COLLECTIBLES'),
-      BARRIERS = grabObj('BARRIERS'), ROCKETS = grabArr('ROCKETS');
+      BARRIERS = grabObj('BARRIERS'), ROCKETS = grabArr('ROCKETS'), SPAWN_COND = grabObj('SPAWN_COND');
+function spawnTag(id) {
+  const c = SPAWN_COND[id]; if (!c) return '';
+  return (c.night ? (c.night === 'only' ? ' · 🌙 night only' : ' · 🌙 more at night') : '') +
+         (c.rain ? (c.rain === 'only' ? ' · 🌧️ rain only' : ' · 🌧️ more in rain') : '');
+}
 
 const byId = new Map(POKEMON_DATA.map(p => [p.id, p]));
 const zname = id => { const z = WORLD.zones.find(z => z.id === id); return z ? (z.icon || '') + ' ' + z.name : ('zone ' + id); };
@@ -35,7 +40,7 @@ const tcol = { Normal: '#9a9a6a', Fire: '#e07028', Water: '#5878d0', Electric: '
 
 function obtain(p) {
   if (p.legend) return { tag: 'Legendary', detail: 'Special encounter (see Bosses)' };
-  if (p.zones && p.zones.length) return { tag: 'Wild', detail: p.zones.map(zname).join(', ') };
+  if (p.zones && p.zones.length) return { tag: 'Wild', detail: p.zones.map(zname).join(', ') + spawnTag(p.id) };
   const s = STONE_EVOS.find(r => r.to === p.id);
   if (s) return { tag: 'Evolve', detail: `${nm(s.from)} + ${STONES[s.stone].emoji} ${STONES[s.stone].name}` };
   const e = EVOS.find(r => r.to === p.id);
