@@ -327,7 +327,7 @@ const POKEMON_DATA = [
     action: 'play', actionEmoji: '⚽',
     type: 'Ghost',
     description: 'Almost invisible, this gaseous Pokémon wraps its opponent in poisonous gas and puts it to sleep.',
-    zones: [2,5,19],
+    zones: [19],
   },
   {
     id: 96, name: 'Drowzee', sprite: 'sprites/096.png', emoji: '😵',

@@ -428,20 +428,22 @@ const EVOS = [
   { from: 77,  to: 78,  method: 'battle', cost: 1 }, { from: 98,  to: 99,  method: 'battle', cost: 1 },
   // first step of the trade-mons = battle (their final form comes from the dance party)
   { from: 66, to: 67, method: 'battle', cost: 1 }, { from: 74, to: 75, method: 'battle', cost: 1 },
-  { from: 63, to: 64, method: 'battle', cost: 1 }, { from: 92, to: 93, method: 'battle', cost: 1 },
+  { from: 63, to: 64, method: 'battle', cost: 1 }, { from: 92, to: 93, method: 'battle', cost: 1, zone: 19 },
   // dance-party (former trade) evolutions — multiplayer, no battle, nothing lost
   { from: 64, to: 65, method: 'dance' }, { from: 67, to: 68, method: 'dance' },
-  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance' },
+  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance', zone: 19 },
 ];
 function evosFor(pokeId) { return EVOS.filter(r => r.from === pokeId); }
 function evoProgress(r) { return r.method === 'buddy' ? (bondSteps[r.from] || 0) : r.method === 'battle' ? (battleUses[r.from] || 0) : 0; }
 function evoReady(r) { return r.method !== 'dance' && evoProgress(r) >= r.cost; }
+// Some evolutions can only happen in a specific zone (e.g. the Ghost line in Haunted Hollow).
+function evoHere(r) { return r.zone == null || currentZone === r.zone; }
 
 // One-time "ready to evolve!" nudge so you don't have to dig in the Pokédex to notice.
 const evoNotified = new Set();
 function checkEvoNotify() {
   for (const r of EVOS) {
-    if (r.method === 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoReady(r)) continue;
+    if (r.method === 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoReady(r) || !evoHere(r)) continue;
     const key = r.from + '>' + r.to;
     if (evoNotified.has(key)) continue;
     evoNotified.add(key);
@@ -4052,10 +4054,12 @@ function showDetail(poke) {
   // Buddy / battle / dance evolutions
   evosFor(poke.id).filter(r => got(r.to)).forEach(r => {
     const t = POKEMON_DATA.find(p => p.id === r.to);
-    if (r.method === 'dance') { mkHint(`🔗 ${t.name}: Dance Party with another trainer`); return; }
-    if (evoReady(r)) mkBtn(`✨ Evolve → ${t.name}`, () => evolveByProgress(poke, r));
-    else if (r.method === 'buddy') mkHint(`🐾 Bond ${evoProgress(r)}/${r.cost} steps → ${t.name}`);
-    else mkHint(`🥊 Battles ${evoProgress(r)}/${r.cost} → ${t.name}`);
+    const where = r.zone != null ? ` in ${ZONE_INFO[r.zone].name}` : '';
+    if (r.method === 'dance') { mkHint(`🔗 ${t.name}: Dance Party with another trainer${where}`); return; }
+    if (evoReady(r) && !evoHere(r)) mkHint(`✨ Ready — evolve it${where}`);
+    else if (evoReady(r)) mkBtn(`✨ Evolve → ${t.name}`, () => evolveByProgress(poke, r));
+    else if (r.method === 'buddy') mkHint(`🐾 Bond ${evoProgress(r)}/${r.cost} steps → ${t.name}${where}`);
+    else mkHint(`🥊 Battles ${evoProgress(r)}/${r.cost} → ${t.name}${where}`);
   });
 
   nav.push(document.getElementById('detail-back'));
@@ -5318,7 +5322,7 @@ function evolveWithStone(poke, rule) {
 }
 // Buddy / battle evolutions — only fire once the progress threshold is met.
 function evolveByProgress(poke, rule) {
-  if (!evoReady(rule)) return;
+  if (!evoReady(rule) || !evoHere(rule)) return;
   performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
 }
 // Dance Party (multiplayer): every dance-method Pokémon you own evolves at once.
@@ -5327,7 +5331,7 @@ function evolveByProgress(poke, rule) {
 function danceEvolve() {
   const done = [];
   for (const r of EVOS) {
-    if (r.method !== 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to)) continue;
+    if (r.method !== 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoHere(r)) continue;
     const t = POKEMON_DATA.find(p => p.id === r.to), f = POKEMON_DATA.find(p => p.id === r.from);
     if (!t) continue;
     seenIds.add(t.id); caughtIds.add(t.id);

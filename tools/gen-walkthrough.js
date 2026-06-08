@@ -40,9 +40,10 @@ function obtain(p) {
   if (s) return { tag: 'Evolve', detail: `${nm(s.from)} + ${STONES[s.stone].emoji} ${STONES[s.stone].name}` };
   const e = EVOS.find(r => r.to === p.id);
   if (e) {
-    if (e.method === 'buddy') return { tag: 'Evolve', detail: `${nm(e.from)} — 🐾 walk ${e.cost} steps as buddy` };
-    if (e.method === 'battle') return { tag: 'Evolve', detail: `${nm(e.from)} — 🥊 use in ${e.cost} battle${e.cost > 1 ? 's' : ''}` };
-    if (e.method === 'dance') return { tag: 'Evolve', detail: `${nm(e.from)} — 🪩 Dance Party (multiplayer)` };
+    const z = e.zone != null ? ` — only in ${zname(e.zone)}` : '';
+    if (e.method === 'buddy') return { tag: 'Evolve', detail: `${nm(e.from)} — 🐾 walk ${e.cost} steps as buddy${z}` };
+    if (e.method === 'battle') return { tag: 'Evolve', detail: `${nm(e.from)} — 🥊 use in ${e.cost} battle${e.cost > 1 ? 's' : ''}${z}` };
+    if (e.method === 'dance') return { tag: 'Evolve', detail: `${nm(e.from)} — 🪩 Dance Party (multiplayer)${z}` };
   }
   return { tag: 'Special', detail: '—' };
 }
