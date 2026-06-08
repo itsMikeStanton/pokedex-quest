@@ -74,6 +74,9 @@ const BARRIERS = {
   vine:  { needsType: 'Grass',    hint: 'Bring a 🌿 Grass Pokémon as your buddy to cut through the vines!', cleared: '🌿 Your Grass buddy cuts through the vines!',  sign: '🌿' },
   frost: { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to melt the ice wall!',     cleared: '🔥 Your Fire buddy melts the ice wall!',       sign: '🔥' },
   sand:  { needsType: 'Ground',   hint: 'Bring a 🌍 Ground Pokémon as your buddy to clear the sand wall!', cleared: '🌍 Your Ground buddy clears the sand wall!',   sign: '🌍' },
+  psychic: { needsType: 'Psychic', needsBuddyId: 150,
+    hint: '🔮 A barrier of pure psychic force seals the path north. Only an ULTRA-POWERFUL Psychic-type — the very strongest of all — may pass.',
+    cleared: '🔮 Mewtwo flares with unimaginable psychic power... the barrier dissolves!', sign: '🔮' },
 };
 
 // ── FIELD NOTES ──────────────────────────────────────
@@ -82,6 +85,7 @@ const BARRIERS = {
 const BARRIER_LABEL = {
   log:'Fallen logs', rock:'River rocks', fence:'Electric fence',
   lava:'Lava flow', vine:'Thick vines', frost:'Ice wall', sand:'Sand wall',
+  psychic:'Psychic seal',
 };
 const STATIC_TIPS = [
   { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
@@ -221,6 +225,15 @@ const COLLECTIBLES = [
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
 const NPCS = [
+  // ── The final NPC: Dad, waiting at the blue house in Champion's Cove. ──
+  // You can only reach him after befriending all 151 (Mewtwo opens the seal).
+  { zone: 21, x: 6, y: 6, emoji: '🧔', name: 'Dad', art: 'dad', lines: () => [
+    `...${saveName}? You made it. You actually made it all the way up here. 🥹`,
+    `You befriended every single Lukeymon — all 151 of them. Even Mewtwo chose to walk beside you.`,
+    `I built this whole island just for you, kiddo — every meadow, every cave, every beach and mountain.`,
+    `I am SO proud of you. You're the kindest, bravest trainer this world has ever known.`,
+    `Now come here and give your dad the biggest hug. I love you, always. 💙`,
+  ] },
   { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
@@ -761,6 +774,7 @@ const TILE_ART = {
   18: { 0: 3, 1: 3, 3: 3, 4: 3, 8: 3 },
   19: { 0: 3, 1: 3, 3: 3 },
   20: { 1: 3, 3: 3, 4: 3, 8: 3 },
+  21: { 0: 3, 1: 3 },
 };
 // The new lands reuse the original received tile art, mapped per tile to a
 // biome-matching source zone (no procedurally-generated tiles).
@@ -773,8 +787,9 @@ const NEW_TILE_SRC = {
   18: { 0: 0, 1: 1, 3: 1, 4: 1, 8: 6 },     // Seafoam ← Beach + Ice Cave ice
   19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
   20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
+  21: { 0: 0, 1: 0 },                       // Champion's Cove ← Meadow
 };
-const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1 };   // (Lunar Pass has no trees)
+const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0 };   // (Lunar Pass has no trees)
 const _tileArt = {};
 function tileArtImg(zone, tileId, variant) {
   const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
@@ -827,6 +842,7 @@ function makeCanvas(w, h) {
 }
 function buildBuildingSprites() {
   { const [c, x] = makeCanvas(54, 58); paintHouseBig(x); buildingSprites[T.HOUSE] = c; }
+  { const [c, x] = makeCanvas(54, 58); paintHouseBigBlue(x); buildingSprites.HOUSE_BLUE = c; }
   { const [c, x] = makeCanvas(54, 58); paintShopBig(x);  buildingSprites[T.SHOP]  = c; }
   { const [c, x] = makeCanvas(54, 60); paintHospitalBig(x); buildingSprites[T.HOSPITAL] = c; }
   { const [c, x] = makeCanvas(54, 60); paintGymBig(x);      buildingSprites[T.GYM]      = c; }
@@ -867,6 +883,21 @@ function paintHouseBig(x) {
   x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);              // door (bottom-centre)
   x.fillStyle = '#5a3a1e'; x.fillRect(22, 40, 10, 2);
   x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);                // knob
+}
+// The cosy blue cottage that waits at the very end of the journey.
+function paintHouseBigBlue(x) {
+  x.fillStyle = '#e8e0d2'; x.fillRect(6, 26, 42, 30);                 // pale body
+  x.fillStyle = '#cfc6b6'; x.fillRect(6, 26, 42, 4);                 // body shade
+  x.fillStyle = '#2f6fd0';                                           // blue roof
+  x.beginPath(); x.moveTo(1, 28); x.lineTo(27, 4); x.lineTo(53, 28); x.closePath(); x.fill();
+  x.fillStyle = '#1f57b0'; x.beginPath(); x.moveTo(1, 28); x.lineTo(53, 28); x.lineTo(53, 31); x.lineTo(1, 31); x.closePath(); x.fill();
+  x.fillStyle = '#bfe3f2'; x.fillRect(12, 34, 9, 9); x.fillRect(33, 34, 9, 9);   // windows
+  x.fillStyle = '#5a7a96'; x.fillRect(12, 34, 9, 2); x.fillRect(33, 34, 9, 2);
+  x.fillStyle = '#3f86df'; x.fillRect(22, 40, 10, 16);              // blue door
+  x.fillStyle = '#2f6fd0'; x.fillRect(22, 40, 10, 2);
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);                // knob
+  x.fillStyle = '#ffffff'; x.font = '9px serif'; x.textAlign = 'center'; x.fillText('💙', 27, 22); // heart in the gable
+  x.textAlign = 'left';
 }
 function paintShopBig(x) {
   x.fillStyle = '#e8d8b0'; x.fillRect(5, 24, 44, 32);              // body
@@ -1521,6 +1552,15 @@ function isBarrierUnlocked(key) {
   return !key || unlockedBarriers.has(key);
 }
 
+// Whether the active buddy can clear a given barrier. Most barriers want a buddy
+// TYPE; a special few (the psychic seal) demand one exact Pokémon as your buddy.
+function buddyClearsBarrier(key) {
+  const b = BARRIERS[key];
+  if (!b) return true;
+  if (b.needsBuddyId != null) return activePet === b.needsBuddyId;
+  return buddyHasType(b.needsType);
+}
+
 // The Pokémon currently set as the active buddy (or null).
 function buddyPoke() {
   return activePet == null ? null : POKEMON_DATA.find(p => p.id === activePet) || null;
@@ -1622,7 +1662,7 @@ function move(dx, dy, ts) {
   if (barrierKey) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    if (buddyHasType(BARRIERS[barrierKey].needsType)) {
+    if (buddyClearsBarrier(barrierKey)) {
       unlockedBarriers.add(barrierKey);
       saveGame();
       beep(523, 0.1, 0.1);
@@ -2611,7 +2651,10 @@ function drawWorld(ts) {
   for (let r = startR; r < Math.min(rows, endR + 2); r++) {
     for (let c = startC; c < endC; c++) {
       const t = map[r][c];
-      if (t === T.HOUSE) { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 62 : 58); }
+      if (t === T.HOUSE) {
+        if (ZONE_INFO[currentZone].name === "Champion's Cove") { pushStruct(sprites, buildingSprites.HOUSE_BLUE, c, r, 58); }
+        else { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 62 : 58); }
+      }
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 62 : 58); }
       else if (t === T.HOSPITAL) { pushStruct(sprites, buildingSprites[T.HOSPITAL], c, r, 60); }
       else if (t === T.GYM)      { pushStruct(sprites, buildingSprites[T.GYM],      c, r, 60); }
