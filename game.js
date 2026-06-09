@@ -2505,13 +2505,48 @@ function animSheet(key) {
   } catch (e) { /* NPCS not ready yet — the player sheet above still preloads */ }
 })();
 
+// ── Crisp sprite downscaling ─────────────────────────
+// Source character art is high-res (~150–240px). Rescaling it to ~53px with
+// nearest-neighbour every frame drops source pixels unevenly and shimmers as
+// the sprite bobs/walks. Instead, downscale each (frame, size) ONCE into an
+// offscreen canvas with high-quality smoothing, cache it, then blit that baked
+// bitmap 1:1 at integer coordinates — stable, clean edges, no per-frame jank.
+const _scaleCache = new Map();
+function scaledSprite(img, sx, sy, sw, sh, w, h) {
+  const key = (img.src || '') + '|' + sx + ',' + sy + ',' + sw + ',' + sh + '|' + w + 'x' + h;
+  let cv = _scaleCache.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    // Step the downscale down in halves first, so the final smoothing has less
+    // than 2× to cover (sharper, less mushy than one big jump).
+    let curW = sw, curH = sh, src = img, ssx = sx, ssy = sy;
+    while (curW > w * 2 && curH > h * 2) {
+      const nW = Math.max(w, Math.floor(curW / 2)), nH = Math.max(h, Math.floor(curH / 2));
+      const tmp = document.createElement('canvas'); tmp.width = nW; tmp.height = nH;
+      const tc = tmp.getContext('2d'); tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high';
+      tc.drawImage(src, ssx, ssy, curW, curH, 0, 0, nW, nH);
+      src = tmp; ssx = 0; ssy = 0; curW = nW; curH = nH;
+    }
+    c.drawImage(src, ssx, ssy, curW, curH, 0, 0, w, h);
+    _scaleCache.set(key, cv);
+  }
+  return cv;
+}
+function blitSprite(img, sx, sy, sw, sh, cx, py, H, footPad) {
+  const w = Math.max(1, Math.round(H * sw / sh)), h = Math.max(1, Math.round(H));
+  const cv = scaledSprite(img, sx, sy, sw, sh, w, h);
+  const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + (footPad == null ? 1 : footPad));
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cv, dx, dy);
+  ctx.imageSmoothingEnabled = prev;
+}
 // Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
 // py = tile top y, both already in screen space).
 function drawCharSprite(img, px, py, H) {
-  const w = Math.round(H * img.naturalWidth / img.naturalHeight);
-  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - H + 2), w, H);
-  ctx.imageSmoothingEnabled = prev;
+  blitSprite(img, 0, 0, img.naturalWidth, img.naturalHeight, px, py, H, 2);
 }
 // Draw a character's overworld sprite for a facing. Prefers the 4-row walk sheet,
 // then a single sprite, then returns false so the caller can fall back to an emoji.
@@ -2519,12 +2554,7 @@ function drawCharField(key, dir, cx, py, H) {
   const sheet = walkSheet(key);
   if (sheet) {
     const cellW = sheet.naturalWidth, cellH = sheet.naturalHeight / 4;
-    const row = DIR_ROW[dir] || 0;
-    const w = Math.round(H * cellW / cellH);
-    const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + 1);
-    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sheet, 0, row * cellH, cellW, cellH, dx, dy, w, H);
-    ctx.imageSmoothingEnabled = prev;
+    blitSprite(sheet, 0, (DIR_ROW[dir] || 0) * cellH, cellW, cellH, cx, py, H);
     return true;
   }
   const single = npcArtImg(key);
@@ -2537,13 +2567,8 @@ function drawAnimChar(key, dir, frame, cx, py, H) {
   const sheet = animSheet(key);
   if (!sheet) return false;
   const cellW = sheet.naturalWidth / ANIM_FRAMES, cellH = sheet.naturalHeight / 4;
-  const row = DIR_ROW[dir] || 0;
   const col = ((frame % ANIM_FRAMES) + ANIM_FRAMES) % ANIM_FRAMES;
-  const w = Math.round(H * cellW / cellH);
-  const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + 1);
-  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(sheet, col * cellW, row * cellH, cellW, cellH, dx, dy, w, H);
-  ctx.imageSmoothingEnabled = prev;
+  blitSprite(sheet, col * cellW, (DIR_ROW[dir] || 0) * cellH, cellW, cellH, cx, py, H);
   return true;
 }
 // A soft little drop-shadow at an entity's feet so it pops off the ground.
