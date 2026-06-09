@@ -850,7 +850,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '12';   // bump to bust the image cache when art files change
+const ART_V = '13';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -2477,6 +2477,18 @@ function portraitImg(key) {
   if (!img) { img = new Image(); img.src = 'art/portrait/' + key + '.png?v=' + ART_V; _portraitArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
+// Animated character sheets: art/anim/<key>.png is a grid of 4 rows (down/up/
+// left/right per DIR_ROW) × ANIM_FRAMES columns (a walk cycle). Used by the
+// player. Frame 1 is the neutral/idle pose; walking ping-pongs 0→1→2→1.
+const ANIM_FRAMES = 3;
+const WALK_SEQ = [0, 1, 2, 1];
+const _animArt = {};
+function animSheet(key) {
+  if (!key) return null;
+  let img = _animArt[key];
+  if (!img) { img = new Image(); img.src = 'art/anim/' + key + '.png?v=' + ART_V; _animArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
 // Eagerly preload character art at boot. walkSheet()/npcArtImg() are otherwise
 // lazy — they only kick off the download on the FIRST draw, so on a cold load
 // (or right after an ART_V cache bump) the explorer PNG isn't decoded yet and
@@ -2484,7 +2496,7 @@ function portraitImg(key) {
 // "change" once the real sprite finishes loading. Requesting these up front
 // means they're ready before the world first renders.
 (function preloadCharArt() {
-  walkSheet('player');                                  // our own body — load this first
+  walkSheet('player'); animSheet('player');             // our own body — load this first
   try {
     const keys = new Set(['player']);
     if (typeof NPCS !== 'undefined') for (const n of NPCS) if (n.art) keys.add(n.art);
@@ -2518,6 +2530,21 @@ function drawCharField(key, dir, cx, py, H) {
   const single = npcArtImg(key);
   if (single) { drawCharSprite(single, cx, py, H); return true; }
   return false;
+}
+// Draw one animation frame for a facing. Returns false if the sheet isn't ready
+// so the caller can fall back to the static walk sheet / emoji.
+function drawAnimChar(key, dir, frame, cx, py, H) {
+  const sheet = animSheet(key);
+  if (!sheet) return false;
+  const cellW = sheet.naturalWidth / ANIM_FRAMES, cellH = sheet.naturalHeight / 4;
+  const row = DIR_ROW[dir] || 0;
+  const col = ((frame % ANIM_FRAMES) + ANIM_FRAMES) % ANIM_FRAMES;
+  const w = Math.round(H * cellW / cellH);
+  const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + 1);
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sheet, col * cellW, row * cellH, cellW, cellH, dx, dy, w, H);
+  ctx.imageSmoothingEnabled = prev;
+  return true;
 }
 // A soft little drop-shadow at an entity's feet so it pops off the ground.
 function drawShadow(centerX, footY, rx, alpha = 0.22) {
@@ -3004,7 +3031,7 @@ function drawWorld(ts) {
     const petSortY = horiz ? renderPos.y + TILE_SIZE - 6 : prp.y + TILE_SIZE + petDirOffsetY();
     sprites.push({ y: petSortY, o: 0, draw: () => drawPet(ts) });
   }
-  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
+  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY, ts); } });
   if (window.MP) MP.collectSprites(sprites, ts);
   sprites.sort((a, b) => a.y - b.y || a.o - b.o);
   sprites.forEach(s => s.draw());
@@ -3351,9 +3378,16 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
   }
 }
 
-function drawPlayer(px, py) {
+function drawPlayer(px, py, ts) {
   drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 11);
-  // Explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
+  // Animated explorer: 4 facings × 4 walk frames. Cycle the frames while we're
+  // sliding between tiles; rest on the idle frame (0) when standing still.
+  if (ts != null) {
+    const moving = (ts - moveAnimTs) < moveAnimDur;
+    const frame  = moving ? WALK_SEQ[Math.floor(ts / 120) % WALK_SEQ.length] : 1;   // idle = neutral pose
+    if (drawAnimChar('player', playerDir, frame, px + TILE_SIZE / 2, py, 40)) return;
+  }
+  // Static explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
   if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 38)) return;
   const rows   = PLAYER_SPRITE[playerDir];
   const scale  = 3;
