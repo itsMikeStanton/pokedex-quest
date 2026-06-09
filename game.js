@@ -708,6 +708,8 @@ let spawnTimerId   = null;   // next spawn setTimeout id
 let expireTimerId  = null;   // current wild's disappear setTimeout id
 let wildTrainer    = null;   // { x, y, zone, name, emoji } — a wandering trainer to battle
 let trainerTimerId = null;   // wandering trainer's wander-off setTimeout id
+let nightGhost     = null;   // { x, y, zone, id, emoji } — a ghost drifting around at night
+let _ghostCheckTs = 0, _ghostMoveTs = 0, _ghostDespawnTs = 0;
 let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
@@ -1620,8 +1622,43 @@ function getPetRenderPos(ts) {
 // ═══════════════════════════════════════════════════
 // GAME LOOP
 // ═══════════════════════════════════════════════════
+// ── Gamepad / Steam Deck support ─────────────────────
+// Polled every frame and fed into the SAME input layer as keyboard & the
+// on-screen buttons: left stick / d-pad drive keys[] for movement; face
+// buttons fire kamiInput/uiPress (A/B/Start/Select), exactly like the Game Boy
+// buttons. Standard mapping: 0=A 1=B 3=Y 8=Select 9=Start 12-15=d-pad.
+let _gpHeld = {};
+const _GP_KEYMAP = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+function pollGamepad() {
+  if (!navigator.getGamepads) return;
+  let gp = null;
+  for (const p of navigator.getGamepads()) if (p && p.connected) { gp = p; break; }
+  if (!gp) return;
+  const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = 0.5;
+  const held = { up: b(12) || ay < -dz, down: b(13) || ay > dz, left: b(14) || ax < -dz, right: b(15) || ax > dz };
+  for (const d in held) {
+    if (held[d]) keys[_GP_KEYMAP[d]] = true;
+    else if (_gpHeld[d]) keys[_GP_KEYMAP[d]] = false;   // only clear what the pad set (don't fight the keyboard)
+    if (held[d] && !_gpHeld[d]) { uiPress(d); kamiInput(d); }
+    _gpHeld[d] = held[d];
+  }
+  const face = { a: b(0), b: b(1), y: b(3), select: b(8), start: b(9) };
+  if (face.a && !_gpHeld.a) { uiPress('a'); kamiInput('a'); }
+  if (face.b && !_gpHeld.b) { uiPress('b'); kamiInput('b'); }
+  if (face.start && !_gpHeld.start) kamiInput('start');
+  if (face.select && !_gpHeld.select) { kamiInput('select'); if (gameState === 'world') cycleBuddy(); }
+  if (face.y && !_gpHeld.y) { if (gameState === 'world') openMap(); else if (gameState === 'map') closeMap(); }
+  Object.assign(_gpHeld, face);
+}
+window.addEventListener('gamepadconnected', () => {
+  showMessage('🎮 Controller connected!');
+  beep(523, 0.08, 0.1); setTimeout(() => beep(784, 0.1, 0.12), 110);
+});
+
 function loop(ts) {
   requestAnimationFrame(loop);
+  pollGamepad();
 
   if (gameState === 'world') {
     // Second half of an ice wall bounce, in two beats:
@@ -1653,6 +1690,7 @@ function loop(ts) {
       else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0, ts); moved = true; }
       if (moved) { lastMoveTs = ts; if (buddyIsSwift()) learnTip('swift'); }
     }
+    tickGhosts(ts);
     if (zoneSlide) drawZoneSlide(ts);
     else           drawWorld(ts);
   }
@@ -1820,7 +1858,8 @@ function move(dx, dy, ts) {
   if (npc) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    if (npc.gymLeader && !collected.has('badge_gym')) startGymBattle(npc);  // challenge → battle
+    if (buddyIsJigglypuff()) talkNPC(npc);  // 🎵 Jigglypuff hums everyone to sleep
+    else if (npc.gymLeader && !collected.has('badge_gym')) startGymBattle(npc);  // challenge → battle
     else if (npc.dojo) startDojoBattle();   // repeatable practice battles (grows battle evolutions)
     else if (npc.shop) openShop();  // the Poké Mart clerk runs the shop
     else talkNPC(npc);
@@ -1832,6 +1871,14 @@ function move(dx, dy, ts) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     startTrainerBattle();
+    return;
+  }
+
+  // 3c3. A drifting night ghost → Boo!, a random treat, and it vanishes.
+  if (ghostAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    bumpGhost();
     return;
   }
 
@@ -2129,6 +2176,75 @@ function spawnTrainer() {
 }
 function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
 
+// A Jigglypuff buddy hums everyone to sleep instead of talking.
+function buddyIsJigglypuff() { return activePet === JIGGLYPUFF_ID && caughtIds.has(JIGGLYPUFF_ID); }
+
+// ── Night ghosts ─────────────────────────────────────
+// At night, outdoors, the Gastly line drifts around. Bump one → "Boo!", a
+// random treat, and it vanishes. A glowing (light) buddy scares them off.
+const GHOST_IDS = [92, 93, 94];   // Gastly, Haunter, Gengar
+function ghostAt(zone, x, y) { return (nightGhost && nightGhost.zone === zone && nightGhost.x === x && nightGhost.y === y) ? nightGhost : null; }
+function ghostTileOK(map, z, c, r) {
+  const t = map[r][c];
+  if (isObstacleTile(t) || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
+  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r)) return false;
+  if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r) || trainerAt(currentZone, c, r)) return false;
+  return true;
+}
+function spawnGhost(ts) {
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone], cands = [];
+  for (let r = 1; r < z.rows - 1; r++) for (let c = 1; c < z.cols - 1; c++) {
+    if (!ghostTileOK(map, z, c, r)) continue;
+    const d = Math.abs(c - playerX) + Math.abs(r - playerY);
+    if (d >= 3 && d <= 7) cands.push({ x: c, y: r });
+  }
+  if (!cands.length) return;
+  const tile = cands[Math.floor(Math.random() * cands.length)];
+  const id = GHOST_IDS[Math.floor(Math.random() * GHOST_IDS.length)];
+  const p = POKEMON_DATA.find(x => x.id === id);
+  nightGhost = { x: tile.x, y: tile.y, zone: currentZone, id, emoji: (p && p.emoji) || '👻' };
+  _ghostDespawnTs = ts + 22000;
+  beep(180, 0.12, 0.16, 'sine');
+}
+function ghostStep() {
+  if (!nightGhost) return;
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
+  for (const [dx, dy] of dirs) {
+    const nx = nightGhost.x + dx, ny = nightGhost.y + dy;
+    if (nx < 1 || ny < 1 || nx >= z.cols - 1 || ny >= z.rows - 1) continue;
+    if (!ghostTileOK(map, z, nx, ny)) continue;
+    nightGhost.x = nx; nightGhost.y = ny; return;
+  }
+}
+function bumpGhost() {
+  if (!nightGhost) return;
+  nightGhost = null;
+  const roll = Math.random();
+  let reward;
+  if (roll < 0.02) { masterBalls += 1; reward = 'a MASTER BALL! 🟣'; }
+  else if (roll < 0.45) { const n = 1 + Math.floor(Math.random() * 3); balls += n; reward = `+${n} PokéBall${n > 1 ? 's' : ''} ⚪`; }
+  else { const n = 15 + Math.floor(Math.random() * 36); coins += n; reward = `+${n} 💰`; }
+  updateHud(); saveGame();
+  beep(440, 0.06, 0.08, 'square'); setTimeout(() => beep(660, 0.1, 0.12), 90);
+  showMessage(`👻 BOO! It startled you, then vanished — and left ${reward}`);
+}
+// Per-frame ghost tick from the game loop (world only).
+function tickGhosts(ts) {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) { nightGhost = null; return; }
+  const lit = buddyLightsCave();
+  if (nightGhost && (nightGhost.zone !== currentZone || !isNightNow() || ts > _ghostDespawnTs || lit)) {
+    if (lit && nightGhost.zone === currentZone) showMessage('🔦 The ghost shrinks from your glowing buddy and slips away!');
+    nightGhost = null;
+  }
+  if (!nightGhost && isNightNow() && !lit && ts > _ghostCheckTs) {
+    _ghostCheckTs = ts + 5000;
+    if (Math.random() < 0.28) spawnGhost(ts);
+  }
+  if (nightGhost && ts > _ghostMoveTs) { _ghostMoveTs = ts + 850; ghostStep(); }
+}
+
 // ── Time/weather-specific wild spawns ────────────────
 // SPAWN_COND[id] = { night?: 'only'|'more', rain?: 'only'|'more' }.
 //   'only' → appears ONLY under that condition;  'more' → appears 3× as often then.
@@ -2219,19 +2335,21 @@ let npcLines = [];   // resolved dialogue for the NPC currently being talked to
 function talkNPC(npc) {
   currentNPC = npc;
   npcLineIdx = 0;
-  npcLines = typeof npc.lines === 'function' ? npc.lines() : npc.lines;
   clearTimeout(spawnTimerId);
+  // 🎵 A Jigglypuff buddy hums them straight to sleep — no chatting (or gifts).
+  const asleep = buddyIsJigglypuff();
+  npcLines = asleep ? ['💤  Zzzzz...  zzzzzz...'] : (typeof npc.lines === 'function' ? npc.lines() : npc.lines);
 
   const ne = document.getElementById('npc-emoji');
   if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/portrait/' + npc.art + '.png?v=' + ART_V + '" alt="" onerror="this.parentNode.textContent=\'' + npc.emoji + '\'">';
   else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
-  document.getElementById('npc-name').textContent  = npc.name;
+  document.getElementById('npc-name').textContent  = asleep ? npc.name + ' 😴' : npc.name;
   document.getElementById('npc-reward').classList.add('hidden');
 
   // One-time gift the first time you meet this character — but hold it back
   // for a big reveal once the conversation wraps up (see advanceNPC).
   const mk = npc.metKey || npc.name;   // metKey lets the same character give a fresh gift elsewhere
-  if (!metNPCs.has(mk) && npc.gift > 0) {
+  if (!asleep && !metNPCs.has(mk) && npc.gift > 0) {
     metNPCs.add(mk);
     pendingGift = npc.gift;
   } else {
@@ -2394,6 +2512,16 @@ function drawTrainerE(t, ts) {
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(t.emoji, px, py + 24 + bob);
   ctx.font = '14px serif'; ctx.fillText('❗', px, py - 4 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
+}
+function drawGhostE(g, ts) {
+  const px = g.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = g.y * TILE_SIZE - camY;
+  const bob = Math.sin(ts * 0.004) * 3;
+  ctx.save();
+  ctx.globalAlpha = 0.55 + 0.18 * Math.sin(ts * 0.006);   // flickering, see-through
+  ctx.textAlign = 'center'; ctx.font = '24px serif';
+  ctx.fillText(g.emoji || '👻', px, py + 22 + bob);
+  ctx.restore();
 }
 function drawRocketE(r, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
@@ -2797,6 +2925,8 @@ function drawWorld(ts) {
     if (n.zone === currentZone) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
   if (wildTrainer && wildTrainer.zone === currentZone)
     sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
+  if (nightGhost && nightGhost.zone === currentZone)
+    sprites.push({ y: (nightGhost.y + 1) * TILE_SIZE, o: 1, draw: () => drawGhostE(nightGhost, ts) });
   for (const r of ROCKETS)
     if (r.zone === currentZone && !caughtIds.has(r.bird)) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRocketE(r, ts) });
   for (const r of roamers)
