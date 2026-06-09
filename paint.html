@@ -8,20 +8,19 @@
   :root { --bg:#0c1422; --panel:#13203a; --line:#27406a; --ink:#dce8f8; --gold:#f8d860; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--ink); }
-  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  header { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
            padding:10px 14px; background:var(--panel); border-bottom:2px solid var(--line); position:sticky; top:0; z-index:5; }
   h1 { font-size:16px; margin:0; color:var(--gold); }
   select, button, input { font:inherit; }
   select { background:#0c1830; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
   .btn { background:#1d3257; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 11px; cursor:pointer; }
   .btn:hover { background:#274270; }
-  .btn.go { background:#2a7d4a; border-color:#3fae6a; }
-  .btn.go:hover { background:#329a59; }
-  .btn.warn { background:#7d3a2a; border-color:#b8633a; }
+  .btn.sel { background:#c8932a; color:#1a1206; border-color:var(--gold); }
+  .btn.go { background:#2a7d4a; border-color:#3fae6a; } .btn.go:hover { background:#329a59; }
   .spacer { flex:1; }
+  .modes { display:flex; gap:4px; }
   main { display:flex; gap:12px; padding:12px; align-items:flex-start; flex-wrap:wrap; }
-  /* palette */
-  #palette { display:flex; flex-direction:column; gap:4px; width:170px; flex-shrink:0;
+  #palette { display:flex; flex-direction:column; gap:4px; width:172px; flex-shrink:0;
              background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; }
   .pal-title { font-size:11px; color:#9fb6d4; margin:2px 0 4px; text-transform:uppercase; letter-spacing:1px; }
   .swatch { display:flex; align-items:center; gap:8px; padding:3px 5px; border-radius:5px; cursor:pointer; border:2px solid transparent; }
@@ -29,39 +28,40 @@
   .swatch.sel { border-color:var(--gold); background:#0c1830; }
   .chip { width:20px; height:20px; border-radius:4px; border:1px solid #0006; flex-shrink:0; }
   .swatch .nm { font-size:12px; } .swatch .id { font-size:10px; color:#7e93b3; margin-left:auto; }
-  /* tools */
-  #tools { display:flex; flex-direction:column; gap:6px; }
   .tool { padding:6px 8px; border-radius:6px; border:2px solid var(--line); background:#0c1830; cursor:pointer; font-size:12px; text-align:left; }
-  .tool.sel { border-color:var(--gold); }
-  /* canvas */
+  .tool.sel { border-color:var(--gold); } .tool.hidden { display:none; }
   #stage { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; max-height:78vh; flex:1; min-width:300px; }
   #grid { image-rendering:pixelated; display:block; cursor:crosshair; touch-action:none; }
   .meta { font-size:12px; color:#9fb6d4; margin:4px 2px; }
-  /* export */
   #exportWrap { width:100%; }
   textarea { width:100%; height:120px; background:#0a1322; color:#bcd; border:1px solid var(--line); border-radius:6px;
              font-family:ui-monospace,monospace; font-size:11px; padding:8px; }
   .hint { font-size:12px; color:#9fb6d4; line-height:1.5; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   kbd { background:#0c1830; border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px; }
+  .hidden { display:none !important; }
 </style>
 </head>
 <body>
 <header>
   <h1>🎨 Tile Painter</h1>
-  <label class="row">Area:&nbsp;<select id="zoneSel"></select></label>
+  <div class="modes">
+    <button class="btn sel" id="mZones">🗺️ Zone tiles</button>
+    <button class="btn" id="mShore">🏝️ Shore edges</button>
+  </div>
+  <label class="row" id="zoneWrap">Area:&nbsp;<select id="zoneSel"></select></label>
   <span class="meta" id="dims"></span>
   <span class="spacer"></span>
   <button class="btn" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
-  <label class="row">Zoom <input id="zoom" type="range" min="6" max="30" value="15"></label>
-  <button class="btn" id="reload" title="Discard edits, reload the game's world.js">↻ Reload from game</button>
-  <button class="btn" id="saveDraft">💾 Save draft</button>
-  <button class="btn" id="loadDraft">📂 Load draft</button>
+  <label class="row">Zoom <input id="zoom" type="range" min="5" max="30" value="15"></label>
+  <button class="btn" id="reload" title="Discard edits, reload the game's world.js">↻ Reload</button>
+  <button class="btn" id="saveDraft">💾 Save</button>
+  <button class="btn" id="loadDraft">📂 Load</button>
 </header>
 
 <main>
   <div id="palette">
-    <div class="pal-title">Tiles</div>
+    <div class="pal-title" id="palTitle">Tiles</div>
     <div id="swatches"></div>
     <div class="pal-title" style="margin-top:8px">Tools</div>
     <div id="tools">
@@ -80,14 +80,10 @@
     <div class="row" style="margin-bottom:6px">
       <button class="btn go" id="copy">📋 Copy world.js</button>
       <button class="btn go" id="download">⬇ Download world.js</button>
-      <span class="hint">Then replace <b>world.js</b> in the repo with this (or paste it in), commit &amp; push.</span>
+      <span class="hint">Then replace <b>world.js</b> in the repo (or paste it to me), commit &amp; push.</span>
     </div>
     <textarea id="out" readonly placeholder="Your exported world.js will appear here…"></textarea>
-    <p class="hint">
-      Pick an <b>Area</b>, choose a <b>Tile</b>, and paint on the grid. <kbd>B</kbd> brush · <kbd>F</kbd> fill · <kbd>P</kbd> pick ·
-      <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo. Edits autosave to this browser as you go.<br>
-      This only paints the per-area background tiles — for doorways, portals, décor &amp; new zones use <b>editor.html</b>.
-    </p>
+    <p class="hint" id="help"></p>
   </div>
 </main>
 
@@ -101,99 +97,159 @@ const TILES = [
   [16,'Hospital','#e8403a'],[17,'Gym','#7a5230'],
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t[0]] = t[2]);
+// atlas palette (what the map view uses) — for the shore overview
+const ATLAS_TC = {0:'#cdb06a',1:'#4fa83f',2:'#1f5a24',3:'#2f6fd0',4:'#e2cf86',5:'#8b8b97',6:'#c83a78',7:'#d8431a',8:'#bfe3f2',9:'#7a7a86',10:'#3a3744',11:'#181520',12:'#c0432f',16:'#e8403a',17:'#7a5230'};
+// shore "paint" choices: a tile id to lay into the ocean, or 'erase' to revert to the auto beach
+const SHORE = [['Sand',4,'#e2cf86'],['Cliff',9,'#8d8678'],['Grass',1,'#4fa83f'],['Ocean (hide beach)',3,'#2f6fd0'],['Reset to auto',-1,'#0a1828']];
 const LS = 'lukeymon_paint_draft';
 const clone = o => JSON.parse(JSON.stringify(o));
 
-let world, zi = 0, sel = 1, tool = 'brush', cell = 15, undoStack = [];
+let world, zi = 0, sel = 1, selShore = 4, tool = 'brush', cell = 15, undoStack = [], mode = 'zones';
 
 function loadWorld(fromDraft) {
-  if (fromDraft) { try { const s = localStorage.getItem(LS); if (s) { world = JSON.parse(s); return true; } } catch(_){} return false; }
-  world = clone(WORLD);
-  if (!world.portals) world.portals = []; if (!world.decor) world.decor = {};
-  return true;
+  if (fromDraft) { try { const s = localStorage.getItem(LS); if (s) { world = JSON.parse(s); norm(); return true; } } catch(_){} return false; }
+  world = clone(WORLD); norm(); return true;
 }
+function norm(){ if(!world.portals) world.portals=[]; if(!world.decor) world.decor={}; if(!world.shore) world.shore={}; }
 function save() { try { localStorage.setItem(LS, JSON.stringify(world)); } catch(_){} }
 
 const $ = id => document.getElementById(id);
 const grid = $('grid'), ctx = grid.getContext('2d');
-
+const surf = () => world.zones.filter(z => z.mapCol != null && z.wx != null);
 function curZone() { return world.zones[zi]; }
 function curMap()  { return world.maps[curZone().id]; }
 
 function buildZoneSelect() {
-  const sel = $('zoneSel'); sel.innerHTML = '';
-  world.zones.forEach((z, i) => {
-    const o = document.createElement('option');
-    o.value = i; o.textContent = `${z.icon||''} ${z.name}  (${z.cols}×${z.rows})`;
-    sel.appendChild(o);
-  });
-  sel.value = zi;
+  const s = $('zoneSel'); s.innerHTML = '';
+  world.zones.forEach((z, i) => { const o = document.createElement('option'); o.value=i; o.textContent=`${z.icon||''} ${z.name}  (${z.cols}×${z.rows})`; s.appendChild(o); });
+  s.value = zi;
 }
 function buildSwatches() {
   const w = $('swatches'); w.innerHTML = '';
-  TILES.forEach(([id,name,col]) => {
-    const d = document.createElement('div');
-    d.className = 'swatch' + (id===sel?' sel':''); d.dataset.tile = id;
-    d.innerHTML = `<span class="chip" style="background:${col}"></span><span class="nm">${name}</span><span class="id">${id}</span>`;
-    d.onclick = () => { sel = id; buildSwatches(); };
-    w.appendChild(d);
-  });
+  if (mode === 'zones') {
+    $('palTitle').textContent = 'Tiles';
+    TILES.forEach(([id,name,col]) => {
+      const d = document.createElement('div'); d.className='swatch'+(id===sel?' sel':'');
+      d.innerHTML = `<span class="chip" style="background:${col}"></span><span class="nm">${name}</span><span class="id">${id}</span>`;
+      d.onclick = () => { sel = id; buildSwatches(); }; w.appendChild(d);
+    });
+  } else {
+    $('palTitle').textContent = 'Shore paint';
+    SHORE.forEach(([name,id,col]) => {
+      const d = document.createElement('div'); d.className='swatch'+(id===selShore?' sel':'');
+      d.innerHTML = `<span class="chip" style="background:${col}"></span><span class="nm">${name}</span>`;
+      d.onclick = () => { selShore = id; buildSwatches(); }; w.appendChild(d);
+    });
+  }
 }
 function buildTools() {
   document.querySelectorAll('.tool').forEach(t => {
     t.classList.toggle('sel', t.dataset.tool === tool);
+    t.classList.toggle('hidden', mode==='shore' && t.dataset.tool==='fill');  // no flood-fill in shore mode
     t.onclick = () => { tool = t.dataset.tool; buildTools(); };
   });
 }
+function setMode(m){ mode=m; $('mZones').classList.toggle('sel',m==='zones'); $('mShore').classList.toggle('sel',m==='shore');
+  $('zoneWrap').classList.toggle('hidden',m==='shore'); undoStack=[]; buildSwatches(); buildTools(); render();
+  $('help').innerHTML = m==='zones'
+    ? `Pick an <b>Area</b> &amp; a <b>Tile</b>, paint the grid. <kbd>B</kbd>/<kbd>F</kbd>/<kbd>P</kbd> tools · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo. Paints the background tiles for that area.`
+    : `Paint the fake <b>beach/cliffs in the ocean</b> around the island. <b>Sand/Cliff/Grass</b> add to the shore, <b>Ocean</b> hides the auto-beach, <b>Reset</b> clears your edit (auto-beach returns). The faint auto-beach &amp; land are shown for reference — you can only paint the water.`;
+}
 
-function render() {
-  const m = curMap(), R = m.length, C = m[0].length;
-  grid.width = C*cell; grid.height = R*cell;
-  for (let r=0;r<R;r++) for (let c=0;c<C;c++){
-    ctx.fillStyle = COLOR[m[r][c]] ?? '#f0f';
-    ctx.fillRect(c*cell, r*cell, cell, cell);
-  }
-  // grid lines
-  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
-  for (let c=0;c<=C;c++){ ctx.beginPath(); ctx.moveTo(c*cell+.5,0); ctx.lineTo(c*cell+.5,R*cell); ctx.stroke(); }
-  for (let r=0;r<=R;r++){ ctx.beginPath(); ctx.moveTo(0,r*cell+.5); ctx.lineTo(C*cell,r*cell+.5); ctx.stroke(); }
+// ── island bounds for shore mode ──
+let SB; // {minX,minY,maxX,maxY}
+function shoreBounds(){ const z=surf(); const pad=6;
+  SB={minX:Math.min(...z.map(s=>s.wx))-pad, minY:Math.min(...z.map(s=>s.wy))-pad,
+      maxX:Math.max(...z.map(s=>s.wx+s.cols))+pad, maxY:Math.max(...z.map(s=>s.wy+s.rows))+pad}; }
+const zrects = () => surf().map(z=>[z.wx,z.wy,z.wx+z.cols,z.wy+z.rows]);
+function covered(rs,x,y){ for(const r of rs) if(x>=r[0]&&x<r[2]&&y>=r[1]&&y<r[3]) return true; return false; }
+function frHash(x,y){ let h=(Math.imul(x|0,73856093)^Math.imul(y|0,19349663))>>>0; return (h%997)/997; }
+// the game's auto-beach fringe → returns map "x,y"→color for ocean cells
+function autoFringe(rs){ const out={}; const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+  surf().forEach(z=>{ const m=world.maps[z.id]; if(!m) return;
+    for(let r=0;r<z.rows;r++) for(let c=0;c<z.cols;c++){
+      if(r>0&&r<z.rows-1&&c>0&&c<z.cols-1) continue; const t=m[r][c]; if(t===3||t===4) continue;
+      const wx=z.wx+c, wy=z.wy+r;
+      for(const [dx,dy] of DIRS){ if(covered(rs,wx+dx,wy+dy)) continue;
+        const rv=frHash(wx*3+dx,wy*3+dy), depth=2+(rv<0.45?0:rv<0.80?1:2);
+        for(let d=1;d<=depth;d++){ const fx=wx+dx*d, fy=wy+dy*d; if(covered(rs,fx,fy)) break;
+          out[fx+','+fy]=(d===1&&frHash(wx,wy)<0.16)?'#8d8678':'#e2cf86'; } }
+    }});
+  return out;
+}
+
+// ── rendering ──
+function render(){ mode==='zones'?renderZone():renderShore(); }
+function renderZone(){
+  const m=curMap(), R=m.length, C=m[0].length; grid.width=C*cell; grid.height=R*cell;
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){ ctx.fillStyle=COLOR[m[r][c]]??'#f0f'; ctx.fillRect(c*cell,r*cell,cell,cell); }
+  gridlines(C,R);
   $('dims').textContent = `${C} × ${R} tiles`;
 }
-
-function cellAt(ev) {
-  const rc = grid.getBoundingClientRect();
-  const x = Math.floor((ev.clientX - rc.left) / cell);
-  const y = Math.floor((ev.clientY - rc.top)  / cell);
-  const m = curMap();
-  if (x<0||y<0||y>=m.length||x>=m[0].length) return null;
-  return [x,y];
+function renderShore(){
+  shoreBounds(); const rs=zrects();
+  const C=SB.maxX-SB.minX, R=SB.maxY-SB.minY; grid.width=C*cell; grid.height=R*cell;
+  ctx.fillStyle='#2f6fd0'; ctx.fillRect(0,0,grid.width,grid.height);                 // ocean
+  const af=autoFringe(rs);                                                            // faint auto-beach (reference)
+  for(const k in af){ const [x,y]=k.split(',').map(Number); ctx.fillStyle=af[k]; ctx.globalAlpha=.5; ctx.fillRect((x-SB.minX)*cell,(y-SB.minY)*cell,cell,cell); }
+  ctx.globalAlpha=1;
+  for(const k in world.shore){ const [x,y]=k.split(',').map(Number); ctx.fillStyle=ATLAS_TC[world.shore[k]]||'#e2cf86'; ctx.fillRect((x-SB.minX)*cell,(y-SB.minY)*cell,cell,cell); }
+  surf().forEach(z=>{ const m=world.maps[z.id]; for(let r=0;r<z.rows;r++) for(let c=0;c<z.cols;c++){    // land (context)
+    const t=m[r][c]; ctx.fillStyle = (t===z.base)?ATLAS_TC[z.base]||'#5a6a7a':(ATLAS_TC[t]||ATLAS_TC[z.base]||'#5a6a7a');
+    ctx.fillRect((z.wx+c-SB.minX)*cell,(z.wy+r-SB.minY)*cell,cell,cell); } });
+  if(cell>=9){ ctx.strokeStyle='rgba(0,0,0,.16)'; ctx.lineWidth=1;
+    for(let c=0;c<=C;c++){ ctx.beginPath(); ctx.moveTo(c*cell+.5,0); ctx.lineTo(c*cell+.5,R*cell); ctx.stroke(); }
+    for(let r=0;r<=R;r++){ ctx.beginPath(); ctx.moveTo(0,r*cell+.5); ctx.lineTo(C*cell,r*cell+.5); ctx.stroke(); } }
+  $('dims').textContent = `island ${C} × ${R}`;
 }
-function pushUndo() { undoStack.push({ id: curZone().id, m: clone(curMap()) }); if (undoStack.length>40) undoStack.shift(); }
-function paintCell(x,y){ const m=curMap(); if(m[y][x]!==sel){ m[y][x]=sel; ctx.fillStyle=COLOR[sel]; ctx.fillRect(x*cell,y*cell,cell,cell);
-  ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.strokeRect(x*cell+.5,y*cell+.5,cell,cell);} }
-function flood(x,y){ const m=curMap(), from=m[y][x]; if(from===sel) return; const R=m.length,C=m[0].length,st=[[x,y]];
+function gridlines(C,R){ ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1;
+  for(let c=0;c<=C;c++){ ctx.beginPath(); ctx.moveTo(c*cell+.5,0); ctx.lineTo(c*cell+.5,R*cell); ctx.stroke(); }
+  for(let r=0;r<=R;r++){ ctx.beginPath(); ctx.moveTo(0,r*cell+.5); ctx.lineTo(C*cell,r*cell+.5); ctx.stroke(); } }
+
+// ── coords + painting ──
+function cellAt(ev){ const rc=grid.getBoundingClientRect(); const px=ev.clientX-rc.left, py=ev.clientY-rc.top;
+  let x=Math.floor(px/cell), y=Math.floor(py/cell);
+  if(mode==='zones'){ const m=curMap(); if(x<0||y<0||y>=m.length||x>=m[0].length) return null; return [x,y]; }
+  x+=SB.minX; y+=SB.minY; if(x<SB.minX||y<SB.minY||x>=SB.maxX||y>=SB.maxY) return null; return [x,y];
+}
+function pushUndo(){ if(mode==='zones') undoStack.push({z:1,id:curZone().id,m:clone(curMap())}); else undoStack.push({z:0,shore:clone(world.shore)}); if(undoStack.length>40) undoStack.shift(); }
+function paintZoneCell(x,y){ const m=curMap(); if(m[y][x]!==sel){ m[y][x]=sel; ctx.fillStyle=COLOR[sel]; ctx.fillRect(x*cell,y*cell,cell,cell); ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.strokeRect(x*cell+.5,y*cell+.5,cell,cell); } }
+function paintShoreCell(x,y){ const rs=zrects(); if(covered(rs,x,y)) return;   // only paint the ocean
+  const key=x+','+y;
+  if(selShore===-1) delete world.shore[key]; else world.shore[key]=selShore;
+  // quick single-cell redraw
+  const sx=(x-SB.minX)*cell, sy=(y-SB.minY)*cell;
+  if(selShore===-1){ const af=frHash; /* recompute this cell's auto color */ ctx.fillStyle=autoCellColor(x,y)||'#2f6fd0'; }
+  else ctx.fillStyle=ATLAS_TC[selShore]||'#e2cf86';
+  ctx.fillRect(sx,sy,cell,cell);
+}
+function autoCellColor(x,y){ const rs=zrects(); const DIRS=[[1,0],[-1,0],[0,1],[0,-1]]; let best=null;
+  // does any neighbouring land cell project a beach onto (x,y)? (mirror of autoFringe)
+  surf().forEach(z=>{ const m=world.maps[z.id]; if(!m) return;
+    for(const [dx,dy] of DIRS){ const lx=x-dx, ly=y-dy; const c=lx-z.wx, r=ly-z.wy;     // land cell behind
+      if(r<0||c<0||r>=z.rows||c>=z.cols) continue; const t=m[r][c]; if(t===3||t===4) continue;
+      if(c>0&&c<z.cols-1&&r>0&&r<z.rows-1) continue;
+      const rv=frHash(lx*3+dx,ly*3+dy), depth=2+(rv<0.45?0:rv<0.80?1:2);
+      for(let d=1;d<=depth;d++){ if(lx+dx*d===x&&ly+dy*d===y){ best=(d===1&&frHash(lx,ly)<0.16)?'#8d8678':'#e2cf86'; } }
+    }});
+  return best;
+}
+let painting=false, lastCell=null;
+function strokeStart(ev){ const p=cellAt(ev); if(!p) return;
+  if(tool==='pick'){ if(mode==='zones'){ sel=curMap()[p[1]][p[0]]; } else { const v=world.shore[p[0]+','+p[1]]; selShore=(v==null?4:v); } buildSwatches(); return; }
+  pushUndo();
+  if(tool==='fill'&&mode==='zones'){ flood(p[0],p[1]); save(); return; }
+  painting=true; lastCell=p; paintAt(p[0],p[1]); }
+function paintAt(x,y){ mode==='zones'?paintZoneCell(x,y):paintShoreCell(x,y); }
+function strokeMove(ev){ if(!painting) return; const p=cellAt(ev); if(!p) return;
+  let [x0,y0]=lastCell,[x1,y1]=p,dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1,err=dx-dy;
+  while(true){ paintAt(x0,y0); if(x0===x1&&y0===y1) break; const e2=2*err; if(e2>-dy){err-=dy;x0+=sx;} if(e2<dx){err+=dx;y0+=sy;} } lastCell=p; }
+function strokeEnd(){ if(painting){ painting=false; if(mode==='shore'&&selShore===-1) render(); save(); } }
+function flood(x,y){ const m=curMap(),from=m[y][x]; if(from===sel) return; const R=m.length,C=m[0].length,st=[[x,y]];
   while(st.length){ const [cx,cy]=st.pop(); if(cx<0||cy<0||cx>=C||cy>=R||m[cy][cx]!==from) continue; m[cy][cx]=sel; st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); } render(); }
 
-let painting=false, lastCell=null;
-function strokeStart(ev){
-  const p = cellAt(ev); if(!p) return;
-  if (tool==='pick'){ sel = curMap()[p[1]][p[0]]; buildSwatches(); return; }
-  pushUndo();
-  if (tool==='fill'){ flood(p[0],p[1]); save(); return; }
-  painting=true; lastCell=p; paintCell(p[0],p[1]);
-}
-function strokeMove(ev){
-  if(!painting) return;
-  const p = cellAt(ev); if(!p) return;
-  // interpolate from lastCell to p so fast drags don't skip
-  let [x0,y0]=lastCell, [x1,y1]=p, dx=Math.abs(x1-x0), dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy;
-  while(true){ paintCell(x0,y0); if(x0===x1&&y0===y1) break; const e2=2*err; if(e2>-dy){err-=dy;x0+=sx;} if(e2<dx){err+=dx;y0+=sy;} }
-  lastCell=p;
-}
-function strokeEnd(){ if(painting){ painting=false; save(); $('hover').textContent='—'; } }
-
 grid.addEventListener('pointerdown', e=>{ e.preventDefault(); grid.setPointerCapture(e.pointerId); strokeStart(e); });
-grid.addEventListener('pointermove', e=>{ const p=cellAt(e); if(p) $('hover').textContent=`x:${p[0]}  y:${p[1]}  (tile ${curMap()[p[1]][p[0]]})`; strokeMove(e); });
+grid.addEventListener('pointermove', e=>{ const p=cellAt(e); $('hover').textContent = p?`x:${p[0]}  y:${p[1]}`+(mode==='zones'?`  (tile ${curMap()[p[1]][p[0]]})`:''):'—'; strokeMove(e); });
 grid.addEventListener('pointerup', strokeEnd);
 grid.addEventListener('pointercancel', strokeEnd);
 
@@ -203,17 +259,15 @@ function serialize() {
   let s = '// WORLD DATA — coherent (planar) layout. Authored/edited in editor.html / paint.html.\n';
   s += '// Tile ids: 0 Path 1 Grass 2 Tree 3 Water 4 Sand 5 City 6 Shop 7 Lava 8 Ice 9 Boulder 10 Cave 11 CaveDoor\n';
   s += '//           12 House 13 Floor 14 Wall 15 Door 16 Hospital 17 Gym\n';
-  s += '// Interior décor props (furniture) live in WORLD.decor — see the bottom of this file.\n';
+  s += '// WORLD.shore = hand-painted map shoreline ("x,y": tile). WORLD.decor = interior furniture.\n';
   s += 'const WORLD = {\n  zones: [\n' + world.zones.map(z=>'    '+J(z)+',').join('\n') + '\n  ],\n';
   s += '  exits: [\n' + world.exits.map(e=>'    '+J(e)+',').join('\n') + '\n  ],\n';
   s += '  portals: [\n' + (world.portals||[]).map(p=>'    '+J(p)+',').join('\n') + '\n  ],\n';
-  s += '  maps: {\n';
-  const keys = world.zones.map(z=>z.id);
-  s += keys.map(k => '    "'+k+'": [\n' + world.maps[k].map(r=>'      ['+r.join(',')+']').join(',\n') + '\n    ]').join(',\n') + '\n  },\n';
+  s += '  maps: {\n' + world.zones.map(z=>'    "'+z.id+'": [\n' + world.maps[z.id].map(r=>'      ['+r.join(',')+']').join(',\n') + '\n    ]').join(',\n') + '\n  },\n';
   const dk = Object.keys(world.decor||{}).filter(k=>(world.decor[k]||[]).length);
-  if (dk.length) {
-    s += '  decor: {\n' + dk.map(k=>'    "'+k+'": ['+world.decor[k].map(d=>J(d)).join(', ')+']').join(',\n') + '\n  },\n';
-  }
+  if (dk.length) s += '  decor: {\n' + dk.map(k=>'    "'+k+'": ['+world.decor[k].map(d=>J(d)).join(', ')+']').join(',\n') + '\n  },\n';
+  const sk = Object.keys(world.shore||{});
+  if (sk.length) s += '  shore: {' + sk.map(k=>J(k)+':'+world.shore[k]).join(', ') + '},\n';
   s += '};\n';
   return s;
 }
@@ -221,11 +275,13 @@ $('copy').onclick = () => { const t=serialize(); $('out').value=t; navigator.cli
 $('download').onclick = () => { const blob=new Blob([serialize()],{type:'text/javascript'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='world.js'; a.click(); };
 
 // ── controls ──
+$('mZones').onclick = ()=>setMode('zones');
+$('mShore').onclick = ()=>setMode('shore');
 $('zoneSel').onchange = e => { zi = +e.target.value; undoStack=[]; render(); };
 $('zoom').oninput = e => { cell = +e.target.value; render(); };
-$('undo').onclick = () => { const u=undoStack.pop(); if(!u) return; world.maps[u.id]=u.m; const idx=world.zones.findIndex(z=>z.id===u.id); if(idx>=0) zi=idx; buildZoneSelect(); render(); save(); };
+$('undo').onclick = () => { const u=undoStack.pop(); if(!u) return; if(u.z){ world.maps[u.id]=u.m; const i=world.zones.findIndex(z=>z.id===u.id); if(i>=0&&mode==='zones'){zi=i;buildZoneSelect();} } else { world.shore=u.shore; } render(); save(); };
 $('reload').onclick = () => { if(confirm('Discard your painting and reload the game’s world.js?')){ localStorage.removeItem(LS); loadWorld(false); zi=0; undoStack=[]; boot(); } };
-$('saveDraft').onclick = () => { save(); $('saveDraft').textContent='✓ Saved'; setTimeout(()=>$('saveDraft').textContent='💾 Save draft',1000); };
+$('saveDraft').onclick = () => { save(); $('saveDraft').textContent='✓'; setTimeout(()=>$('saveDraft').textContent='💾 Save',900); };
 $('loadDraft').onclick = () => { if(loadWorld(true)){ zi=Math.min(zi,world.zones.length-1); undoStack=[]; boot(); } else alert('No saved draft found.'); };
 document.addEventListener('keydown', e => {
   if(e.ctrlKey && (e.key==='z'||e.key==='Z')){ e.preventDefault(); $('undo').click(); return; }
@@ -234,8 +290,7 @@ document.addEventListener('keydown', e => {
   if(e.key==='p'||e.key==='P'){ tool='pick';  buildTools(); }
 });
 
-function boot(){ buildZoneSelect(); buildSwatches(); buildTools(); render(); }
-// start fresh from the game's world.js (no stale surprises); draft is opt-in via "Load draft"
+function boot(){ buildZoneSelect(); buildSwatches(); buildTools(); setMode(mode); }
 loadWorld(false); boot();
 </script>
 </body>

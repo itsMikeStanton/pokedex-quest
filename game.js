@@ -4616,6 +4616,14 @@ function renderAtlas(open) {
       }
     }
   });
+  // Hand-painted shore overrides (from paint.html) drawn on top of the auto-beach:
+  // "x,y" → tile id (sand/cliff/grass to add, water to erase back to ocean).
+  if (typeof WORLD !== 'undefined' && WORLD.shore) {
+    for (const k in WORLD.shore) {
+      const ci = k.indexOf(','); const x = +k.slice(0, ci), y = +k.slice(ci + 1);
+      fringeSvg += `<rect x="${x}" y="${y}" width="1.05" height="1.05" fill="${ATLAS_TC[WORLD.shore[k]] || '#e2cf86'}"/>`;
+    }
+  }
   svg.innerHTML = fringeSvg + zoneSvg + doorSvg + gateSvg + hintSvg;
   if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
   if (!_atlasInit) {   // centre the pan window on the current zone the first time

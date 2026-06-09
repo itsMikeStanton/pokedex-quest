@@ -609,6 +609,8 @@ function exportText() {
     dz.forEach((k, i) => { s += `    "${k}": [` + world.decor[k].map(d => JSON.stringify(d)).join(', ') + ']' + (i < dz.length-1 ? ',' : '') + '\n'; });
     s += '  },\n';
   }
+  const sk = Object.keys(world.shore || {});
+  if (sk.length) s += '  shore: {' + sk.map(k => JSON.stringify(k) + ':' + world.shore[k]).join(', ') + '},\n';
   s += '};\n';
   return s;
 }
