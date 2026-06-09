@@ -99,7 +99,7 @@ const STATIC_TIPS = [
   { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
     text:'Wild Lukeymon want kindness, not force. Feed 🍎, Pet 🤚 or Play ⚽ to read their mood and fill the heart meter — then throw a Ball.' },
   { id:'buddy', cat:'Training', icon:'🐾', title:'Pick a buddy',
-    text:'Set a buddy from the Pokédex (tap the ❤️) or the HUD. It follows you, and its TYPE is the key to barriers, surfing and cave-light.' },
+    text:'Set a buddy from the Pokédex — open a Lukéymon and tap the ❤️. It follows you, and its TYPE is the key to barriers, surfing and cave-light.' },
   { id:'battles', cat:'Battles', icon:'⚔️', title:'Send the counter',
     text:'Legendary guardians demand a TYPE each round. Send out a buddy whose type is SUPER-EFFECTIVE against it to win the exchange.' },
   { id:'ice', cat:'Ice', icon:'🧊', title:'Slippery ice',
@@ -1330,7 +1330,8 @@ function bindEvents() {
     }
     if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
     if (!e.repeat && kbNavMap[e.key]) uiPress(kbNavMap[e.key]);   // menu navigation
-    if (e.key === 'Shift' && !e.repeat && gameState === 'world') cycleBuddy();
+    // (Buddy switching is Pokédex-only now — the old Shift shortcut was too easy
+    // to hit by accident and would silently swap your buddy.)
     // 'M' toggles the world map from the world screen.
     if (e.key === 'm' || e.key === 'M') {
       if (gameState === 'world') openMap();
@@ -1364,7 +1365,7 @@ function bindEvents() {
   document.getElementById('pokedex-btn').addEventListener('click', openPokedex);
   document.getElementById('map-btn').addEventListener('click', openMap);
   document.getElementById('mute-btn').addEventListener('click', () => { wakeAudio(); toggleMute(); });
-  document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); cycleBuddy(); });
+  document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); openPokedex(); });   // tap the buddy chip → Pokédex (switch buddy there)
 
   // Full-screen / immersive: hide the Game Boy shell so the screen fills the
   // display (great for landscape / casting to a TV). Also asks the browser for
@@ -1528,16 +1529,10 @@ function bindEvents() {
   selectEl.addEventListener('touchstart',  e => { pressSelect(); }, { passive: false });
 }
 
-// Select button: feeds the secret-code buffer, and quick-swaps your buddy in-world.
-let _selLast = 0;
+// Select button: feeds the secret-code buffer. (Buddy switching lives in the
+// Pokédex now — no accidental quick-swap shortcut.)
 function pressSelect() {
   kamiInput('select');                    // has its own touch/pointer de-dupe
-  if (gameState !== 'world') return;
-  const now = Date.now();
-  if (now - _selLast < 250) return;
-  _selLast = now;
-  wakeAudio();
-  cycleBuddy();
 }
 
 // ═══════════════════════════════════════════════════
@@ -1672,7 +1667,7 @@ function pollGamepad() {
   if (face.a && !_gpHeld.a) { uiPress('a'); kamiInput('a'); }
   if (face.b && !_gpHeld.b) { uiPress('b'); kamiInput('b'); }
   if (face.start && !_gpHeld.start) kamiInput('start');
-  if (face.select && !_gpHeld.select) { kamiInput('select'); if (gameState === 'world') cycleBuddy(); }
+  if (face.select && !_gpHeld.select) kamiInput('select');   // secret codes only — buddy switching is Pokédex-only
   if (face.y && !_gpHeld.y) { if (gameState === 'world') openMap(); else if (gameState === 'map') closeMap(); }
   Object.assign(_gpHeld, face);
 }
@@ -5807,25 +5802,9 @@ function toggleMute() {
   else { wakeAudio(); restartMusic(); beep(660, 0.08, 0.08); }   // resume + confirm blip
 }
 
-// Cycle the active buddy through your caught Lukeymon (and a "no buddy" slot).
-function cycleBuddy() {
-  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
-  if (!team.length) { showMessage('Catch a Lukeymon first to choose a buddy!'); return; }
-  let idx = team.findIndex(p => p.id === activePet);
-  idx = (idx + 1) % (team.length + 1);            // last slot = no buddy
-  activePet = idx === team.length ? null : team[idx].id;
-  if (activePet != null) {
-    petX = playerX; petY = playerY;
-    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
-    petMoveAnimTs = -9999;
-  }
-  saveGame();
-  updateHud();
-  beep(523, 0.06, 0.07);
-  const cur = POKEMON_DATA.find(p => p.id === activePet);
-  showMessage(cur ? `🐾 Buddy: ${cur.name} (${cur.type})` : '🐾 No buddy following');
-  if (cur) learnTip('buddy');
-}
+// (Buddy switching is now Pokédex-only — open a Lukéymon and tap the ❤️.
+// The old cycleBuddy() quick-swap was removed because its Shift/Select
+// shortcuts swapped the buddy by accident.)
 
 // ═══════════════════════════════════════════════════
 // BACKGROUND MUSIC  (simple hand-written chiptune loops)
