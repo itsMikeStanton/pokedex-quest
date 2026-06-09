@@ -321,8 +321,8 @@ const NPCS = [
     return [blurt];
   } },
   // ── Arbiter, the black cat (Safari Savanna) — says a LOT, none of it readable ──
-  // gift>0 → the bacon arrives with the full gift fanfare on the first meeting.
-  { zone: 15, x: 12, y: 8, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 30, lines: () => {
+  // Real bacon: the full gift fanfare on first meet, but gives nothing useful.
+  { zone: 15, x: 12, y: 8, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 1, giftKind: 'bacon', lines: () => {
     const meows = [
       'Meow.',
       'Mrrrow? Mew mew. Meeeeow.',
@@ -2253,12 +2253,13 @@ function advanceNPC() {
 // version of the badge-get celebration.
 function revealGift(amount) {
   pendingGift = 0;
-  coins += amount;
+  const bacon = currentNPC && currentNPC.giftKind === 'bacon';
+  if (!bacon) coins += amount;          // bacon is gloriously useless — no coins
   updateHud();
   saveGame();
 
-  document.getElementById('gift-badge').textContent = '💰';
-  document.getElementById('gift-amount').textContent = `+${amount} coins`;
+  document.getElementById('gift-badge').textContent = bacon ? '🥓' : '💰';
+  document.getElementById('gift-amount').textContent = bacon ? 'A piece of bacon!' : `+${amount} coins`;
   showScreen('gift');
   playBadgeJingle();
   badgeConfetti(document.getElementById('gift-screen'));
