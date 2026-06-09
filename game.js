@@ -243,7 +243,7 @@ const COLLECTIBLES = [
 const NPCS = [
   // ── The final NPC: Dad, waiting inside the blue house in Champion's Cove. ──
   // You can only reach him after befriending all 151 (Mewtwo opens the seal).
-  { zone: 22, x: 4, y: 2, emoji: '🧔', name: 'Dad', art: 'dad', lines: () => [
+  { zone: 22, x: 4, y: 2, emoji: '🧔', name: 'Dad', art: 'dad', gift: 1, giftKind: 'trophy', lines: () => [
     `...${saveName}? Is that you? You made it! Congratulations!`,
     `You made friends with every single Lukeymon — all 151. Even Mewtwo chose to walk beside you.`,
     `Lukeymon island is your playground, I hope you had fun!`,
@@ -2264,7 +2264,7 @@ function advanceNPC() {
 // version of the badge-get celebration.
 function revealGift(amount) {
   pendingGift = 0;
-  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'] };
+  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'] };
   const kind = currentNPC && KINDS[currentNPC.giftKind];
   if (!kind) coins += amount;          // novelty foods are gloriously useless — no coins
   updateHud();
