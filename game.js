@@ -2512,8 +2512,13 @@ function animSheet(key) {
 // offscreen canvas with high-quality smoothing, cache it, then blit that baked
 // bitmap 1:1 at integer coordinates — stable, clean edges, no per-frame jank.
 const _scaleCache = new Map();
+let _srcIdSeq = 0; const _srcIds = new WeakMap();
+function srcKey(img) {                       // stable key for <img> (by src) or <canvas> (by identity)
+  if (img.src) return img.src;
+  let k = _srcIds.get(img); if (!k) { k = 'cv' + (++_srcIdSeq); _srcIds.set(img, k); } return k;
+}
 function scaledSprite(img, sx, sy, sw, sh, w, h) {
-  const key = (img.src || '') + '|' + sx + ',' + sy + ',' + sw + ',' + sh + '|' + w + 'x' + h;
+  const key = srcKey(img) + '|' + sx + ',' + sy + ',' + sw + ',' + sh + '|' + w + 'x' + h;
   let cv = _scaleCache.get(key);
   if (!cv) {
     cv = document.createElement('canvas');
@@ -2541,6 +2546,18 @@ function blitSprite(img, sx, sy, sw, sh, cx, py, H, footPad) {
   const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + (footPad == null ? 1 : footPad));
   const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
   ctx.drawImage(cv, dx, dy);
+  ctx.imageSmoothingEnabled = prev;
+}
+// Blit a whole image/canvas scaled to w×h via the cache, at integer (dx,dy),
+// optionally flipped horizontally. Used for Pokémon sprites (buddy, ghosts,
+// roamers) and tall structures so they get the same crisp, jank-free downscale.
+function blitImg(img, dx, dy, w, h, flip) {
+  w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+  const cv = scaledSprite(img, 0, 0, img.naturalWidth || img.width, img.naturalHeight || img.height, w, h);
+  dx = Math.round(dx); dy = Math.round(dy);
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  if (flip) { ctx.save(); ctx.translate(dx + w, dy); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0); ctx.restore(); }
+  else ctx.drawImage(cv, dx, dy);
   ctx.imageSmoothingEnabled = prev;
 }
 // Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
@@ -2628,11 +2645,7 @@ function drawGhostE(g, ts) {
   ctx.globalAlpha = 0.5 + 0.2 * Math.sin(ts * 0.006);     // flickering, see-through
   if (img && img.complete && img.naturalWidth) {
     const h = 44, w = Math.round(h * img.naturalWidth / img.naturalHeight);  // oversized like the buddy
-    const dx = Math.round(px + (TILE_SIZE - w) / 2);
-    const dy = Math.round(py + TILE_SIZE - h + 5 + bob);
-    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, dx, dy, w, h);
-    ctx.imageSmoothingEnabled = prev;
+    blitImg(img, px + (TILE_SIZE - w) / 2, py + TILE_SIZE - h + 5 + bob, w, h);
   } else {
     ctx.textAlign = 'center'; ctx.font = '24px serif';
     ctx.fillText(g.emoji || '👻', px + TILE_SIZE / 2, py + 22 + bob);
@@ -2652,9 +2665,7 @@ function drawRocketE(r, ts) {
     const img = canvasSprite(bird);
     if (img.complete && img.naturalWidth) {
       const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
-      const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
-      ctx.imageSmoothingEnabled = prev;
+      blitImg(img, px - w / 2, py + TILE_SIZE - h + bob, w, h);
     } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
   } else if (!(r.art && drawCharField(r.art, 'down', px, py, 44))) {   // sprite already wears the "R"
     ctx.font = '22px serif';
@@ -2675,9 +2686,7 @@ function drawRoamerE(r, ts) {
   const img = canvasSprite(poke);
   if (img.complete && img.naturalWidth) {
     const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
-    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, Math.round(px - w / 2), Math.round(py + TILE_SIZE - h + bob), w, h);
-    ctx.imageSmoothingEnabled = prev;
+    blitImg(img, px - w / 2, py + TILE_SIZE - h + bob, w, h);
   } else {
     ctx.font = '26px serif'; ctx.fillText(poke.emoji, px, py + 24 + bob);
   }
@@ -2689,9 +2698,7 @@ function pushStruct(sprites, img, c, r, targetH) {
   const w = Math.round(targetH * iw / ih);
   const bx = c * TILE_SIZE + TILE_SIZE / 2, by = (r + 1) * TILE_SIZE;
   sprites.push({ y: by, o: 0, draw: () => {
-    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, Math.round(bx - camX - w / 2), Math.round(by - camY - targetH), w, targetH);
-    ctx.imageSmoothingEnabled = prev;
+    blitImg(img, bx - camX - w / 2, by - camY - targetH, w, targetH);
   } });
 }
 
@@ -2970,6 +2977,10 @@ function drawWorld(ts) {
   const endC   = Math.min(cols, startC + 22);
   const startR = Math.max(0, Math.floor(camY / TILE_SIZE));
   const endR   = Math.min(rows, startR + 16);
+  // Ground tiles are drawn at floored integer positions and 1px oversized so
+  // neighbours overlap — no black seams peek through during sub-pixel scrolling.
+  const TS1 = TILE_SIZE + 1;
+  const smPrev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
   for (let r = startR; r < endR; r++) {
     for (let c = startC; c < endC; c++) {
       const t = map[r][c];
@@ -2980,18 +2991,19 @@ function drawWorld(ts) {
       const groundId = isBuild ? (ZONE_INFO[currentZone].base === T.CITY ? T.CITY : T.GRASS)
                                : (isStruct ? T.GRASS : t);
       const cnt = TILE_ART[currentZone] && TILE_ART[currentZone][groundId];
-      const dx = c * TILE_SIZE - camX, dy = r * TILE_SIZE - camY;
+      const dx = Math.floor(c * TILE_SIZE - camX), dy = Math.floor(r * TILE_SIZE - camY);
       let drew = false;
       if (cnt) {
         const img = tileArtImg(currentZone, groundId, tileVariant(currentZone, r, c, cnt));
-        if (img) { ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE); drew = true; }
+        if (img) { ctx.drawImage(img, dx, dy, TS1, TS1); drew = true; }
       }
       if (!drew) {                                    // procedural fallback
         const variants = tileCache[groundId];
-        ctx.drawImage(variants[tileVariant(currentZone, r, c, variants.length)], dx, dy);
+        ctx.drawImage(variants[tileVariant(currentZone, r, c, variants.length)], dx, dy, TS1, TS1);
       }
     }
   }
+  ctx.imageSmoothingEnabled = smPrev;
   const zoneTints = {
     4: 'rgba(255,80,0,0.14)',
     5: 'rgba(0,30,0,0.22)',
@@ -3147,18 +3159,7 @@ function drawPet(ts) {
     const h = 46, w = Math.round(h * img.naturalWidth / img.naturalHeight);
     const dx = Math.round(px + (TILE_SIZE - w) / 2);
     const dy = Math.round(py + TILE_SIZE - h + 5);
-    const prev = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = false;
-    if (petFacing === 1) {            // sprites face left by default → flip when moving right
-      ctx.save();
-      ctx.translate(dx + w, dy);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0, w, h);
-      ctx.restore();
-    } else {
-      ctx.drawImage(img, dx, dy, w, h);
-    }
-    ctx.imageSmoothingEnabled = prev;
+    blitImg(img, dx, dy, w, h, petFacing === 1);   // flip when moving right
   } else {
     ctx.font = '32px serif';
     ctx.textAlign = 'center';
