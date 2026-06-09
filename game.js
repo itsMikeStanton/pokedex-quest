@@ -5642,6 +5642,13 @@ function loadSlot(n) {
       evoNotified.clear(); (data.evoNotified || []).forEach(k => evoNotified.add(k));
       visited = new Set([0, ...(data.visited || []), data.zone ?? 0]);
       activePet = data.activePet ?? null;
+      // Preload the buddy's sprite so it doesn't flash as its emoji for the first
+      // frames after loading (drawPet falls back to the emoji until the image
+      // is decoded — that brief swap looked like the buddy "changing" on login).
+      if (activePet != null && typeof canvasSprite === 'function') {
+        const bp = POKEMON_DATA.find(p => p.id === activePet);
+        if (bp) canvasSprite(bp);
+      }
       if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
       [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
       fromPx.x   = playerX * TILE_SIZE;
