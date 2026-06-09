@@ -309,14 +309,16 @@ const NPCS = [
   } },
   // ── Kyle, the big brother (Home) — encouragement + a big reward ──
   { zone: 9, x: 8, y: 2, emoji: '🧒', name: 'Kyle', gift: 150, art: 'kyle', lines: () => {
+    const blurts = ['Guh guh guh guh guh!', 'meow meow meow meow....', 'EMOTIONAL DAMAGE!', 'HUH?', 'Jaysus CHRIST', 'BRTRTPPHPHHHHHH', 'aww yea awww yea'];
+    const blurt = blurts[Math.floor(Math.random() * blurts.length)];
     if (!metNPCs.has('Kyle')) {
       masterBalls += 1; balls += 5; updateHud(); saveGame();
-      return [`${saveName}!! Look at you go — you are doing AMAZING out there! 🌟`,
-              `Hey, you wanna go fly planes later? ✈️ I'll teach you the loop-the-loop.`,
-              `Here, take this for the road — a MASTER BALL and a stack of PokéBalls. Go get 'em, champ! 🟣`];
+      return [`${saveName}!! Whoa look at the skibbidy rizzler! You chad!`,
+              `You wanna go fly planes later? ✈️ I'll teach you the loop-the-loop.`,
+              `Here, take this for the road — a MASTER BALL and a stack of PokéBalls! 🟣`,
+              blurt];
     }
-    return [`Keep crushing it, ${saveName}! Still up for flying planes later? ✈️`,
-            `You're gonna be the best trainer this island has ever seen.`];
+    return [blurt];
   } },
   // ── Arbiter, the black cat (Home) — says a LOT, none of it readable ──
   { zone: 9, x: 5, y: 6, emoji: '🐈‍⬛', name: 'Arbiter', gift: 0, lines: () => {
