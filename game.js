@@ -1874,11 +1874,12 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 3c3. A drifting night ghost → Boo!, a random treat, and it vanishes.
+  // 3c3. A drifting night ghost → a quick "BOO!" dialogue, then it vanishes
+  //      and gives a random gift with fanfare.
   if (ghostAt(currentZone, nx, ny)) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
-    bumpGhost();
+    engageGhost();
     return;
   }
 
@@ -2217,17 +2218,31 @@ function ghostStep() {
     nightGhost.x = nx; nightGhost.y = ny; return;
   }
 }
-function bumpGhost() {
-  if (!nightGhost) return;
-  nightGhost = null;
+function engageGhost() {
+  const g = nightGhost; if (!g) return;
+  nightGhost = null;                       // it vanishes the moment you touch it
+  const poke = POKEMON_DATA.find(p => p.id === g.id) || {};
+  // Roll a random REAL gift, granted now and revealed with fanfare at dialog end.
   const roll = Math.random();
-  let reward;
-  if (roll < 0.02) { masterBalls += 1; reward = 'a MASTER BALL! 🟣'; }
-  else if (roll < 0.45) { const n = 1 + Math.floor(Math.random() * 3); balls += n; reward = `+${n} PokéBall${n > 1 ? 's' : ''} ⚪`; }
-  else { const n = 15 + Math.floor(Math.random() * 36); coins += n; reward = `+${n} 💰`; }
+  let badge, label;
+  if (roll < 0.03) { masterBalls += 1; badge = '🟣'; label = 'A MASTER BALL!'; }
+  else if (roll < 0.45) { const n = 1 + Math.floor(Math.random() * 3); balls += n; badge = '⚪'; label = `+${n} PokéBall${n > 1 ? 's' : ''}`; }
+  else { const n = 20 + Math.floor(Math.random() * 41); coins += n; badge = '💰'; label = `+${n} coins`; }
   updateHud(); saveGame();
-  beep(440, 0.06, 0.08, 'square'); setTimeout(() => beep(660, 0.1, 0.12), 90);
-  showMessage(`👻 BOO! It startled you, then vanished — and left ${reward}`);
+  // A quick dialogue with the ghost (its sprite as the portrait), then the gift.
+  currentNPC = { name: '???', emoji: g.emoji || '👻', ghostGift: { badge, label } };
+  npcLineIdx = 0;
+  npcLines = ['👻 ...', '👻 BOO!!'];
+  const ne = document.getElementById('npc-emoji');
+  if (poke.sprite) ne.innerHTML = '<img class="char-portrait" src="' + poke.sprite + '" alt="">';
+  else { ne.innerHTML = ''; ne.textContent = g.emoji || '👻'; }
+  document.getElementById('npc-name').textContent = '???';
+  document.getElementById('npc-reward').classList.add('hidden');
+  pendingGift = 1;                          // any >0 → triggers revealGift (uses ghostGift)
+  clearTimeout(spawnTimerId);
+  beep(160, 0.1, 0.14, 'sine'); setTimeout(() => beep(110, 0.16, 0.22, 'sawtooth'), 150);
+  renderNpcLine();
+  showScreen('npc');
 }
 // Per-frame ghost tick from the game loop (world only).
 function tickGhosts(ts) {
@@ -2242,7 +2257,7 @@ function tickGhosts(ts) {
     _ghostCheckTs = ts + 5000;
     if (Math.random() < 0.28) spawnGhost(ts);
   }
-  if (nightGhost && ts > _ghostMoveTs) { _ghostMoveTs = ts + 850; ghostStep(); }
+  if (nightGhost && ts > _ghostMoveTs) { _ghostMoveTs = ts + 1500; ghostStep(); }
 }
 
 // ── Time/weather-specific wild spawns ────────────────
@@ -2382,14 +2397,15 @@ function advanceNPC() {
 // version of the badge-get celebration.
 function revealGift(amount) {
   pendingGift = 0;
+  const gg = currentNPC && currentNPC.ghostGift;   // ghost reward (already granted) → custom badge/label
   const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'] };
   const kind = currentNPC && KINDS[currentNPC.giftKind];
-  if (!kind) coins += amount;          // novelty foods are gloriously useless — no coins
+  if (!gg && !kind) coins += amount;   // novelty foods are useless; ghost gift already paid out
   updateHud();
   saveGame();
 
-  document.getElementById('gift-badge').textContent = kind ? kind[0] : '💰';
-  document.getElementById('gift-amount').textContent = kind ? kind[1] : `+${amount} coins`;
+  document.getElementById('gift-badge').textContent = gg ? gg.badge : (kind ? kind[0] : '💰');
+  document.getElementById('gift-amount').textContent = gg ? gg.label : (kind ? kind[1] : `+${amount} coins`);
   showScreen('gift');
   playBadgeJingle();
   badgeConfetti(document.getElementById('gift-screen'));
@@ -2514,13 +2530,23 @@ function drawTrainerE(t, ts) {
   ctx.font = '14px serif'; ctx.fillText('❗', px, py - 4 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
 }
 function drawGhostE(g, ts) {
-  const px = g.x * TILE_SIZE - camX + TILE_SIZE / 2;
-  const py = g.y * TILE_SIZE - camY;
+  const px = g.x * TILE_SIZE - camX, py = g.y * TILE_SIZE - camY;
   const bob = Math.sin(ts * 0.004) * 3;
+  const poke = POKEMON_DATA.find(p => p.id === g.id);
+  const img = poke && canvasSprite(poke);
   ctx.save();
-  ctx.globalAlpha = 0.55 + 0.18 * Math.sin(ts * 0.006);   // flickering, see-through
-  ctx.textAlign = 'center'; ctx.font = '24px serif';
-  ctx.fillText(g.emoji || '👻', px, py + 22 + bob);
+  ctx.globalAlpha = 0.5 + 0.2 * Math.sin(ts * 0.006);     // flickering, see-through
+  if (img && img.complete && img.naturalWidth) {
+    const h = 44, w = Math.round(h * img.naturalWidth / img.naturalHeight);  // oversized like the buddy
+    const dx = Math.round(px + (TILE_SIZE - w) / 2);
+    const dy = Math.round(py + TILE_SIZE - h + 5 + bob);
+    const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, dx, dy, w, h);
+    ctx.imageSmoothingEnabled = prev;
+  } else {
+    ctx.textAlign = 'center'; ctx.font = '24px serif';
+    ctx.fillText(g.emoji || '👻', px + TILE_SIZE / 2, py + 22 + bob);
+  }
   ctx.restore();
 }
 function drawRocketE(r, ts) {
