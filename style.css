@@ -2033,7 +2033,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 #fullscreen-btn:active { transform: translateY(1px); }
 
 /* When immersive, the grey shell + controls vanish and the screen fills the view. */
-body.immersive { background: #000; align-items: center; }
+body.immersive { background: #000; align-items: center; overflow: hidden; }
 body.immersive #device {
   width: 100vw;
   height: 100vh;
@@ -2062,9 +2062,14 @@ body.immersive #screen-bezel {
   justify-content: center;
 }
 body.immersive #screen-area {
-  width: min(100vw, calc(100vh * 10 / 9));
-  height: auto;
+  /* Fixed "design" size (same as the desktop shell) scaled as ONE unit, so the
+     canvas AND every overlay button grow together to fill the screen — instead
+     of the px-sized buttons staying tiny / tracking browser zoom. */
+  width: 440px;
+  height: auto;            /* aspect-ratio: 10/9 → 396px tall */
   border-radius: 0;
+  transform: scale(var(--imm-scale, 1));
+  transform-origin: center center;
 }
 body.immersive #fullscreen-btn {
   position: fixed;

@@ -1372,6 +1372,15 @@ function bindEvents() {
   const fsBtn = document.getElementById('fullscreen-btn');
   if (fsBtn) {
     const syncFsBtn = on => { fsBtn.textContent = on ? '✕' : '⛶'; fsBtn.title = on ? 'Exit full screen' : 'Full screen'; };
+    // In immersive mode the whole screen is one fixed-size unit scaled to fit, so
+    // the canvas and every overlay button grow together with the screen.
+    const IMM_W = 440, IMM_H = 440 * 9 / 10;
+    const syncImmersiveScale = () => {
+      if (!document.body.classList.contains('immersive')) return;
+      const s = Math.min(window.innerWidth / IMM_W, window.innerHeight / IMM_H);
+      document.documentElement.style.setProperty('--imm-scale', s);
+    };
+    window.syncImmersiveScale = syncImmersiveScale;
     fsBtn.addEventListener('click', () => {
       const on = document.body.classList.toggle('immersive');
       syncFsBtn(on);
@@ -1379,12 +1388,17 @@ function bindEvents() {
         if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
         else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
       } catch (_) {}
+      syncImmersiveScale();
+      setTimeout(syncImmersiveScale, 120);   // re-measure after the fullscreen transition settles
     });
+    window.addEventListener('resize', syncImmersiveScale);
+    window.addEventListener('orientationchange', () => setTimeout(syncImmersiveScale, 150));
     // Keep our layout in sync if the user leaves browser fullscreen via Esc/back.
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement && document.body.classList.contains('immersive')) {
         document.body.classList.remove('immersive'); syncFsBtn(false);
       }
+      syncImmersiveScale();
     });
   }
 
