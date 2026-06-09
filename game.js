@@ -2988,8 +2988,12 @@ function drawWorld(ts) {
       // drawn later in the depth pass. Everything else just uses its own tile art.
       const isBuild = t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
       const isStruct = isBuild || (t === T.TREE && treeArtImg(currentZone));
-      const groundId = isBuild ? (ZONE_INFO[currentZone].base === T.CITY ? T.CITY : T.GRASS)
-                               : (isStruct ? T.GRASS : t);
+      const zbase = ZONE_INFO[currentZone].base;
+      // Trees carry their own grass patch, so on sandy zones (beach/desert/coast)
+      // sit them on SAND and let that patch ground them — no hard grass square.
+      const structGround = zbase === T.SAND ? T.SAND : T.GRASS;
+      const groundId = isBuild ? (zbase === T.CITY ? T.CITY : T.GRASS)
+                               : (isStruct ? structGround : t);
       const cnt = TILE_ART[currentZone] && TILE_ART[currentZone][groundId];
       const dx = Math.floor(c * TILE_SIZE - camX), dy = Math.floor(r * TILE_SIZE - camY);
       let drew = false;
