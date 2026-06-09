@@ -1622,6 +1622,15 @@ function petFollow(tx, ty, ts, dur) {
   petMoveAnimDur = (dur != null) ? dur : moveAnimDur;   // buddy can lag behind on long slides
 }
 
+// A small vertical nudge for the buddy based on the way the PLAYER is facing,
+// so the two idle-bobs never make the buddy pop in front of us:
+//   • left / right — buddy sits a touch higher → always drawn behind the player
+//   • up           — buddy sits a touch lower  → we see more of the player's back
+//   • down         — buddy lifts up a touch    → we see more of the buddy
+function petDirOffsetY() {
+  return playerDir === 'up' ? 3 : -3;
+}
+
 function getPetRenderPos(ts) {
   const destX = petX * TILE_SIZE;
   const destY = petY * TILE_SIZE;
@@ -2530,7 +2539,7 @@ function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = n.y * TILE_SIZE - camY;
   drawShadow(px, py + TILE_SIZE - 4, 11);
-  if (n.art && drawCharField(n.art, 'down', px, py, 42)) return;
+  if (n.art && drawCharField(n.art, 'down', px, py, 53)) return;   // 25% larger so faces read better
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
 }
@@ -2973,7 +2982,12 @@ function drawWorld(ts) {
     if (r.zone === currentZone) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRoamerE(r, ts) });
   if (activePet != null) {
     const prp = getPetRenderPos(ts);
-    sprites.push({ y: prp.y + TILE_SIZE, o: 1, draw: () => drawPet(ts) });
+    // When walking left/right the buddy shares our row, so anchor its sort key
+    // firmly behind the player (ignoring both idle-bobs) to stop the draw order
+    // flickering. Vertically, sort by its actual feet so depth stays correct.
+    const horiz = (playerDir === 'left' || playerDir === 'right');
+    const petSortY = horiz ? renderPos.y + TILE_SIZE - 6 : prp.y + TILE_SIZE + petDirOffsetY();
+    sprites.push({ y: petSortY, o: 0, draw: () => drawPet(ts) });
   }
   sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY); } });
   if (window.MP) MP.collectSprites(sprites, ts);
@@ -3058,7 +3072,7 @@ function drawPet(ts) {
   const poke = POKEMON_DATA.find(p => p.id === activePet);
   if (!poke || !caughtIds.has(poke.id)) return;
   const rp = getPetRenderPos(ts);
-  const px = rp.x - camX, py = rp.y - camY;
+  const px = rp.x - camX, py = rp.y - camY + petDirOffsetY();
   drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 12);
   const img = canvasSprite(poke);
   if (img.complete && img.naturalWidth) {
