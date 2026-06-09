@@ -850,7 +850,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '11';   // bump to bust the image cache when art files change
+const ART_V = '12';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -2170,6 +2170,7 @@ function clearWild() {
 // ── Wandering trainers ───────────────────────────────
 const TRAINER_NAMES  = ['Hiker Joe', 'Bug Catcher Lia', 'Camper Sam', 'Picnicker Mae', 'Youngster Tim', 'Lass Ivy', 'Fisher Gil', 'Bird Keeper Ann', 'Sailor Moe', 'Painter Bea'];
 const TRAINER_EMOJIS = ['🧗', '🧒', '🎒', '🧺', '👦', '👧', '🎣', '🦅', '⚓', '🎨'];
+const TRAINER_ART    = ['hiker', 'bugcatcher', 'camper', 'picnicker', 'youngster', 'lass', 'angler', 'birdkeeper', 'seadog', 'painter'];
 function trainerAt(zone, x, y) {
   return (wildTrainer && wildTrainer.zone === zone && wildTrainer.x === x && wildTrainer.y === y) ? wildTrainer : null;
 }
@@ -2189,7 +2190,7 @@ function spawnTrainer() {
   if (!cands.length) return false;
   const tile = cands[Math.floor(Math.random() * cands.length)];
   const i = Math.floor(Math.random() * TRAINER_NAMES.length);
-  wildTrainer = { x: tile.x, y: tile.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i] };
+  wildTrainer = { x: tile.x, y: tile.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i] };
   beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
   showMessage(`❗ ${wildTrainer.name} wants to battle! Walk up to them.`);
   clearTimeout(trainerTimerId);
@@ -2487,6 +2488,7 @@ function portraitImg(key) {
   try {
     const keys = new Set(['player']);
     if (typeof NPCS !== 'undefined') for (const n of NPCS) if (n.art) keys.add(n.art);
+    if (typeof TRAINER_ART !== 'undefined') for (const a of TRAINER_ART) keys.add(a);
     keys.forEach(k => { walkSheet(k); npcArtImg(k); });  // overworld sprites
   } catch (e) { /* NPCS not ready yet — the player sheet above still preloads */ }
 })();
@@ -2557,10 +2559,13 @@ function drawTrainerE(t, ts) {
   const px = t.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = t.y * TILE_SIZE - camY;
   drawShadow(px, py + TILE_SIZE - 4, 11);
-  const bob = Math.sin(ts * 0.004) * 2;
-  ctx.textAlign = 'center'; ctx.font = '22px serif';
-  ctx.fillText(t.emoji, px, py + 24 + bob);
-  ctx.font = '14px serif'; ctx.fillText('❗', px, py - 4 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
+  if (!(t.art && drawCharField(t.art, 'down', px, py, 53))) {   // sliced sprite, else emoji
+    const bob = Math.sin(ts * 0.004) * 2;
+    ctx.textAlign = 'center'; ctx.font = '22px serif';
+    ctx.fillText(t.emoji, px, py + 24 + bob);
+  }
+  ctx.textAlign = 'center'; ctx.font = '14px serif';
+  ctx.fillText('❗', px, py - 8 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
 }
 function drawGhostE(g, ts) {
   const px = g.x * TILE_SIZE - camX, py = g.y * TILE_SIZE - camY;
@@ -4034,7 +4039,7 @@ function startTrainerBattle() {
   const reward = 6 + Math.floor(Math.random() * 7);   // a small coin reward (6–12)
   startBossBattle({
     title: t.name, emoji: t.emoji, rounds: 2, rule: 'beats',
-    grunt: t.name, lineup, foeEmoji: t.emoji,
+    grunt: t.name, lineup, foeEmoji: t.emoji, charArt: t.art, foeArt: t.art,
     motto: `<b>${t.name} wants to battle!</b><br>“Let’s see what your team can do!”`,
     intro: () => rocketIntro(),
     onWin:  () => { coins += reward; balls += 1; updateHud(); saveGame(); clearTrainer(); showBattleWin(`🏆 You won! +${reward} 💰 +1 ball`, 'Done ✓', true, returnToWorld); },
