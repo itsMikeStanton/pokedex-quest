@@ -2899,7 +2899,9 @@ function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
       const dyp = (r * TILE_SIZE - camY + TILE_SIZE / 2) - pcy;
       const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R;
       const a = edge <= 0 ? near : edge <= 1.0 ? dim : far;
-      const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
+      // Floor to integers so abutting translucent rects tile pixel-perfectly —
+      // fractional positions anti-alias their edges and leave a dark seam grid.
+      const x = Math.floor(c * TILE_SIZE - camX), y = Math.floor(r * TILE_SIZE - camY);
       if (a > 0) { ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
       else if (warm && lit) { ctx.fillStyle = 'rgba(255,168,70,0.07)'; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
     }
@@ -3121,7 +3123,7 @@ function drawWorld(ts) {
         if      (edge <= 0)   a = 0;      // fully lit
         else if (edge <= 1.0) a = 0.55;   // one dim ring
         else                  a = 1;      // pitch black
-        const x = c * TILE_SIZE - camX, y = r * TILE_SIZE - camY;
+        const x = Math.floor(c * TILE_SIZE - camX), y = Math.floor(r * TILE_SIZE - camY);   // integer-align to avoid seam grid
         if (a > 0) {
           ctx.fillStyle = a >= 1 ? '#000' : `rgba(4,3,14,${a})`;
           ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
