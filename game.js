@@ -734,6 +734,8 @@ let notesUnread = false;           // a new tip is waiting in the notepad
 let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
 let wonGame = false;               // Champion victory (4 land badges) already celebrated
 let pendingChampion = false;       // queue the Champion screen after the BADGE GET screen
+let pendingPerfect  = false;       // queue the 100% "Perfect Island" screen
+let perfectDone     = false;       // the 100% finale has already played
 const LAND_BADGES = ['badge_volcano', 'badge_forest', 'badge_ice', 'badge_desert'];
 function landBadgesDone() { return LAND_BADGES.every(id => collected.has(id)); }
 let currentNPC = null;             // NPC whose dialog is open
@@ -1661,6 +1663,7 @@ function loop(ts) {
   pollGamepad();
 
   if (gameState === 'world') {
+    if (pendingPerfect) { pendingPerfect = false; showPerfect(); return; }   // 100% finale
     // Second half of an ice wall bounce, in two beats:
     //   1) the player reaches the wall and slides straight back to the start,
     //   2) the buddy — which slid to the same wall point a touch later — turns
@@ -1859,9 +1862,9 @@ function move(dx, dy, ts) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
     if (buddyIsJigglypuff()) talkNPC(npc);  // 🎵 Jigglypuff hums everyone to sleep
-    else if (npc.gymLeader && !collected.has('badge_gym')) startGymBattle(npc);  // challenge → battle
-    else if (npc.dojo) startDojoBattle();   // repeatable practice battles (grows battle evolutions)
-    else if (npc.shop) openShop();  // the Poké Mart clerk runs the shop
+    else if (npc.gymLeader && !collected.has('badge_gym')) { metNPCs.add(npc.metKey || npc.name); startGymBattle(npc); }  // challenge → battle
+    else if (npc.dojo) { metNPCs.add(npc.metKey || npc.name); startDojoBattle(); }   // repeatable practice battles
+    else if (npc.shop) { metNPCs.add(npc.metKey || npc.name); openShop(); }  // the Poké Mart clerk runs the shop
     else talkNPC(npc);
     return;
   }
@@ -2364,12 +2367,9 @@ function talkNPC(npc) {
   // One-time gift the first time you meet this character — but hold it back
   // for a big reveal once the conversation wraps up (see advanceNPC).
   const mk = npc.metKey || npc.name;   // metKey lets the same character give a fresh gift elsewhere
-  if (!asleep && !metNPCs.has(mk) && npc.gift > 0) {
-    metNPCs.add(mk);
-    pendingGift = npc.gift;
-  } else {
-    pendingGift = 0;
-  }
+  const firstMeet = !metNPCs.has(mk);
+  if (!asleep) metNPCs.add(mk);        // "greeted" — counts toward Quest "Characters Met"
+  pendingGift = (!asleep && firstMeet && npc.gift > 0) ? npc.gift : 0;
 
   renderNpcLine();
   showScreen('npc');
@@ -3722,6 +3722,38 @@ function showChampion() {
   badgeConfetti();
 }
 
+// ── 100% completion ("Perfect Island") ───────────────
+// Every category the Quest Log tracks is maxed out.
+function islandComplete() {
+  if (caughtIds.size !== POKEMON_DATA.length) return false;          // all 151
+  if (!COLLECTIBLES.every(b => collected.has(b.id))) return false;   // every badge
+  if (!STONE_FINDS.every(s => foundStones.has(s.id))) return false;  // every stone
+  if (!ZONE_INFO.filter(z => z.name).every(z => visited.has(z.id))) return false;  // every area
+  if (!NPCS.every(n => metNPCs.has(n.name))) return false;          // every character
+  if (knownTips.size < allTips().length) return false;              // every field note
+  if (!Object.keys(BARRIERS).every(k => unlockedBarriers.has(k))) return false;    // every barrier
+  return true;
+}
+// Cheap to call from saveGame(); queues the celebration for the next world frame.
+function maybePerfect() {
+  if (!perfectDone && wonGame && islandComplete()) pendingPerfect = true;
+}
+function showPerfect() {
+  perfectDone = true;
+  saveGame();
+  document.getElementById('champion-trophy').textContent = '🏝️';
+  document.getElementById('champion-title').textContent = 'PERFECT ISLAND!';
+  document.getElementById('champion-sub').textContent = '✨ 100% — every last thing found! ✨';
+  document.getElementById('champion-row').textContent = '🏆 🌟 💎 🦅 🌸 🧬 🗺️ 📖 💙';
+  document.getElementById('champion-praise').textContent =
+    `${saveName}, you found EVERYTHING — every Lukeymon, every badge, every stone, every secret, every soul on the island. You are the one and only TRUE Island Master. We are SO proud of you. 💙🌟`;
+  const next = document.getElementById('champion-next'); if (next) next.style.display = 'none';
+  const btn = document.getElementById('champion-continue'); if (btn) btn.textContent = '🌟 YOU DID IT ALL ▶';
+  showScreen('champion');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
 // A legendary you failed to capture vanishes and reappears elsewhere.
 function legendaryEscaped() {
   const legend = currentLegend;
@@ -4444,7 +4476,9 @@ function renderQuestPage() {
     ['🧬', 'Apex Bond', 'Befriend Mewtwo', caughtIds.has(150)],
     ['🗺️', 'Explorer', 'Set foot in every area', areaN === areaT],
     ['📖', 'Lorekeeper', 'Discover every field note', tipN === tipT],
-    ['💙', 'Homecoming', 'Find the secret cove and come home', metNPCs.has('Dad')],
+    (metNPCs.has('Dad')
+      ? ['💙', 'Homecoming', 'You found the secret cove and came home', true]
+      : ['❓', '? ? ?', 'A hidden ending awaits the truest of champions...', false]),
     ['🌟', 'Lukeymon Master', 'Befriend all 151', dexN === dexT],
   ];
   const achN = ach.filter(a => a[3]).length;
@@ -4455,9 +4489,11 @@ function renderQuestPage() {
                  areaN / areaT, npcN / npcT, tipN / Math.max(1, tipT), barrN / barrT, achN / ach.length];
   const overall = Math.round(100 * fracs.reduce((a, b) => a + b, 0) / fracs.length);
 
+  const perfect = islandComplete();
   document.getElementById('pokedex-quest').innerHTML =
-    `<div class="q-overall"><div class="q-overall-num">${overall}%</div>` +
-    `<div class="q-overall-lbl">ISLAND COMPLETION</div>${bar(overall, 100)}</div>` +
+    `<div class="q-overall${perfect ? ' q-perfect' : ''}"><div class="q-overall-num">${overall}%</div>` +
+    `<div class="q-overall-lbl">${perfect ? '🏝️ PERFECT ISLAND! 🌟' : 'ISLAND COMPLETION'}</div>${bar(overall, 100)}` +
+    (perfect ? `<div class="q-note" style="color:#f8d860;margin-top:6px">You found absolutely everything. True Island Master! 💙</div>` : '') + `</div>` +
     section('🔰', 'Pokédex', dexN, dexT, `<div class="q-note">Open the All / Caught / Missing tabs above to track every species.</div>`) +
     section('👑', 'Legendary Lukeymon', legN, legendIds.length, legBody) +
     section('🎖️', 'Badges', badgeN, COLLECTIBLES.length, badgeBody) +
@@ -5458,6 +5494,7 @@ function startNewGame() {
   notesUnread = false;
   rocketDefeated.clear();
   wonGame = false;
+  perfectDone = false; pendingPerfect = false;
   pendingChampion = false;
   balls = 12;
   masterBalls = 0;
@@ -5505,6 +5542,7 @@ function saveGame() {
       knownTips: [...knownTips],
       rocketDefeated: [...rocketDefeated],
       wonGame,
+      perfectDone,
       roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
       zone:      currentZone,
       x:         playerX,
@@ -5522,6 +5560,7 @@ function saveGame() {
       visited: [...visited],
     }));
   } catch (_) {}
+  maybePerfect();   // did that last thing complete the whole island?
 }
 
 // Load slot n into the live game state. Returns true if data was present.
@@ -5543,7 +5582,8 @@ function loadSlot(n) {
       rocketDefeated   = new Set(data.rocketDefeated || []);
       // Legacy saves that already had all 4 land badges count as won (don't re-fire).
       wonGame          = !!data.wonGame || landBadgesDone();
-      pendingChampion  = false;
+      perfectDone      = !!data.perfectDone;
+      pendingChampion  = false; pendingPerfect = false;
       loadedRoamers    = data.roamers || null;
       currentZone    = data.zone  ?? 0;
       playerX        = data.x    ?? 10;

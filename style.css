@@ -600,6 +600,10 @@ body {
   text-align: center; background: linear-gradient(160deg,#13314e,#0c2236);
   border: 1px solid #2a5a86; border-radius: 8px; padding: 10px 8px; margin-bottom: 10px;
 }
+.q-overall.q-perfect {
+  background: linear-gradient(160deg,#4a3a0a,#2a1f06);
+  border-color: #f8d860; box-shadow: 0 0 16px rgba(248,216,96,.45);
+}
 .q-overall-num { font-size: 20px; color: #f8d860; text-shadow: 0 0 10px rgba(248,216,96,.5); }
 .q-overall-lbl { font-size: 6px; color: #9fc0dc; letter-spacing: 1px; margin: 2px 0 6px; }
 .q-section {
