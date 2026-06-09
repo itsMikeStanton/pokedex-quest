@@ -318,11 +318,12 @@ const NPCS = [
             'Come home to visit whenever you like.'];
   } },
   // ── Kyle, the big brother (Home) — encouragement + a big reward ──
-  { zone: 18, x: 15, y: 8, emoji: '🧒', name: 'Kyle', gift: 150, art: 'kyle', lines: () => {
+  { zone: 18, x: 15, y: 8, emoji: '🧒', name: 'Kyle', gift: 0, art: 'kyle', lines: () => {
     const blurts = ['Guh guh guh guh guh!', 'meow meow meow meow....', 'EMOTIONAL DAMAGE!', 'HUH?', 'Jaysus CHRIST', 'BRTRTPPHPHHHHHH', 'aww yea awww yea'];
     const blurt = blurts[Math.floor(Math.random() * blurts.length)];
     if (!metNPCs.has('Kyle')) {
-      masterBalls += 1; balls += 5; updateHud(); saveGame();
+      masterBalls += 1; balls += 5; coins += 150; updateHud(); saveGame();
+      pendingFanfare = { badge: '🟣', label: 'Master Ball + 5 Balls + 150 coins!' };
       return [`${saveName}!! Whoa look at the skibbidy rizzler! You chad!`,
               `You wanna go fly planes later? ✈️ I'll teach you the loop-the-loop.`,
               `Here, take this for the road — a MASTER BALL and a stack of PokéBalls! 🟣`,
@@ -360,6 +361,7 @@ const NPCS = [
     const today = todayKey();
     if (lastHeal !== today) {
       lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      pendingFanfare = { badge: '⚪', label: `+${HEAL_BALLS} PokéBalls!` };
       return ['Welcome to the Pokémon Hospital! 💗',
               'Your Lukéymon look wonderfully happy and rested.',
               `Here — take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
@@ -380,6 +382,7 @@ const NPCS = [
     const today = todayKey();
     if (lastHeal !== today) {
       lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      pendingFanfare = { badge: '⚪', label: `+${HEAL_BALLS} PokéBalls!` };
       return ['Welcome to the Summit Aid Station! ❄️',
               'You made it all the way up here — wonderful.',
               `Warm up and take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
@@ -729,6 +732,7 @@ const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the 
 function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
 let pendingGift = 0;               // coins held back for the end-of-conversation reveal
+let pendingFanfare = null;         // {badge,label} an NPC's lines() queues to fanfare at dialog end
 let knownTips = new Set();         // ids of field-notes tips the player has discovered
 let notesUnread = false;           // a new tip is waiting in the notepad
 let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
@@ -2375,7 +2379,9 @@ function talkNPC(npc) {
   clearTimeout(spawnTimerId);
   // 🎵 A Jigglypuff buddy hums them straight to sleep — no chatting (or gifts).
   const asleep = buddyIsJigglypuff();
+  pendingFanfare = null;           // an NPC's lines() may queue a fanfare (daily freebies, etc.)
   npcLines = asleep ? ['💤  Zzzzz...  zzzzzz...'] : (typeof npc.lines === 'function' ? npc.lines() : npc.lines);
+  if (asleep) pendingFanfare = null;
 
   const ne = document.getElementById('npc-emoji');
   if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/portrait/' + npc.art + '.png?v=' + ART_V + '" alt="" onerror="this.parentNode.textContent=\'' + npc.emoji + '\'">';
@@ -2405,6 +2411,7 @@ function renderNpcLine() {
 function advanceNPC() {
   if (npcLineIdx >= npcLines.length - 1) {
     if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
+    if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, closeNPC); return; }
     closeNPC();
     return;
   }
@@ -2412,8 +2419,21 @@ function advanceNPC() {
   renderNpcLine();
 }
 
-// The held-back gift, revealed once the conversation ends — a slightly smaller
-// version of the badge-get celebration.
+// The one true "you got something!" fanfare — full-screen reveal with the badge
+// jingle and confetti. Used for NPC gifts, battle rewards, daily freebies… every
+// time the player is handed anything. `onDone` runs when they tap continue.
+let _fanfareDone = null;
+function showFanfare(badge, label, onDone, title) {
+  document.getElementById('gift-title').textContent = title || 'A GIFT!';
+  document.getElementById('gift-badge').textContent = badge;
+  document.getElementById('gift-amount').textContent = label;
+  _fanfareDone = onDone || null;
+  showScreen('gift');
+  playBadgeJingle();
+  badgeConfetti(document.getElementById('gift-screen'));
+}
+
+// The held-back gift, revealed once the conversation ends.
 function revealGift(amount) {
   pendingGift = 0;
   const gg = currentNPC && currentNPC.ghostGift;   // ghost reward (already granted) → custom badge/label
@@ -2422,17 +2442,16 @@ function revealGift(amount) {
   if (!gg && !kind) coins += amount;   // novelty foods are useless; ghost gift already paid out
   updateHud();
   saveGame();
-
-  document.getElementById('gift-badge').textContent = gg ? gg.badge : (kind ? kind[0] : '💰');
-  document.getElementById('gift-amount').textContent = gg ? gg.label : (kind ? kind[1] : `+${amount} coins`);
-  showScreen('gift');
-  playBadgeJingle();
-  badgeConfetti(document.getElementById('gift-screen'));
+  showFanfare(gg ? gg.badge : (kind ? kind[0] : '💰'),
+              gg ? gg.label : (kind ? kind[1] : `+${amount} coins`),
+              closeNPC);
 }
 
 function continueGift() {
   beep(523, 0.08, 0.08);
-  closeNPC();
+  const cb = _fanfareDone; _fanfareDone = null;
+  if (cb) cb();
+  else closeNPC();
 }
 
 function closeNPC() {
@@ -2601,13 +2620,13 @@ function drawShadow(centerX, footY, rx, alpha = 0.22) {
 // A bright pulsing beacon glow behind a pickup so it's easy to spot against
 // busy or dark terrain.
 function pickupGlow(px, cy, ts, rgb) {
-  const pulse = 0.55 + 0.45 * Math.sin(ts * 0.005);
-  const R = 19;
+  const pulse = 0.6 + 0.4 * Math.sin(ts * 0.005);
+  const R = 17;
   ctx.save();
   ctx.globalAlpha = 1;
   const g = ctx.createRadialGradient(px, cy, 1, px, cy, R);
-  g.addColorStop(0, `rgba(${rgb},${0.9 * pulse})`);
-  g.addColorStop(0.6, `rgba(${rgb},${0.35 * pulse})`);
+  g.addColorStop(0, `rgba(${rgb},${0.4 * pulse})`);
+  g.addColorStop(0.55, `rgba(${rgb},${0.14 * pulse})`);
   g.addColorStop(1, `rgba(${rgb},0)`);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, cy, R, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
@@ -4089,10 +4108,10 @@ function awardGymBadge(leader) {
   balls += GYM_BADGE_BALLS; coins += GYM_BADGE_COINS;
   saveGame(); updateHud();
   const badge = COLLECTIBLES.find(c => c.id === 'badge_gym');
-  showBattleWin(
-    `🏆 Victory! +${GYM_BADGE_BALLS} Balls, +${GYM_BADGE_COINS} coins`,
-    first ? 'Claim the Badge ✓' : 'Nice! ✓', true,
-    () => { if (first) celebrateBadge(badge); else showScreen('world'); });
+  // First win → fanfare the haul, then the BADGE GET celebration. Repeat wins →
+  // just fanfare the reward.
+  showFanfare('🏆', `+${GYM_BADGE_BALLS} ⚪  +${GYM_BADGE_COINS} 💰`,
+    () => { if (first) celebrateBadge(badge); else returnToWorld(); }, 'VICTORY!');
 }
 
 // Battle Dojo — endless practice. Each round you send out a Lukéymon (which counts
@@ -4130,7 +4149,7 @@ function startTrainerBattle() {
     grunt: t.name, lineup, foeEmoji: t.emoji, charArt: t.art, foeArt: t.art,
     motto: `<b>${t.name} wants to battle!</b><br>“Let’s see what your team can do!”`,
     intro: () => rocketIntro(),
-    onWin:  () => { coins += reward; balls += 1; updateHud(); saveGame(); clearTrainer(); showBattleWin(`🏆 You won! +${reward} 💰 +1 ball`, 'Done ✓', true, returnToWorld); },
+    onWin:  () => { coins += reward; balls += 1; updateHud(); saveGame(); clearTrainer(); showFanfare('🏆', `+${reward} 💰  +1 ⚪`, returnToWorld, 'VICTORY!'); },
     onLose: () => { clearTrainer(); showBattleWin('💪 They got the better of you this time!', 'Done ✓', true, returnToWorld); },
   });
 }
