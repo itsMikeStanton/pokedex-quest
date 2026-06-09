@@ -923,8 +923,10 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   padding: 10px 12px;
   font-size: 7px;
   line-height: 1.9;
-  max-width: 270px;
-  text-align: center;
+  width: 270px;
+  max-width: 86%;
+  min-height: 5.4em;   /* reserve ~3 lines so the line types out without the box (and button) jumping */
+  text-align: left;    /* left-aligned so characters appear left-to-right, not re-centering each keystroke */
   position: relative;
   border: 2px solid #c8c8d0;
 }

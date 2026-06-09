@@ -2400,15 +2400,46 @@ function talkNPC(npc) {
   showScreen('npc');
 }
 
+// ── Old-game typewriter dialogue ─────────────────────
+// The current line types out a character at a time — quick, with a soft blip
+// of chatter and little halts at spaces / punctuation. Tapping advance once
+// completes the line instantly; tapping again moves on.
+let _typeTimer = null, _typing = false, _typeFull = '';
+function typeNpcLine(text) {
+  clearTimeout(_typeTimer);
+  _typeFull = text || '';
+  _typing = true;
+  const el = document.getElementById('npc-text');
+  el.textContent = '';
+  let i = 0, blip = 0;
+  const step = () => {
+    if (i >= _typeFull.length) { _typing = false; _typeTimer = null; return; }
+    const ch = _typeFull[i++];
+    el.textContent += ch;
+    if (ch !== ' ' && (blip++ % 2 === 0)) beep(500 + Math.random() * 60, 0.03, 0.012, 'square');
+    let delay = 24;                                   // quick base speed
+    if ('.!?…'.includes(ch))      delay = 250;        // long beat after a sentence
+    else if (',;:'.includes(ch))  delay = 140;        // shorter beat after a clause
+    else if (ch === ' ')          delay = 50 + (Math.random() < 0.25 ? 80 : 0);  // halt at words, sometimes
+    else if (Math.random() < 0.05) delay = 95;        // occasional mid-word hitch
+    _typeTimer = setTimeout(step, delay);
+  };
+  step();
+}
+function finishTyping() {
+  clearTimeout(_typeTimer); _typeTimer = null;
+  document.getElementById('npc-text').textContent = _typeFull;
+  _typing = false;
+}
+
 function renderNpcLine() {
-  document.getElementById('npc-text').textContent = npcLines[npcLineIdx];
   const last = npcLineIdx >= npcLines.length - 1;
   document.getElementById('npc-advance').textContent = last ? 'CLOSE ✓' : 'NEXT ▶';
-  beep(440, 0.05, 0.06, 'sine');
-  setTimeout(() => beep(550, 0.05, 0.07, 'sine'), 70);
+  typeNpcLine(npcLines[npcLineIdx]);
 }
 
 function advanceNPC() {
+  if (_typing) { finishTyping(); return; }   // first tap finishes the line, next tap advances
   if (npcLineIdx >= npcLines.length - 1) {
     if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
     if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, closeNPC); return; }
@@ -2455,6 +2486,7 @@ function continueGift() {
 }
 
 function closeNPC() {
+  clearTimeout(_typeTimer); _typeTimer = null; _typing = false;
   currentNPC = null;
   pendingGift = 0;
   showScreen('world');
