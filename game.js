@@ -2598,23 +2598,41 @@ function drawShadow(centerX, footY, rx, alpha = 0.22) {
   ctx.restore();
 }
 
+// A bright pulsing beacon glow behind a pickup so it's easy to spot against
+// busy or dark terrain.
+function pickupGlow(px, cy, ts, rgb) {
+  const pulse = 0.55 + 0.45 * Math.sin(ts * 0.005);
+  const R = 19;
+  ctx.save();
+  ctx.globalAlpha = 1;
+  const g = ctx.createRadialGradient(px, cy, 1, px, cy, R);
+  g.addColorStop(0, `rgba(${rgb},${0.9 * pulse})`);
+  g.addColorStop(0.6, `rgba(${rgb},${0.35 * pulse})`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, cy, R, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 function drawCollectibleE(c, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
   const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = c.y * TILE_SIZE - camY;
   drawShadow(px, py + TILE_SIZE - 5, 8);
+  pickupGlow(px, py + 13 + bob, ts, '255,224,120');   // warm gold beacon
+  ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
-  ctx.font = '12px serif'; ctx.fillText('✨', px, py - 10 + bob);
-  ctx.font = '20px serif'; ctx.fillText(c.emoji, px, py + 18 + bob);
+  ctx.font = '13px serif'; ctx.fillText('✨', px, py - 11 + bob);
+  ctx.font = '26px serif'; ctx.fillText(c.emoji, px, py + 21 + bob);
 }
 function drawStoneE(s, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
   const px = s.x * TILE_SIZE - camX + TILE_SIZE / 2;
   const py = s.y * TILE_SIZE - camY;
   drawShadow(px, py + TILE_SIZE - 5, 8);
+  pickupGlow(px, py + 13 + bob, ts, '150,230,255');   // bright cyan beacon
+  ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
-  ctx.font = '11px serif'; ctx.fillText('💎', px, py - 10 + bob);
-  ctx.font = '20px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 18 + bob);
+  ctx.font = '12px serif'; ctx.fillText('💎', px, py - 11 + bob);
+  ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
 }
 function drawNPCE(n, ts) {
   const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
@@ -2946,11 +2964,15 @@ function drawRain(ts, rf) {
   const slant = 2.2;
   ctx.save();
   ctx.lineCap = 'round';
-  // Build the streaks once, then stroke twice: a dark wider pass for contrast on
-  // light ground (sand/snow), and a bright thin core on top.
+  // Build the streaks once, then stroke. The dark wider pass only helps white
+  // rain show on LIGHT ground (sand/snow); on dark zones (forest, highlands,
+  // caves) it reads as ugly black streaks, so skip it there and just draw the
+  // bright core.
+  const zb = ZONE_INFO[currentZone] && ZONE_INFO[currentZone].base;
+  const lightGround = zb === T.SAND || zb === T.ICE;
   ctx.beginPath();
   for (const d of rainDrops) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - slant, d.y + d.l); }
-  ctx.strokeStyle = `rgba(30,55,110,${0.5 * rf})`;  ctx.lineWidth = 2.2; ctx.stroke();
+  if (lightGround) { ctx.strokeStyle = `rgba(30,55,110,${0.5 * rf})`; ctx.lineWidth = 2.2; ctx.stroke(); }
   ctx.strokeStyle = `rgba(225,238,255,${0.9 * rf})`; ctx.lineWidth = 1.0; ctx.stroke();
   ctx.restore();
   // advance the drops
