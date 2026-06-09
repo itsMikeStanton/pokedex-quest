@@ -250,6 +250,16 @@ const NPCS = [
     `I am SO proud of you. You're the kindest, bravest trainer this world has ever known.`,
     `NOW COME GET A HUG YOU CHICKEN-BUTT. I love you!`,
   ] },
+  // ── The whole family is waiting at the finale, inside the blue house ──
+  { zone: 22, x: 2, y: 3, emoji: '👩', name: 'Mom', art: 'mom', lines: () => [`Welcome home, bud! I love you, ${saveName}! 💗`] },
+  { zone: 22, x: 6, y: 3, emoji: '🧒', name: 'Kyle', art: 'kyle', lines: () => [`Time for those loop-de-loops! Let's get pizza! 🍕✈️`] },
+  { zone: 22, x: 4, y: 4, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 1, giftKind: 'steak', metKey: 'arbiter_finale', lines: () => [
+    'Mrrrow? Mew mew. Meeeeow.',
+    'MEOW. Meow meow meow... mrrp?',
+    'Mew. Mew. MEEEOW. Meow meow MEOW meow. Mrrrrrrp.',
+    'mrow. Mew? MEOW! ...meeeeeeeeeow.',
+    '❤️',
+  ] },
   { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
@@ -2220,8 +2230,9 @@ function talkNPC(npc) {
 
   // One-time gift the first time you meet this character — but hold it back
   // for a big reveal once the conversation wraps up (see advanceNPC).
-  if (!metNPCs.has(npc.name) && npc.gift > 0) {
-    metNPCs.add(npc.name);
+  const mk = npc.metKey || npc.name;   // metKey lets the same character give a fresh gift elsewhere
+  if (!metNPCs.has(mk) && npc.gift > 0) {
+    metNPCs.add(mk);
     pendingGift = npc.gift;
   } else {
     pendingGift = 0;
@@ -2253,13 +2264,14 @@ function advanceNPC() {
 // version of the badge-get celebration.
 function revealGift(amount) {
   pendingGift = 0;
-  const bacon = currentNPC && currentNPC.giftKind === 'bacon';
-  if (!bacon) coins += amount;          // bacon is gloriously useless — no coins
+  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'] };
+  const kind = currentNPC && KINDS[currentNPC.giftKind];
+  if (!kind) coins += amount;          // novelty foods are gloriously useless — no coins
   updateHud();
   saveGame();
 
-  document.getElementById('gift-badge').textContent = bacon ? '🥓' : '💰';
-  document.getElementById('gift-amount').textContent = bacon ? 'A piece of bacon!' : `+${amount} coins`;
+  document.getElementById('gift-badge').textContent = kind ? kind[0] : '💰';
+  document.getElementById('gift-amount').textContent = kind ? kind[1] : `+${amount} coins`;
   showScreen('gift');
   playBadgeJingle();
   badgeConfetti(document.getElementById('gift-screen'));
