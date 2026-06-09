@@ -3385,10 +3385,10 @@ function drawPlayer(px, py, ts) {
   if (ts != null) {
     const moving = (ts - moveAnimTs) < moveAnimDur;
     const frame  = moving ? WALK_SEQ[Math.floor(ts / 120) % WALK_SEQ.length] : 1;   // idle = neutral pose
-    if (drawAnimChar('player', playerDir, frame, px + TILE_SIZE / 2, py, 40)) return;
+    if (drawAnimChar('player', playerDir, frame, px + TILE_SIZE / 2, py, 53)) return;   // 25% larger, matching NPCs
   }
   // Static explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
-  if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 38)) return;
+  if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 53)) return;
   const rows   = PLAYER_SPRITE[playerDir];
   const scale  = 3;
   const pw     = 8 * scale;
