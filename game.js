@@ -83,8 +83,8 @@ const BARRIERS = {
     hint: '🔮 A barrier of pure psychic force seals the path north. Only an ULTRA-POWERFUL Psychic-type — the very strongest of all — may pass.',
     cleared: '🔮 Mewtwo flares with unimaginable psychic power... the barrier dissolves!', sign: '🔮' },
   lullaby: { needsType: 'Normal', needsBuddyId: 39,
-    hint: '🔥 A COLOSSAL fire dragon — a Gigantamax titan from a far-off region — sprawls across the path, blue flames roaring off its wings. Creep close and it snorts a searing warning. You\'d need to soothe a beast THIS fierce into a deep sleep... (a singing buddy, perhaps?)',
-    cleared: '🎵 Jigglypuff\'s lullaby drifts over the giant... its blue inferno fades to gentle embers and it slumps into a deep, rumbling sleep. 😴 You tiptoe right past!', sign: '😴' },
+    hint: '🔥 An enormous Gigantamax Charizard blocks this path! He\'s too dangerous to fight... Maybe he needs a nap!',
+    cleared: '🎵 Jigglypuff\'s lullaby drifts over the giant... its blue inferno fades to gentle embers and it slumps into a deep, rumbling sleep.', sign: '😴' },
 };
 
 // ── FIELD NOTES ──────────────────────────────────────
@@ -244,11 +244,11 @@ const NPCS = [
   // ── The final NPC: Dad, waiting inside the blue house in Champion's Cove. ──
   // You can only reach him after befriending all 151 (Mewtwo opens the seal).
   { zone: 22, x: 4, y: 2, emoji: '🧔', name: 'Dad', art: 'dad', lines: () => [
-    `...${saveName}? You made it. You actually made it all the way up here. 🥹`,
-    `You befriended every single Lukeymon — all 151 of them. Even Mewtwo chose to walk beside you.`,
-    `I built this whole island just for you, kiddo — every meadow, every cave, every beach and mountain.`,
+    `...${saveName}? Is that you? You made it! Congratulations!`,
+    `You made friends with every single Lukeymon — all 151. Even Mewtwo chose to walk beside you.`,
+    `Lukeymon island is your playground, I hope you had fun!`,
     `I am SO proud of you. You're the kindest, bravest trainer this world has ever known.`,
-    `Now come here and give your dad the biggest hug. I love you, always. 💙`,
+    `NOW COME GET A HUG YOU CHICKEN-BUTT. I love you!`,
   ] },
   { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', lines: () => [
     `Good to see you out and about, ${saveName}!`,
@@ -302,7 +302,7 @@ const NPCS = [
 
   // ── Inside your home (zone 9) ──
   { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', lines: () => {
-    if (wonGame) return [`My little Champion, ${saveName}! So proud of you. 🏆`, 'Rest up any time, sweetie.'];
+    if (wonGame) return [`${saveName}! A true master! So proud of you. 🏆`, `Come and visit any time, ${saveName}!`];
     return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
             'Come home to visit whenever you like.'];
