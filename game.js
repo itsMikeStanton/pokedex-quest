@@ -321,7 +321,7 @@ const NPCS = [
     return [blurt];
   } },
   // ── Arbiter, the black cat (Home) — says a LOT, none of it readable ──
-  { zone: 9, x: 5, y: 6, emoji: '🐈‍⬛', name: 'Arbiter', gift: 0, lines: () => {
+  { zone: 9, x: 5, y: 6, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 0, lines: () => {
     const meows = [
       'Meow.',
       'Mrrrow? Mew mew. Meeeeow.',
@@ -346,7 +346,7 @@ const NPCS = [
 
   // ── Inside the Pokémon Hospital (zone 11) ──
   // Resting gives a daily bundle of free PokéBalls (your team has no HP to heal).
-  { zone: 11, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Nurse Joy', gift: 0, lines: () => {
+  { zone: 11, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Nurse Joy', art: 'nurse', gift: 0, lines: () => {
     const today = todayKey();
     if (lastHeal !== today) {
       lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
@@ -362,11 +362,11 @@ const NPCS = [
   // ── Oasis Mart (zone 23) — a second shop out in the Desert ──
   { zone: 23, x: 5, y: 3, emoji: '🧑‍💼', name: 'Oasis Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Oasis Mart! Stock up before the dunes. 🏜️'] },
   // ── Ranger's Lodge (zone 24) in Safari Savanna ──
-  { zone: 24, x: 5, y: 3, emoji: '🧑‍🌾', name: 'Ranger', gift: 30, lines: () => [
+  { zone: 24, x: 5, y: 3, emoji: '🧑‍🌾', name: 'Ranger', art: 'ranger', gift: 30, lines: () => [
     `Welcome to the lodge, ${saveName}! I watch over the savanna critters.`,
     'Plenty of rock & ground Lukéymon hide in the caves — bring a glowing buddy to explore them!' ] },
   // ── Summit Aid Station (zone 25) in Frostpeak Ridge — free daily PokéBalls ──
-  { zone: 25, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Summit Medic', gift: 0, lines: () => {
+  { zone: 25, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Summit Medic', art: 'medic', gift: 0, lines: () => {
     const today = todayKey();
     if (lastHeal !== today) {
       lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
@@ -377,23 +377,23 @@ const NPCS = [
     return ['Stay warm out there! 💗', 'Come back tomorrow for more free PokéBalls.']; } },
 
   // ── Seaside hamlet (Beach, zone 1) ──
-  { zone: 1, x: 7, y: 11, emoji: '🎣', name: 'Fisher', gift: 20, lines: () => [
+  { zone: 1, x: 7, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
     `Mornin', ${saveName}! The fish are biting today.`,
     'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
-  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', gift: 0, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
+  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'sailor', gift: 0, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
   // ── Sunpetal village (zone 13) ──
-  { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', gift: 20, lines: () => [
+  { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', art: 'gardener', gift: 20, lines: () => [
     `These sunpetals only bloom for kind hearts like yours, ${saveName}. 🌻`,
     'Grass Lukéymon adore it here.' ] },
-  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', gift: 0, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
+  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', art: 'villagekid', gift: 0, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
 
   // ── Inside the Gym (zone 12) ──
-  { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', gift: 0, gymLeader: true,
+  { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', art: 'rocky', gift: 0, gymLeader: true,
     leaderName: 'Leader Rocky', battleEmoji: '🥋', lineup: [74, 75, 95],   // Geodude → Graveler → Onix
     lines: () => collected.has('badge_gym')
       ? [`Good to see you again, ${saveName}!`, 'That Rumble Badge looks great on you. Keep training!']
       : ['So you want to challenge my Gym, eh?', 'Bring it on!'] },
-  { zone: 12, x: 2, y: 6, emoji: '🧑‍🏫', name: 'Dojo Master', gift: 0, dojo: true,
+  { zone: 12, x: 2, y: 6, emoji: '🧑‍🏫', name: 'Dojo Master', art: 'dojomaster', gift: 0, dojo: true,
     lines: ['Train as much as you like! Send out a Lukéymon each round — win or lose, the practice helps it grow.'] },
 ];
 
@@ -402,7 +402,7 @@ const NPCS = [
 const ROCKETS = [
   { zone: 6, x: 10, y: 6, name: 'Jessie', emoji: '👩‍🎤', art: 'rocket_f', bird: 144 }, // Ice Cave → Articuno
   { zone: 3, x: 10, y: 7, name: 'James',  emoji: '👨‍🎤', art: 'rocket_m', bird: 145 }, // Highlands → Zapdos
-  { zone: 4, x: 10, y: 9, name: 'Meowth', emoji: '😼',   bird: 146 }, // Volcano → Moltres
+  { zone: 4, x: 10, y: 9, name: 'Meowth', art: 'meowth', emoji: '😼',   bird: 146 }, // Volcano → Moltres
 ];
 // A legendary lair tile (still active until its bird is caught). Before the
 // guard is beaten it shows Team Rocket; after, the bird itself awaits a rematch.
