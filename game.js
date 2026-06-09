@@ -308,7 +308,7 @@ const NPCS = [
             'Come home to visit whenever you like.'];
   } },
   // ── Kyle, the big brother (Home) — encouragement + a big reward ──
-  { zone: 9, x: 8, y: 2, emoji: '🧒', name: 'Kyle', gift: 150, art: 'kyle', lines: () => {
+  { zone: 18, x: 15, y: 8, emoji: '🧒', name: 'Kyle', gift: 150, art: 'kyle', lines: () => {
     const blurts = ['Guh guh guh guh guh!', 'meow meow meow meow....', 'EMOTIONAL DAMAGE!', 'HUH?', 'Jaysus CHRIST', 'BRTRTPPHPHHHHHH', 'aww yea awww yea'];
     const blurt = blurts[Math.floor(Math.random() * blurts.length)];
     if (!metNPCs.has('Kyle')) {
@@ -320,8 +320,9 @@ const NPCS = [
     }
     return [blurt];
   } },
-  // ── Arbiter, the black cat (Home) — says a LOT, none of it readable ──
-  { zone: 9, x: 5, y: 6, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 0, lines: () => {
+  // ── Arbiter, the black cat (Safari Savanna) — says a LOT, none of it readable ──
+  // gift>0 → the bacon arrives with the full gift fanfare on the first meeting.
+  { zone: 15, x: 12, y: 8, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 30, lines: () => {
     const meows = [
       'Meow.',
       'Mrrrow? Mew mew. Meeeeow.',
@@ -332,8 +333,7 @@ const NPCS = [
       'MEOW MEOW MEOW. mew. ...Meow. 😼',
     ];
     if (!metNPCs.has('Arbiter')) {
-      metNPCs.add('Arbiter'); balls += 3; updateHud(); saveGame();
-      meows.push('🥓 ...Mrrp. (Arbiter drops a warm piece of bacon at your feet — just for you — then struts off like nothing happened.)');
+      meows.push('🥓 ...Mrrp. (Arbiter drops a warm piece of bacon at your feet — just for you!)');
     } else {
       meows.push('🥓 (Arbiter blinks at you very slowly. You feel deeply judged. And deeply loved.)');
     }
