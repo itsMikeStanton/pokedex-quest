@@ -854,7 +854,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '15';   // bump to bust the image cache when art files change
+const ART_V = '16';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -911,6 +911,12 @@ const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png?v='
 function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _shopImg : null; }
 const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png?v=' + ART_V; return i; })();
 function houseArtImg() { return (_houseImg.complete && _houseImg.naturalWidth) ? _houseImg : null; }
+const _hospImg = (() => { const i = new Image(); i.src = 'art/build/hospital.png?v=' + ART_V; return i; })();
+function hospitalArtImg() { return (_hospImg.complete && _hospImg.naturalWidth) ? _hospImg : null; }
+const _gymImg = (() => { const i = new Image(); i.src = 'art/build/gym.png?v=' + ART_V; return i; })();
+function gymArtImg() { return (_gymImg.complete && _gymImg.naturalWidth) ? _gymImg : null; }
+const _blueHouseImg = (() => { const i = new Image(); i.src = 'art/build/house_blue.png?v=' + ART_V; return i; })();
+function blueHouseArtImg() { return (_blueHouseImg.complete && _blueHouseImg.naturalWidth) ? _blueHouseImg : null; }
 
 // ── Interior décor props (furniture sliced from the building art sheet) ──
 // Placements live in WORLD.decor: { "<zoneId>": [ {x,y,s:spriteKey,solid?}, … ] }.
@@ -3128,12 +3134,12 @@ function drawWorld(ts) {
     for (let c = startC; c < endC; c++) {
       const t = map[r][c];
       if (t === T.HOUSE) {
-        if (ZONE_INFO[currentZone].name === "Champion's Cove") { pushStruct(sprites, buildingSprites.HOUSE_BLUE, c, r, 58); }
-        else { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 62 : 58); }
+        if (ZONE_INFO[currentZone].name === "Champion's Cove") { const bh = blueHouseArtImg(); pushStruct(sprites, bh || buildingSprites.HOUSE_BLUE, c, r, bh ? 93 : 87); }
+        else { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 93 : 87); }
       }
-      else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 62 : 58); }
-      else if (t === T.HOSPITAL) { pushStruct(sprites, buildingSprites[T.HOSPITAL], c, r, 60); }
-      else if (t === T.GYM)      { pushStruct(sprites, buildingSprites[T.GYM],      c, r, 60); }
+      else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 93 : 87); }
+      else if (t === T.HOSPITAL) { const hp = hospitalArtImg(); pushStruct(sprites, hp || buildingSprites[T.HOSPITAL], c, r, hp ? 93 : 90); }
+      else if (t === T.GYM)      { const gy = gymArtImg();      pushStruct(sprites, gy || buildingSprites[T.GYM],      c, r, gy ? 93 : 90); }
       else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, 54); }
     }
   }
