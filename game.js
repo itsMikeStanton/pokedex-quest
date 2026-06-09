@@ -307,6 +307,36 @@ const NPCS = [
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
             'Come home to visit whenever you like.'];
   } },
+  // ── Kyle, the big brother (Home) — encouragement + a big reward ──
+  { zone: 9, x: 8, y: 2, emoji: '🧒', name: 'Kyle', gift: 150, art: 'kyle', lines: () => {
+    if (!metNPCs.has('Kyle')) {
+      masterBalls += 1; balls += 5; updateHud(); saveGame();
+      return [`${saveName}!! Look at you go — you are doing AMAZING out there! 🌟`,
+              `Hey, you wanna go fly planes later? ✈️ I'll teach you the loop-the-loop.`,
+              `Here, take this for the road — a MASTER BALL and a stack of PokéBalls. Go get 'em, champ! 🟣`];
+    }
+    return [`Keep crushing it, ${saveName}! Still up for flying planes later? ✈️`,
+            `You're gonna be the best trainer this island has ever seen.`];
+  } },
+  // ── Arbiter, the black cat (Home) — says a LOT, none of it readable ──
+  { zone: 9, x: 5, y: 6, emoji: '🐈‍⬛', name: 'Arbiter', gift: 0, lines: () => {
+    const meows = [
+      'Meow.',
+      'Mrrrow? Mew mew. Meeeeow.',
+      'MEOW. Meow meow meow... mrrp?',
+      'Mew. Mew. MEEEOW. Meow meow MEOW meow. Mrrrrrrp.',
+      'meow meow. Mew? MEOW! ...mrow. meeeeeeeeeow.',
+      'Mrrp. Mew mew MEOW. Meow. Meow. Meow meow meow meow. Mreeeow??',
+      'MEOW MEOW MEOW. mew. ...Meow. 😼',
+    ];
+    if (!metNPCs.has('Arbiter')) {
+      metNPCs.add('Arbiter'); balls += 3; updateHud(); saveGame();
+      meows.push('🥓 ...Mrrp. (Arbiter drops a warm piece of bacon at your feet — just for you — then struts off like nothing happened.)');
+    } else {
+      meows.push('🥓 (Arbiter blinks at you very slowly. You feel deeply judged. And deeply loved.)');
+    }
+    return meows;
+  } },
   // (The home is now furnished with real décor props — see WORLD.decor zone 9.)
 
   // ── Inside the Poké Mart (zone 10) ──
