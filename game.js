@@ -2481,6 +2481,21 @@ function portraitImg(key) {
   if (!img) { img = new Image(); img.src = 'art/portrait/' + key + '.png?v=' + ART_V; _portraitArt[key] = img; }
   return (img.complete && img.naturalWidth) ? img : null;
 }
+// Eagerly preload character art at boot. walkSheet()/npcArtImg() are otherwise
+// lazy — they only kick off the download on the FIRST draw, so on a cold load
+// (or right after an ART_V cache bump) the explorer PNG isn't decoded yet and
+// the player falls back to the procedural figure, making the body appear to
+// "change" once the real sprite finishes loading. Requesting these up front
+// means they're ready before the world first renders.
+(function preloadCharArt() {
+  walkSheet('player');                                  // our own body — load this first
+  try {
+    const keys = new Set(['player']);
+    if (typeof NPCS !== 'undefined') for (const n of NPCS) if (n.art) keys.add(n.art);
+    keys.forEach(k => { walkSheet(k); npcArtImg(k); });  // overworld sprites
+  } catch (e) { /* NPCS not ready yet — the player sheet above still preloads */ }
+})();
+
 // Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
 // py = tile top y, both already in screen space).
 function drawCharSprite(img, px, py, H) {
