@@ -2400,46 +2400,65 @@ function talkNPC(npc) {
   showScreen('npc');
 }
 
-// ── Old-game typewriter dialogue ─────────────────────
-// The current line types out a character at a time — quick, with a soft blip
-// of chatter and little halts at spaces / punctuation. Tapping advance once
-// completes the line instantly; tapping again moves on.
-let _typeTimer = null, _typing = false, _typeFull = '';
-function typeNpcLine(text) {
-  clearTimeout(_typeTimer);
-  _typeFull = text || '';
-  _typing = true;
-  const el = document.getElementById('npc-text');
-  el.textContent = '';
-  let i = 0, blip = 0;
-  const step = () => {
-    if (i >= _typeFull.length) { _typing = false; _typeTimer = null; return; }
-    const ch = _typeFull[i++];
-    el.textContent += ch;
-    if (ch !== ' ' && (blip++ % 2 === 0)) beep(500 + Math.random() * 60, 0.03, 0.012, 'square');
-    let delay = 24;                                   // quick base speed
-    if ('.!?…'.includes(ch))      delay = 250;        // long beat after a sentence
-    else if (',;:'.includes(ch))  delay = 140;        // shorter beat after a clause
-    else if (ch === ' ')          delay = 50 + (Math.random() < 0.25 ? 80 : 0);  // halt at words, sometimes
-    else if (Math.random() < 0.05) delay = 95;        // occasional mid-word hitch
-    _typeTimer = setTimeout(step, delay);
-  };
-  step();
+// ── Old-game typewriter ──────────────────────────────
+// Reveals text a character at a time — quick base speed, a soft blip of
+// chatter, and little halts at spaces / punctuation. HTML-aware: tags (<b>,
+// <br>) snap in instantly, entities count as one glyph. Used for every bit of
+// character dialogue. finishTyper() (tap-to-skip) renders the whole thing now.
+let _typer = null;   // { el, units, idx, out, isHtml, onDone, blip, timer }
+function _tokenize(content, isHtml) {
+  if (!isHtml) return Array.from(content);   // code-point aware → emoji stay whole
+  const units = []; let i = 0;
+  while (i < content.length) {
+    if (content[i] === '<') { const e = content.indexOf('>', i); const tag = e === -1 ? content.slice(i) : content.slice(i, e + 1); units.push({ tag }); i += tag.length; }
+    else if (content[i] === '&') { const e = content.indexOf(';', i); if (e !== -1 && e - i <= 8) { units.push(content.slice(i, e + 1)); i = e + 1; } else { units.push(content[i++]); } }
+    else { const chr = String.fromCodePoint(content.codePointAt(i)); units.push(chr); i += chr.length; }   // keep surrogate pairs together
+  }
+  return units;
 }
-function finishTyping() {
-  clearTimeout(_typeTimer); _typeTimer = null;
-  document.getElementById('npc-text').textContent = _typeFull;
-  _typing = false;
+function startTyper(el, content, isHtml, onDone) {
+  if (_typer) clearTimeout(_typer.timer);
+  _typer = { el, units: _tokenize(content || '', isHtml), idx: 0, out: '', isHtml: !!isHtml, onDone: onDone || null, blip: 0, timer: null };
+  el[isHtml ? 'innerHTML' : 'textContent'] = '';
+  _stepTyper();
+}
+function _render(T) { T.el[T.isHtml ? 'innerHTML' : 'textContent'] = T.out; }
+function _stepTyper() {
+  const T = _typer; if (!T) return;
+  let ch = '';
+  while (T.idx < T.units.length) {
+    const u = T.units[T.idx++];
+    if (u && u.tag) { T.out += u.tag; continue; }   // tag snaps in, keep going
+    ch = u; T.out += u; break;                       // one visible glyph this step
+  }
+  _render(T);
+  if (T.idx >= T.units.length && !ch) { finishTyper(); return; }
+  if (ch && ch !== ' ' && (T.blip++ % 2 === 0)) beep(500 + Math.random() * 60, 0.03, 0.012, 'square');
+  let delay = 24;
+  if ('.!?…'.includes(ch))       delay = 250;
+  else if (',;:'.includes(ch))   delay = 140;
+  else if (ch === ' ')           delay = 50 + (Math.random() < 0.25 ? 80 : 0);
+  else if (Math.random() < 0.05) delay = 95;
+  T.timer = setTimeout(_stepTyper, delay);
+}
+function typerActive() { return !!_typer; }
+function finishTyper() {                              // tap-to-skip: render it all at once
+  const T = _typer; if (!T) return;
+  clearTimeout(T.timer);
+  T.out = ''; for (const u of T.units) T.out += (u && u.tag) ? u.tag : u;
+  _render(T);
+  const cb = T.onDone; _typer = null;
+  if (cb) cb();
 }
 
 function renderNpcLine() {
   const last = npcLineIdx >= npcLines.length - 1;
   document.getElementById('npc-advance').textContent = last ? 'CLOSE ✓' : 'NEXT ▶';
-  typeNpcLine(npcLines[npcLineIdx]);
+  startTyper(document.getElementById('npc-text'), npcLines[npcLineIdx], false);
 }
 
 function advanceNPC() {
-  if (_typing) { finishTyping(); return; }   // first tap finishes the line, next tap advances
+  if (typerActive()) { finishTyper(); return; }   // first tap finishes the line, next tap advances
   if (npcLineIdx >= npcLines.length - 1) {
     if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
     if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, closeNPC); return; }
@@ -2486,7 +2505,7 @@ function continueGift() {
 }
 
 function closeNPC() {
-  clearTimeout(_typeTimer); _typeTimer = null; _typing = false;
+  if (_typer) { clearTimeout(_typer.timer); _typer = null; }
   currentNPC = null;
   pendingGift = 0;
   showScreen('world');
@@ -5854,6 +5873,8 @@ function selectSlot(n) {
     const inp = document.getElementById('name-input');
     inp.value = '';
     showScreen('name');
+    startTyper(document.getElementById('prof-greeting'),
+      "Welcome to the island, new trainer!<br>I'm Professor Birch. And you are…?", true);
     setTimeout(() => inp.focus(), 50);
   }
 }
@@ -5864,12 +5885,13 @@ function confirmName() {
   currentSlot = pendingNewSlot;
   // The professor sees you off before your adventure begins.
   const nm = saveName.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  document.getElementById('intro-text').innerHTML =
+  const introHtml =
     `Wonderful to meet you, <b>${nm}</b>!<br><br>` +
     `A whole island of Lukeymon is waiting. Befriend them with kindness, ` +
     `earn the four Gym Badges, and who knows what legends you'll uncover…<br><br>` +
     `Good luck, ${nm}! Your adventure starts at home. 🌟`;
   showScreen('intro');
+  startTyper(document.getElementById('intro-text'), introHtml, true);   // professor types it out
   beep(523, 0.1, 0.1); setTimeout(() => beep(659, 0.1, 0.12), 130); setTimeout(() => beep(784, 0.16, 0.2), 270);
 }
 
