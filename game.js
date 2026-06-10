@@ -3460,40 +3460,58 @@ function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return
 function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  return rainMode; }
 
 // ── Soft tile corners ────────────────────────────────────────────
-// Cheap de-blockifier (no new art): after the flat ground grid is drawn, round the
-// OUTER corners where one outdoor terrain pokes into another, so paths/grass/sand/
-// water read as organic blobs instead of hard squares. At each corner where the two
-// edge-neighbours AND the diagonal are all the same *other* terrain, we overpaint
-// that neighbour's colour in the little sliver outside a quarter-circle.
+// De-blockifier (no new art): after the flat ground grid is drawn, round the OUTER
+// corners where one outdoor terrain pokes into another, so paths/grass/sand/water
+// read as organic blobs instead of hard squares. At each corner where the two
+// edge-neighbours AND the diagonal are all the same *other* terrain, we clip the
+// little sliver outside a quarter-circle and draw THAT neighbour's real textured
+// tile into it — so the rounded reveal matches the ground beside it (no flat colour).
 let TILE_ROUND = true;            // master toggle (window.TILE_ROUND to flip live)
 const TILE_ROUND_R = 11;          // corner radius in px (0..16); bigger = rounder
-const TILE_BASE_COLOR = {         // representative colour per roundable terrain
-  [T.PATH]: '#d0b068', [T.GRASS]: '#38b038', [T.WATER]: '#2060d0',
-  [T.SAND]: '#e8c870', [T.CITY]: '#909090',
+const ROUNDABLE = new Set([T.PATH, T.GRASS, T.WATER, T.SAND, T.CITY]);   // outdoor terrains that blob
+const TILE_BASE_COLOR = {         // fallback colour if a tile image isn't ready yet
+  [T.PATH]: '#d0b068', [T.GRASS]: '#38b038', [T.WATER]: '#2060d0', [T.SAND]: '#e8c870', [T.CITY]: '#909090',
 };
-function roundOuterCorner(dx, dy, which, fill) {
+// The textured tile image for a terrain at a given cell (art if present, else the
+// procedural variant) — same selection the main ground pass uses.
+function groundTileImg(zone, r, c, id) {
+  const cnt = TILE_ART[zone] && TILE_ART[zone][id];
+  if (cnt) { const img = tileArtImg(zone, id, tileVariant(zone, r, c, cnt)); if (img) return img; }
+  const variants = tileCache[id];
+  return variants ? variants[tileVariant(zone, r, c, variants.length)] : null;
+}
+function cornerSliverPath(dx, dy, which) {
   const R = TILE_ROUND_R, TS = TILE_SIZE, H = Math.PI / 2;
   ctx.beginPath();
   if (which === 'tl')      { ctx.moveTo(dx, dy);            ctx.lineTo(dx + R, dy);            ctx.arc(dx + R,      dy + R,      R, 3 * H, 2 * H, true); }
   else if (which === 'tr') { ctx.moveTo(dx + TS, dy);       ctx.lineTo(dx + TS, dy + R);       ctx.arc(dx + TS - R, dy + R,      R, 0,     -H,    true); }
   else if (which === 'bl') { ctx.moveTo(dx, dy + TS);       ctx.lineTo(dx, dy + TS - R);       ctx.arc(dx + R,      dy + TS - R, R, 2 * H,  H,    true); }
   else                     { ctx.moveTo(dx + TS, dy + TS);  ctx.lineTo(dx + TS - R, dy + TS);  ctx.arc(dx + TS - R, dy + TS - R, R, H,     0,    true); }
-  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+  ctx.closePath();
+}
+function roundOuterCorner(zone, r, c, dx, dy, which, nbId) {
+  ctx.save();
+  cornerSliverPath(dx, dy, which);
+  ctx.clip();
+  const img = groundTileImg(zone, r, c, nbId);          // the neighbour terrain's real texture
+  if (img) ctx.drawImage(img, dx, dy, TILE_SIZE + 1, TILE_SIZE + 1);
+  else { ctx.fillStyle = TILE_BASE_COLOR[nbId] || '#000'; ctx.fillRect(dx, dy, TILE_SIZE, TILE_SIZE); }
+  ctx.restore();
 }
 function roundTileCorners(map, startR, endR, startC, endC, rows, cols) {
-  const TS = TILE_SIZE, col = t => TILE_BASE_COLOR[t];
+  const z = currentZone, TS = TILE_SIZE;
   const at = (r, c) => (r >= 0 && r < rows && c >= 0 && c < cols) ? map[r][c] : -1;
   for (let r = startR; r < endR; r++) {
     for (let c = startC; c < endC; c++) {
-      if (col(map[r][c]) === undefined) continue;     // not a roundable terrain
       const t = map[r][c];
+      if (!ROUNDABLE.has(t)) continue;
       const dx = Math.floor(c * TS - camX), dy = Math.floor(r * TS - camY);
       const up = at(r - 1, c), dn = at(r + 1, c), lf = at(r, c - 1), rt = at(r, c + 1);
       const ul = at(r - 1, c - 1), ur = at(r - 1, c + 1), dl = at(r + 1, c - 1), dr = at(r + 1, c + 1);
-      if (up !== t && up === lf && up === ul && col(up) !== undefined) roundOuterCorner(dx, dy, 'tl', col(up));
-      if (up !== t && up === rt && up === ur && col(up) !== undefined) roundOuterCorner(dx, dy, 'tr', col(up));
-      if (dn !== t && dn === lf && dn === dl && col(dn) !== undefined) roundOuterCorner(dx, dy, 'bl', col(dn));
-      if (dn !== t && dn === rt && dn === dr && col(dn) !== undefined) roundOuterCorner(dx, dy, 'br', col(dn));
+      if (up !== t && up === lf && up === ul && ROUNDABLE.has(up)) roundOuterCorner(z, r, c, dx, dy, 'tl', up);
+      if (up !== t && up === rt && up === ur && ROUNDABLE.has(up)) roundOuterCorner(z, r, c, dx, dy, 'tr', up);
+      if (dn !== t && dn === lf && dn === dl && ROUNDABLE.has(dn)) roundOuterCorner(z, r, c, dx, dy, 'bl', dn);
+      if (dn !== t && dn === rt && dn === dr && ROUNDABLE.has(dn)) roundOuterCorner(z, r, c, dx, dy, 'br', dn);
     }
   }
 }
