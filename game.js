@@ -2918,7 +2918,9 @@ function drawTrainerE(t, ts) {
     bx = w.fromX + (t.x * TILE_SIZE - w.fromX) * k;
     by = w.fromY + (t.y * TILE_SIZE - w.fromY) * k;
     dir = w.dir; hop = Math.sin(k * Math.PI * 2) * -1.5;
-  } else if (!t.approaching && !t.leaving) {           // arrived & waiting → two excited hops, a beat, repeat
+  } else if (!t.approaching && !t.leaving) {           // arrived & waiting → face you, two excited hops, a beat, repeat
+    const dx = playerX - t.x, dy = playerY - t.y;       // turn to look right at you
+    dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
     const cyc = ts % 1500;
     if (cyc < 280) hop = -Math.abs(Math.sin((cyc / 280) * Math.PI)) * 7;               // hop 1
     else if (cyc < 560) hop = -Math.abs(Math.sin(((cyc - 280) / 280) * Math.PI)) * 7;  // hop 2
