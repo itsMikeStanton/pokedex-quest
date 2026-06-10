@@ -3516,6 +3516,53 @@ function roundTileCorners(map, startR, endR, startC, endC, rows, cols) {
   }
 }
 
+// ── Ground shading overlay ───────────────────────────────────────
+// After normalizing the tile variants the ground can read a touch flat. This adds
+// gentle, world-anchored light/dark blotches that span several tiles and ignore the
+// grid — so the surface feels organic without bringing back per-tile checkerboarding.
+let GROUND_SHADE = true;          // master toggle
+const GROUND_SHADE_ALPHA = 0.55;  // strength of the soft-light blend (0..1)
+let _groundNoise = null;
+function buildGroundNoise() {
+  const N = 384;                                  // texture size (tiles seamlessly)
+  const [cv, x] = makeCanvas(N, N);
+  const smooth = t => t * t * (3 - 2 * t);
+  // Two octaves of tileable value-noise → big soft blobs + a little finer detail.
+  const octave = G => {
+    const g = [];
+    for (let i = 0; i < G; i++) { g[i] = []; for (let j = 0; j < G; j++) g[i][j] = Math.random(); }
+    return (px, py) => {
+      const gx = px / N * G, gy = py / N * G;
+      const x0 = Math.floor(gx) % G, y0 = Math.floor(gy) % G, x1 = (x0 + 1) % G, y1 = (y0 + 1) % G;
+      const fx = smooth(gx - Math.floor(gx)), fy = smooth(gy - Math.floor(gy));
+      const top = g[y0][x0] * (1 - fx) + g[y0][x1] * fx, bot = g[y1][x0] * (1 - fx) + g[y1][x1] * fx;
+      return top * (1 - fy) + bot * fy;
+    };
+  };
+  const o1 = octave(6), o2 = octave(12);          // ~2-tile blobs + ~1-tile detail
+  const img = x.createImageData(N, N), d = img.data;
+  for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+    const v = o1(px, py) * 0.7 + o2(px, py) * 0.3;          // 0..1
+    const g = Math.max(0, Math.min(255, 128 + (v - 0.5) * 150));   // grey around neutral 128
+    const i = (py * N + px) * 4;
+    d[i] = d[i + 1] = d[i + 2] = g; d[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  _groundNoise = cv;
+}
+function drawGroundNoise() {
+  if (!_groundNoise) buildGroundNoise();
+  const N = _groundNoise.width;
+  const ox = ((camX % N) + N) % N, oy = ((camY % N) + N) % N;   // world-anchored: scrolls with the terrain
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = GROUND_SHADE_ALPHA;
+  for (let y = -oy; y < canvas.height; y += N)
+    for (let x = -ox; x < canvas.width; x += N)
+      ctx.drawImage(_groundNoise, Math.floor(x), Math.floor(y));
+  ctx.restore();
+}
+
 function drawWorld(ts) {
   const renderPos = getRenderPos(ts);
   updateCamera(getRenderPos(ts, true));   // centre on the true grid position, not the bob/hop
@@ -3561,6 +3608,7 @@ function drawWorld(ts) {
   }
   if (TILE_ROUND && TILE_ROUND_R > 0) roundTileCorners(map, startR, endR, startC, endC, rows, cols);
   ctx.imageSmoothingEnabled = smPrev;
+  if (GROUND_SHADE && !ZONE_INFO[currentZone].interior && ZONE_INFO[currentZone].base !== T.CAVE) drawGroundNoise();
   const zoneTints = {
     4: 'rgba(255,80,0,0.14)',
     5: 'rgba(0,30,0,0.22)',
