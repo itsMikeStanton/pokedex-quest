@@ -258,7 +258,7 @@ const NPCS = [
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, lines: () => [
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
@@ -266,7 +266,7 @@ const NPCS = [
     `Waves are perfect today, ${saveName}!`,
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', wander: 'free', lines: () => [
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', wander: 'free', nightOwl: true, lines: () => [
     `...you wandered this deep into the forest, ${saveName}? Impressive.`,
     `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
   ] },
@@ -573,8 +573,12 @@ function checkEvoNotify() {
 }
 function tickBond(id) { bondSteps[id] = (bondSteps[id] || 0) + 1; checkEvoNotify(); }
 
+// Most folks head home to bed at night; only "night owls" (the wild Hermit, the
+// patrolling Officer) stay out. Interiors never count as night, so families at
+// home are unaffected.
+function npcIsHome(n) { return isNightNow() && !n.nightOwl; }
 function npcAt(zone, x, y) {
-  return NPCS.find(n => n.zone === zone && n.x === x && n.y === y) || null;
+  return NPCS.find(n => n.zone === zone && n.x === x && n.y === y && !npcIsHome(n)) || null;
 }
 function collectibleAt(zone, x, y) {
   return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
@@ -3360,7 +3364,7 @@ function drawWorld(ts) {
   for (const s of STONE_FINDS)
     if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
   for (const n of NPCS)
-    if (n.zone === currentZone) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+    if (n.zone === currentZone && !npcIsHome(n)) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
   if (wildTrainer && wildTrainer.zone === currentZone)
     sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
   if (nightGhost && nightGhost.zone === currentZone)
