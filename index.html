@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.18.6">
+  <link rel="stylesheet" href="style.css?v=3.19.0">
 </head>
 <body>
 
@@ -29,7 +29,7 @@
           <p class="title-tagline">Catch ʼem with kindness!</p>
           <div class="title-scene">
             <span class="title-ground"></span>
-            <img class="title-hero" src="art/player/side.png?v=3.18.6" alt="">
+            <img class="title-hero" src="art/player/side.png?v=3.19.0" alt="">
             <img class="title-pika" src="sprites/025.png" alt="">
             <span class="title-spark sp1">⚡</span>
             <span class="title-spark sp2">⚡</span>
@@ -37,7 +37,7 @@
           </div>
           <button id="play-btn" class="pixel-btn green">▶ PLAY</button>
           <button id="title-settings" class="pixel-btn small blue">⚙️ Settings</button>
-          <p class="title-hint">Arrow keys or WASD to move</p>
+          <p class="title-hint">☰ Start (or C) — Controls · ✛ D-pad / WASD — move</p>
         </div>
 
         <!-- SAVE SLOT SELECT -->
@@ -218,11 +218,12 @@
             <div class="help-section">
               <div class="help-head">🎮 CONTROLS</div>
               <div class="help-controls">
-                <span>✛ D-pad — move / choose</span>
+                <span>✛ D-pad / stick — move · choose</span>
                 <span>Ⓐ — select / confirm</span>
                 <span>Ⓑ — back / cancel</span>
-                <span>Select — switch buddy</span>
+                <span>Ⓨ — map · LB/RB — switch buddy</span>
                 <span>In the world: Ⓐ Pokédex · Ⓑ Map</span>
+                <span>☰ Start — full controls screen</span>
               </div>
             </div>
             <div class="help-section">
@@ -397,6 +398,24 @@
           <button id="shop-close" class="pixel-btn red">◀ LEAVE</button>
         </div>
 
+        <!-- CONTROLS OVERLAY (Start opens from anywhere) -->
+        <div id="controls-overlay" class="hidden">
+          <div id="controls-card">
+            <div id="controls-head">🎮 CONTROLS</div>
+            <div class="ctl-grid">
+              <span class="ctl-key">✛<br><small>D-Pad / Stick</small></span><span class="ctl-desc"><b>Move</b> around · <b>Navigate</b> menus</span>
+              <span class="ctl-key ctl-a">Ⓐ</span><span class="ctl-desc"><b>Select / Confirm</b> · In the world: open <b>Pokédex</b></span>
+              <span class="ctl-key ctl-b">Ⓑ</span><span class="ctl-desc"><b>Back / Cancel</b> · In the world: open <b>Map</b></span>
+              <span class="ctl-key ctl-y">Ⓨ</span><span class="ctl-desc">World &amp; Map: toggle <b>Map</b> · Pokédex: <b>Quest</b> view</span>
+              <span class="ctl-key">LB · RB</span><span class="ctl-desc">World: <b>switch buddy</b> · Pokédex: change <b>filter</b></span>
+              <span class="ctl-key">LT · RT</span><span class="ctl-desc">Pokédex: change <b>type filter</b></span>
+              <span class="ctl-key">☰<br><small>Start</small></span><span class="ctl-desc">Open / close this <b>Controls</b> screen</span>
+              <span class="ctl-key">⌫<br><small>Slots</small></span><span class="ctl-desc">Save select: focus <b>⌫</b>, press <b>Ⓐ</b> twice to <b>erase</b></span>
+            </div>
+            <div id="controls-foot">Press <b>Ⓑ</b> or <b>Start</b> to close · keyboard &amp; touch work too</div>
+          </div>
+        </div>
+
       </div><!-- /screen-area -->
     </div><!-- /screen-bezel -->
 
@@ -422,12 +441,12 @@
   </div><!-- /device -->
   <div id="version-bar">
     <button id="hard-refresh" title="Hard refresh — force reload the latest version">⟳</button>
-    <span id="version">v3.18.6</span>
+    <span id="version">v3.19.0</span>
   </div>
 
-  <script src="world.js?v=3.18.6"></script>
-  <script src="data.js?v=3.18.6"></script>
-  <script src="game.js?v=3.18.6"></script>
-  <script src="net.js?v=3.18.6"></script>
+  <script src="world.js?v=3.19.0"></script>
+  <script src="data.js?v=3.19.0"></script>
+  <script src="game.js?v=3.19.0"></script>
+  <script src="net.js?v=3.19.0"></script>
 </body>
 </html>

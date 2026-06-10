@@ -1415,6 +1415,8 @@ function bindEvents() {
     if (e.target && e.target.tagName === 'INPUT') return; // don't hijack text fields
     keys[e.key] = true;
     wakeAudio();
+    if (controlsOpen) { closeControls(); return; }        // any key closes the controls overlay
+    if (!e.repeat && (e.key === 'c' || e.key === 'C')) { toggleControls(); return; }   // 'C' opens it
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
       e.preventDefault();
     }
@@ -1456,6 +1458,7 @@ function bindEvents() {
   document.getElementById('map-btn').addEventListener('click', openMap);
   document.getElementById('mute-btn').addEventListener('click', () => { wakeAudio(); toggleMute(); });
   document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); openPokedex(); });   // tap the buddy chip → Pokédex (switch buddy there)
+  document.getElementById('controls-overlay').addEventListener('click', closeControls);   // tap anywhere to dismiss
 
   // Full-screen / immersive: hide the Game Boy shell so the screen fills the
   // display (great for landscape / casting to a TV). Also asks the browser for
@@ -1747,19 +1750,84 @@ function pollGamepad() {
   const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
   const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = 0.5;
   const held = { up: b(12) || ay < -dz, down: b(13) || ay > dz, left: b(14) || ax < -dz, right: b(15) || ax > dz };
+  const face = { a: b(0), b: b(1), y: b(3), select: b(8), start: b(9), lb: b(4), rb: b(5), lt: b(6), rt: b(7) };
+
+  // Start always opens/closes the Controls overlay (and still feeds secret codes).
+  if (face.start && !_gpHeld.start) {
+    kamiInput('start'); toggleControls();
+    Object.assign(_gpHeld, held, face);
+    return;                                            // consume this press
+  }
+  // While the overlay is up it captures everything — any A/B press closes it,
+  // and the player never moves underneath.
+  if (controlsOpen) {
+    if ((face.a && !_gpHeld.a) || (face.b && !_gpHeld.b)) closeControls();
+    ['up', 'down', 'left', 'right'].forEach(d => { keys[_GP_KEYMAP[d]] = false; });
+    Object.assign(_gpHeld, held, face);
+    return;
+  }
+
   for (const d in held) {
     if (held[d]) keys[_GP_KEYMAP[d]] = true;
     else if (_gpHeld[d]) keys[_GP_KEYMAP[d]] = false;   // only clear what the pad set (don't fight the keyboard)
     if (held[d] && !_gpHeld[d]) { uiPress(d); kamiInput(d); }
     _gpHeld[d] = held[d];
   }
-  const face = { a: b(0), b: b(1), y: b(3), select: b(8), start: b(9) };
   if (face.a && !_gpHeld.a) { uiPress('a'); kamiInput('a'); }
   if (face.b && !_gpHeld.b) { uiPress('b'); kamiInput('b'); }
-  if (face.start && !_gpHeld.start) kamiInput('start');
-  if (face.select && !_gpHeld.select) kamiInput('select');   // secret codes only — buddy switching is Pokédex-only
-  if (face.y && !_gpHeld.y) { if (gameState === 'world') openMap(); else if (gameState === 'map') closeMap(); }
+  if (face.select && !_gpHeld.select) kamiInput('select');   // secret codes only
+  if (face.y && !_gpHeld.y) {
+    if (gameState === 'world')        openMap();
+    else if (gameState === 'map')     closeMap();
+    else if (gameState === 'pokedex' && !dexDetailOpen()) showDexView(dexView === 'quest' ? 'grid' : 'quest');
+  }
+  // Shoulder buttons: world = cycle buddy; Pokédex = filters.
+  if (face.lb && !_gpHeld.lb) gpShoulder('lb');
+  if (face.rb && !_gpHeld.rb) gpShoulder('rb');
+  if (face.lt && !_gpHeld.lt) gpShoulder('lt');
+  if (face.rt && !_gpHeld.rt) gpShoulder('rt');
   Object.assign(_gpHeld, face);
+}
+// Is the Pokédex detail card open (gameState is still 'pokedex' while it is)?
+function dexDetailOpen() {
+  const d = document.getElementById('pokedex-detail');
+  return d && !d.classList.contains('hidden');
+}
+// Shoulder-button actions, by screen.
+function gpShoulder(btn) {
+  if (gameState === 'world') {
+    if (btn === 'lb') cycleBuddy(-1);
+    else if (btn === 'rb') cycleBuddy(1);
+  } else if (gameState === 'pokedex' && !dexDetailOpen()) {
+    if (btn === 'lb' || btn === 'rb') cycleDexStatus(btn === 'rb' ? 1 : -1);
+    else if (btn === 'lt' || btn === 'rt') { if (dexView !== 'grid') showDexView('grid'); cycleDexType(); }
+  }
+}
+// Cycle the active buddy through your caught Lukeymon (and "no buddy").
+function cycleBuddy(dir) {
+  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
+  if (!team.length) { showMessage('Catch a Lukeymon first to pick a buddy!'); return; }
+  const ids = [null, ...team.map(p => p.id)];
+  let i = ids.indexOf(activePet); if (i < 0) i = 0;
+  activePet = ids[(i + dir + ids.length) % ids.length];
+  if (activePet != null) {
+    learnTip('buddy');
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE; petMoveAnimTs = -9999;
+  }
+  saveGame(); updateHud();
+  const bp = POKEMON_DATA.find(p => p.id === activePet);
+  showMessage(bp ? `🤝 Buddy: ${bp.name}` : '🚶 Walking solo');
+  beep(523, 0.06, 0.08);
+}
+// Cycle the Pokédex status filter (All / Caught / Missing).
+function cycleDexStatus(dir) {
+  const order = ['all', 'caught', 'missing'];
+  let i = order.indexOf(dexFilter.status); if (i < 0) i = 0;
+  dexFilter.status = order[(i + dir + order.length) % order.length];
+  if (dexView !== 'grid') showDexView('grid');
+  refreshDexFilters();
+  beep(360, 0.03, 0.05);
 }
 window.addEventListener('gamepadconnected', () => {
   showMessage('🎮 Controller connected!');
@@ -5648,6 +5716,24 @@ function closeSettings() { showScreen('title'); }
 
 // ─── Guide / type-chart screen ───────────────────────
 let helpReturn = 'map';
+// ── Controls overlay ─────────────────────────────────
+// A button-map you can pop up ANY time with Start (or 'C' on a keyboard). It's an
+// overlay, not a screen swap, so it works from the world, menus, battles, anywhere.
+let controlsOpen = false;
+function openControls() {
+  if (controlsOpen) return;
+  controlsOpen = true;
+  document.getElementById('controls-overlay').classList.remove('hidden');
+  beep(523, 0.05, 0.07);
+}
+function closeControls() {
+  if (!controlsOpen) return;
+  controlsOpen = false;
+  document.getElementById('controls-overlay').classList.add('hidden');
+  beep(392, 0.05, 0.07);
+}
+function toggleControls() { controlsOpen ? closeControls() : openControls(); }
+
 function openHelp(from) {
   helpReturn = from || 'map';
   renderHelp();
@@ -6059,6 +6145,7 @@ function navBack() { if (nav.onBack) nav.onBack(); }
 let _uiLast = '', _uiLastT = 0;
 function uiPress(action) {
   if (!action) return;
+  if (controlsOpen) { if (action === 'a' || action === 'b') closeControls(); return; }   // overlay captures input
   const now = Date.now();
   if (action === _uiLast && now - _uiLastT < 30) return;   // kill synthetic touch+pointer dupes
   _uiLast = action; _uiLastT = now;
@@ -6084,7 +6171,7 @@ function setupNav(id) {
   switch (id) {
     case 'title':     setNav([$('play-btn'), $('title-settings')]); break;
     case 'settings':  setNav([$('set-sound'), $('set-guide'), $('settings-back')], { onBack: closeSettings }); break;
-    case 'slot':      setNav(all('#slot-list .slot-info'), { onBack: () => showScreen('title') }); break;
+    case 'slot':      setNav(all('#slot-list .slot-info, #slot-list .slot-erase'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
     case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
@@ -6375,8 +6462,8 @@ function renderSlots() {
       const er = document.createElement('button');
       er.className = 'slot-erase';
       er.textContent = '⌫';
-      er.title = 'Hold to erase';
-      bindHoldErase(er, n);
+      er.title = 'Erase (press twice)';
+      bindErase(er, n);
       card.appendChild(er);
     }
     list.appendChild(card);
@@ -6420,37 +6507,25 @@ function beginAdventure() {
 }
 
 // Erase a slot only on a deliberate ~1.2s hold (buried so it can't happen by accident).
-function bindHoldErase(btn, n) {
-  let timer = null, raf = null, start = 0;
-  const HOLD = 1200;
-  const begin = e => {
+// Erase a slot on a deliberate double-press: first press arms it (shows "OK?"),
+// the second within 3s wipes it. Works the same for a mouse click or the
+// controller's Ⓐ, so it's reachable without a press-and-hold gesture.
+function bindErase(btn, n) {
+  let armed = false, t = null;
+  const reset = () => { armed = false; btn.classList.remove('erase-armed'); btn.textContent = '⌫'; if (t) { clearTimeout(t); t = null; } };
+  btn.addEventListener('click', e => {
     e.preventDefault(); e.stopPropagation();
-    start = Date.now();
-    btn.classList.add('erasing');
-    const tick = () => {
-      const p = Math.min((Date.now() - start) / HOLD, 1);
-      btn.style.setProperty('--p', (p * 100) + '%');
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    timer = setTimeout(() => {
+    if (armed) {
+      reset();
       localStorage.removeItem(slotKey(n));
       beep(140, 0.2, 0.3, 'square');
-      cancel();
-      renderSlots();
-    }, HOLD);
-  };
-  const cancel = () => {
-    clearTimeout(timer); timer = null;
-    if (raf) cancelAnimationFrame(raf);
-    btn.classList.remove('erasing');
-    btn.style.setProperty('--p', '0%');
-  };
-  btn.addEventListener('pointerdown', begin);
-  btn.addEventListener('pointerup', cancel);
-  btn.addEventListener('pointerleave', cancel);
-  btn.addEventListener('pointercancel', cancel);
-  btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+      renderSlots(); setupNav('slot');
+    } else {
+      armed = true; btn.classList.add('erase-armed'); btn.textContent = 'OK?';
+      beep(300, 0.05, 0.07);
+      t = setTimeout(reset, 3000);
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════
