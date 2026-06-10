@@ -2255,12 +2255,10 @@ function spawnTrainer() {
   const i = (Math.random() * TRAINER_NAMES.length) | 0;
   wildTrainer = { x: chosen.x, y: chosen.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i],
                   approaching: true,
-                  _w: { st: 'idle', dir: 'down', fromX: chosen.x * TILE_SIZE, fromY: chosen.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y, path, pi: 0 } };
+                  _w: { st: 'idle', dir: 'down', fromX: chosen.x * TILE_SIZE, fromY: chosen.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y, spawnX: chosen.x, spawnY: chosen.y, path, pi: 0 } };
   beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
   showMessage(`👀 ${wildTrainer.name} spotted you — here they come!`);
-  clearTimeout(trainerTimerId);
-  trainerTimerId = setTimeout(() => { wildTrainer = null; scheduleSpawn(); }, 30000);  // wanders off if ignored
-  return true;
+  return true;   // wait-timer starts on ARRIVAL (see tickTrainer), so the walk-in doesn't eat into it
 }
 // Breadth-first shortest path over walkable tiles from (sx,sy) to (tx,ty).
 // Returns the tiles to step onto (excluding the start), or null if unreachable.
@@ -2284,20 +2282,39 @@ function bfsPath(sx, sy, tx, ty) {
   }
   return null;
 }
-// Walk an approaching trainer along its pre-computed path, one tile at a time.
+// Walk an approaching (or departing) trainer along its path, one tile at a time.
 function tickTrainer(ts) {
   const t = wildTrainer;
-  if (!t || t.zone !== currentZone || !t.approaching || !t._w) return;
+  if (!t || t.zone !== currentZone || !t._w || (!t.approaching && !t.leaving)) return;
   const w = t._w;
   if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return;       // mid-step
-  if (t.x === w.destX && t.y === w.destY) { t.approaching = false; w.st = 'idle'; return; }   // arrived → ready to battle
+  // Arrived at your square → stop, get excited, and start the give-up countdown.
+  if (t.approaching && t.x === w.destX && t.y === w.destY) { trainerArrived(); return; }
   const next = w.path && w.path[w.pi];
-  if (!next || !npcStandOK(next.x, next.y, t)) { t.approaching = false; w.st = 'idle'; return; }   // path end, or you stepped onto it → stop
+  if (t.approaching && (!next || !npcStandOK(next.x, next.y, t))) { trainerArrived(); return; }   // you stepped onto the path → stop here
+  if (t.leaving && (!next || !npcStandOK(next.x, next.y, t))) { clearTrainer(); scheduleSpawn(); return; }   // walked back out (or blocked) → gone
   w.pi++;
   w.fromX = t.x * TILE_SIZE; w.fromY = t.y * TILE_SIZE;
   const dx = next.x - t.x, dy = next.y - t.y;
   t.x = next.x; t.y = next.y; w.animTs = ts; w.st = 'walk';
   w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+}
+// Trainer reached your square: hold position, bounce excitedly, and wait TRAINER_WAIT_MS
+// for you to come battle. Ignore them and they'll walk back the way they came.
+function trainerArrived() {
+  const t = wildTrainer; if (!t || !t._w) return;
+  t.approaching = false; t._w.st = 'idle';
+  clearTimeout(trainerTimerId);
+  trainerTimerId = setTimeout(startTrainerLeave, TRAINER_WAIT_MS);
+}
+// Gave up waiting → retrace the path back to where they entered, then despawn.
+function startTrainerLeave() {
+  const t = wildTrainer; if (!t || !t._w) return;
+  const w = t._w;
+  const back = (w.path || []).slice(0, Math.max(0, w.pi - 1)).reverse();   // tiles already walked, in reverse
+  back.push({ x: w.spawnX, y: w.spawnY });                                  // …finishing at the entrance tile
+  w.path = back; w.pi = 0; w.st = 'idle';
+  t.leaving = true;
 }
 function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
 
@@ -2389,6 +2406,7 @@ function tickGhosts(ts) {
 // 'free' roams the whole zone in short hops. They idle a while, pick a nearby
 // tile, walk to it at a calm pace, idle again — alive but never running off.
 const NPC_STEP_MS = 360;          // ms per tile (a relaxed walk)
+const TRAINER_WAIT_MS = 22000;    // how long a trainer waits at your square before giving up & walking off
 function npcStandOK(x, y, self) {
   const z = ZONE_INFO[currentZone], m = MAPS[currentZone];
   if (x < 1 || y < 1 || x >= z.cols - 1 || y >= z.rows - 1) return false;
@@ -2894,12 +2912,16 @@ function drawNPCE(n, ts) {
 }
 function drawTrainerE(t, ts) {
   const w = t._w;
-  let bx = t.x * TILE_SIZE, by = t.y * TILE_SIZE, dir = 'down', hop = 0;
-  if (w && w.st === 'walk') {                          // striding toward you
+  let bx = t.x * TILE_SIZE, by = t.y * TILE_SIZE, dir = (w && w.dir) || 'down', hop = 0;
+  if (w && w.st === 'walk') {                          // striding toward you (or away)
     const k = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
     bx = w.fromX + (t.x * TILE_SIZE - w.fromX) * k;
     by = w.fromY + (t.y * TILE_SIZE - w.fromY) * k;
     dir = w.dir; hop = Math.sin(k * Math.PI * 2) * -1.5;
+  } else if (!t.approaching && !t.leaving) {           // arrived & waiting → two excited hops, a beat, repeat
+    const cyc = ts % 1500;
+    if (cyc < 280) hop = -Math.abs(Math.sin((cyc / 280) * Math.PI)) * 7;               // hop 1
+    else if (cyc < 560) hop = -Math.abs(Math.sin(((cyc - 280) / 280) * Math.PI)) * 7;  // hop 2
   }
   const px = bx - camX + TILE_SIZE / 2, py = by - camY + hop;
   drawShadow(px, by - camY + TILE_SIZE - 4, 11);
@@ -2907,8 +2929,10 @@ function drawTrainerE(t, ts) {
     ctx.textAlign = 'center'; ctx.font = '22px serif';
     ctx.fillText(t.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
   }
-  ctx.textAlign = 'center'; ctx.font = '14px serif';
-  ctx.fillText(t.approaching ? '👀' : '❗', px, py - 8 + Math.sin(ts * 0.006) * 2);   // approaching → spotted; arrived → battle me!
+  if (!t.leaving) {                                   // approaching → spotted; arrived → battle me!  (no bubble once they give up)
+    ctx.textAlign = 'center'; ctx.font = '14px serif';
+    ctx.fillText(t.approaching ? '👀' : '❗', px, py - 8 + Math.sin(ts * 0.006) * 2);
+  }
 }
 function drawGhostE(g, ts) {
   const px = g.x * TILE_SIZE - camX, py = g.y * TILE_SIZE - camY;
