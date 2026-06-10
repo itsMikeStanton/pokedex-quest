@@ -247,24 +247,24 @@ const NPCS = [
     'mrow. Mew? MEOW! ...meeeeeeeeeow.',
     '❤️',
   ] },
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', lines: () => [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
   ] },
-  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', lines: () => [
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, lines: () => [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', lines: () => [
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, lines: () => [
     `Waves are perfect today, ${saveName}!`,
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
-  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', lines: () => [
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', wander: 'free', lines: () => [
     `...you wandered this deep into the forest, ${saveName}? Impressive.`,
     `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
   ] },
-  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, art: 'ash', lines: () => {
+  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, art: 'ash', wander: 3, lines: () => {
     const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
     if (caughtIds.size === POKEMON_DATA.length)
       return [`You caught them ALL, ${saveName}?! You're a true Lukeymon Master! 🌟`];
@@ -279,7 +279,7 @@ const NPCS = [
             'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
             'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.'];
   } },
-  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, art: 'misty', lines: () => {
+  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, art: 'misty', wander: 3, lines: () => {
     const birds = [144, 145, 146].filter(id => caughtIds.has(id)).length;
     if (birds === 3)
       return [`You tamed all three legendary birds, ${saveName}?! Amazing!`,
@@ -288,7 +288,7 @@ const NPCS = [
             'A Water buddy lets you surf across deep water. 🌊',
             'Moltres throwing Fire? Douse it with Water, Rock or Ground!'];
   } },
-  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, art: 'brock', lines: () => {
+  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, art: 'brock', wander: 3, lines: () => {
     if (wonGame)
       return [`Champion already, ${saveName}? Let me cook your team a victory feast! 🍳`,
               'Remember — only GROUND truly shrugs off Zapdos\'s Electric.'];
@@ -380,12 +380,12 @@ const NPCS = [
   { zone: 1, x: 5, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
     `Mornin', ${saveName}! The fish are biting today.`,
     'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
-  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'sailor', gift: 0, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
+  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'sailor', gift: 0, wander: 3, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
   // ── Sunpetal village (zone 13) ──
   { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', art: 'gardener', gift: 20, lines: () => [
     `These sunpetals only bloom for kind hearts like yours, ${saveName}. 🌻`,
     'Grass Lukéymon adore it here.' ] },
-  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', art: 'villagekid', gift: 0, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
+  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', art: 'villagekid', gift: 0, wander: 3, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
 
   // ── Inside the Gym (zone 12) ──
   { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', art: 'rocky', gift: 0, gymLeader: true,
@@ -1740,6 +1740,7 @@ function loop(ts) {
       if (moved) { lastMoveTs = ts; if (buddyIsSwift()) learnTip('swift'); }
     }
     tickGhosts(ts);
+    tickNpcs(ts);
     if (zoneSlide) drawZoneSlide(ts);
     else           drawWorld(ts);
   }
@@ -2319,6 +2320,73 @@ function tickGhosts(ts) {
   if (nightGhost && ts > _ghostMoveTs) { _ghostMoveTs = ts + 1500; ghostStep(); }
 }
 
+// ── Wandering NPCs ───────────────────────────────────
+// NPCs flagged `wander: N` stroll within N tiles of where they start; `wander:
+// 'free' roams the whole zone in short hops. They idle a while, pick a nearby
+// tile, walk to it at a calm pace, idle again — alive but never running off.
+const NPC_STEP_MS = 360;          // ms per tile (a relaxed walk)
+function npcStandOK(x, y, self) {
+  const z = ZONE_INFO[currentZone], m = MAPS[currentZone];
+  if (x < 1 || y < 1 || x >= z.cols - 1 || y >= z.rows - 1) return false;
+  const t = m[y][x];
+  if (isObstacleTile(t) || t === T.WATER || t === T.ICE || t === T.LAVA ||
+      t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
+  if (decorSolidAt(currentZone, x, y) || portalAt(currentZone, x, y) || buildingFootprintSolid(currentZone, x, y)) return false;
+  if (x === playerX && y === playerY) return false;
+  if (lairAt(currentZone, x, y) || roamerAt(currentZone, x, y) || trainerAt(currentZone, x, y)) return false;
+  for (const o of NPCS) if (o !== self && o.zone === currentZone && o.x === x && o.y === y) return false;
+  return true;
+}
+function npcPickDest(n) {
+  const free = n.wander === 'free';
+  const rad = free ? 6 : n.wander;                 // free roams from where it stands; bounded from home
+  const ox = free ? n.x : n.hx, oy = free ? n.y : n.hy;
+  for (let tries = 0; tries < 14; tries++) {
+    const tx = ox + ((Math.random() * (2 * rad + 1)) | 0) - rad;
+    const ty = oy + ((Math.random() * (2 * rad + 1)) | 0) - rad;
+    if ((tx !== n.x || ty !== n.y) && npcStandOK(tx, ty, n)) return { x: tx, y: ty };
+  }
+  return null;
+}
+function npcStartStep(n, ts) {                       // step one tile toward the destination
+  const w = n._w;
+  const ddx = Math.sign(w.destX - n.x), ddy = Math.sign(w.destY - n.y);
+  const opts = Math.abs(w.destX - n.x) >= Math.abs(w.destY - n.y)
+    ? [[ddx, 0], [0, ddy], [0, -ddy], [-ddx, 0]] : [[0, ddy], [ddx, 0], [-ddx, 0], [0, -ddy]];
+  for (const [dx, dy] of opts) {
+    if (!dx && !dy) continue;
+    const nx = n.x + dx, ny = n.y + dy;
+    if (npcStandOK(nx, ny, n)) {
+      w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
+      n.x = nx; n.y = ny;                            // claim the tile now; the sprite slides into it
+      w.animTs = ts; w.st = 'walk';
+      w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+      return true;
+    }
+  }
+  return false;                                      // boxed in — give up this trip
+}
+function tickNpcs(ts) {
+  if (ZONE_INFO[currentZone].interior) return;
+  for (const n of NPCS) {
+    if (n.wander == null || n.zone !== currentZone) continue;
+    if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
+    let w = n._w;
+    if (!w) { w = n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts + 1200 + Math.random() * 3000, destX: n.x, destY: n.y }; }
+    if (w.frozenUntil && ts < w.frozenUntil) continue;   // just talked to — hold still a beat
+    if (w.st === 'idle') {
+      if (ts >= w.until) {
+        const d = npcPickDest(n);
+        if (d) { w.destX = d.x; w.destY = d.y; if (!npcStartStep(n, ts)) w.until = ts + 1500; }
+        else w.until = ts + 1500;
+      }
+    } else if (ts - w.animTs >= NPC_STEP_MS) {
+      if (n.x === w.destX && n.y === w.destY) { w.st = 'idle'; w.dir = 'down'; w.until = ts + 2500 + Math.random() * 4500; }
+      else if (!npcStartStep(n, ts)) { w.st = 'idle'; w.until = ts + 1500; }
+    }
+  }
+}
+
 // ── Time/weather-specific wild spawns ────────────────
 // SPAWN_COND[id] = { night?: 'only'|'more', rain?: 'only'|'more' }.
 //   'only' → appears ONLY under that condition;  'more' → appears 3× as often then.
@@ -2408,6 +2476,7 @@ let npcLines = [];   // resolved dialogue for the NPC currently being talked to
 
 function talkNPC(npc) {
   currentNPC = npc;
+  if (npc._w) { npc._w.st = 'idle'; npc._w.dir = 'down'; npc._w.until = npc._w.frozenUntil = performance.now() + 4000; }   // a wanderer stops to chat
   npcLineIdx = 0;
   clearTimeout(spawnTimerId);
   // 🎵 A Jigglypuff buddy hums them straight to sleep — no chatting (or gifts).
@@ -2738,10 +2807,18 @@ function drawStoneE(s, ts) {
   ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
 }
 function drawNPCE(n, ts) {
-  const px = n.x * TILE_SIZE - camX + TILE_SIZE / 2;
-  const py = n.y * TILE_SIZE - camY;
-  drawShadow(px, py + TILE_SIZE - 4, 11);
-  if (n.art && drawCharField(n.art, 'down', px, py, 53)) return;   // 25% larger so faces read better
+  const w = n._w;
+  let bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE, dir = 'down', hop = 0;
+  if (w && w.st === 'walk') {                        // sliding between tiles
+    const t = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
+    bx = w.fromX + (n.x * TILE_SIZE - w.fromX) * t;
+    by = w.fromY + (n.y * TILE_SIZE - w.fromY) * t;
+    dir = w.dir;
+    hop = Math.sin(t * Math.PI * 2) * -1.5;          // a gentle step-hop suggests walking
+  }
+  const px = bx - camX + TILE_SIZE / 2, py = by - camY + hop;
+  drawShadow(px, by - camY + TILE_SIZE - 4, 11);
+  if (n.art && drawCharField(n.art, dir, px, py, 53)) return;   // 25% larger so faces read better
   ctx.textAlign = 'center'; ctx.font = '22px serif';
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
 }
