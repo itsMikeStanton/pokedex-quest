@@ -2242,25 +2242,62 @@ function spawnTrainer() {
   let pool = collect((c, r) => (c < vc0 || c > vc1 || r < vr0 || r > vr1) && dToT({ x: c, y: r }) <= 12);   // off-screen, not too far
   if (!pool.length) pool = collect((c, r) => c === 1 || c === cols - 2 || r === 1 || r === rows - 2);        // edge entrance
   if (!pool.length) pool = collect((c, r) => { const a = map[r - 1] && map[r - 1][c]; return a === T.HOUSE || a === T.SHOP || a === T.HOSPITAL || a === T.GYM; });  // a building door
-  const sp = pool.length ? pool.sort((a, b) => dToT(a) - dToT(b))[0] : tgt;   // closest approach point, or just appear
+  // Find an approach point that can actually REACH the target (BFS), trying the
+  // closest few. If nothing can path to it, cancel — no trainers popping out of
+  // thin air or getting stuck behind walls/water.
+  pool.sort((a, b) => dToT(a) - dToT(b));
+  let chosen = null, path = null;
+  for (const cand of pool.slice(0, 8)) {
+    const p = bfsPath(cand.x, cand.y, tgt.x, tgt.y);
+    if (p && p.length) { chosen = cand; path = p; break; }
+  }
+  if (!chosen) return false;                          // boxed-in target — skip (a wild Lukéymon spawns instead)
   const i = (Math.random() * TRAINER_NAMES.length) | 0;
-  wildTrainer = { x: sp.x, y: sp.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i],
-                  approaching: (sp !== tgt),
-                  _w: { st: 'idle', dir: 'down', fromX: sp.x * TILE_SIZE, fromY: sp.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y } };
+  wildTrainer = { x: chosen.x, y: chosen.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i],
+                  approaching: true,
+                  _w: { st: 'idle', dir: 'down', fromX: chosen.x * TILE_SIZE, fromY: chosen.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y, path, pi: 0 } };
   beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
-  showMessage(wildTrainer.approaching ? `👀 ${wildTrainer.name} spotted you — here they come!` : `❗ ${wildTrainer.name} wants to battle! Walk up to them.`);
+  showMessage(`👀 ${wildTrainer.name} spotted you — here they come!`);
   clearTimeout(trainerTimerId);
   trainerTimerId = setTimeout(() => { wildTrainer = null; scheduleSpawn(); }, 30000);  // wanders off if ignored
   return true;
 }
-// Walk an approaching trainer toward their target spot, one tile at a time.
+// Breadth-first shortest path over walkable tiles from (sx,sy) to (tx,ty).
+// Returns the tiles to step onto (excluding the start), or null if unreachable.
+function bfsPath(sx, sy, tx, ty) {
+  const W = ZONE_INFO[currentZone].cols, key = (x, y) => y * W + x;
+  const prev = new Map(), seen = new Set([key(sx, sy)]), q = [[sx, sy]];
+  let qi = 0;
+  while (qi < q.length) {
+    const [cx, cy] = q[qi++];
+    if (cx === tx && cy === ty) {
+      const path = []; let k = key(cx, cy);
+      while (k !== key(sx, sy)) { path.push({ x: k % W, y: (k / W) | 0 }); k = prev.get(k); }
+      return path.reverse();
+    }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy, k = key(nx, ny);
+      if (seen.has(k)) continue;
+      if (!(nx === tx && ny === ty) && !npcStandOK(nx, ny, null)) continue;   // target tile is pre-validated
+      seen.add(k); prev.set(k, key(cx, cy)); q.push([nx, ny]);
+    }
+  }
+  return null;
+}
+// Walk an approaching trainer along its pre-computed path, one tile at a time.
 function tickTrainer(ts) {
   const t = wildTrainer;
   if (!t || t.zone !== currentZone || !t.approaching || !t._w) return;
   const w = t._w;
   if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return;       // mid-step
-  if (t.x === w.destX && t.y === w.destY) { t.approaching = false; w.st = 'idle'; w.dir = 'down'; return; }   // arrived → ready to battle
-  if (!npcStartStep(t, ts)) { t.approaching = false; w.st = 'idle'; w.dir = 'down'; }   // boxed in → just wait here
+  if (t.x === w.destX && t.y === w.destY) { t.approaching = false; w.st = 'idle'; return; }   // arrived → ready to battle
+  const next = w.path && w.path[w.pi];
+  if (!next || !npcStandOK(next.x, next.y, t)) { t.approaching = false; w.st = 'idle'; return; }   // path end, or you stepped onto it → stop
+  w.pi++;
+  w.fromX = t.x * TILE_SIZE; w.fromY = t.y * TILE_SIZE;
+  const dx = next.x - t.x, dy = next.y - t.y;
+  t.x = next.x; t.y = next.y; w.animTs = ts; w.st = 'walk';
+  w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
 }
 function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
 
