@@ -3459,6 +3459,45 @@ function drawRain(ts, rf) {
 function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return nightMode; }
 function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  return rainMode; }
 
+// ── Soft tile corners ────────────────────────────────────────────
+// Cheap de-blockifier (no new art): after the flat ground grid is drawn, round the
+// OUTER corners where one outdoor terrain pokes into another, so paths/grass/sand/
+// water read as organic blobs instead of hard squares. At each corner where the two
+// edge-neighbours AND the diagonal are all the same *other* terrain, we overpaint
+// that neighbour's colour in the little sliver outside a quarter-circle.
+let TILE_ROUND = true;            // master toggle (window.TILE_ROUND to flip live)
+const TILE_ROUND_R = 11;          // corner radius in px (0..16); bigger = rounder
+const TILE_BASE_COLOR = {         // representative colour per roundable terrain
+  [T.PATH]: '#d0b068', [T.GRASS]: '#38b038', [T.WATER]: '#2060d0',
+  [T.SAND]: '#e8c870', [T.CITY]: '#909090',
+};
+function roundOuterCorner(dx, dy, which, fill) {
+  const R = TILE_ROUND_R, TS = TILE_SIZE, H = Math.PI / 2;
+  ctx.beginPath();
+  if (which === 'tl')      { ctx.moveTo(dx, dy);            ctx.lineTo(dx + R, dy);            ctx.arc(dx + R,      dy + R,      R, 3 * H, 2 * H, true); }
+  else if (which === 'tr') { ctx.moveTo(dx + TS, dy);       ctx.lineTo(dx + TS, dy + R);       ctx.arc(dx + TS - R, dy + R,      R, 0,     -H,    true); }
+  else if (which === 'bl') { ctx.moveTo(dx, dy + TS);       ctx.lineTo(dx, dy + TS - R);       ctx.arc(dx + R,      dy + TS - R, R, 2 * H,  H,    true); }
+  else                     { ctx.moveTo(dx + TS, dy + TS);  ctx.lineTo(dx + TS - R, dy + TS);  ctx.arc(dx + TS - R, dy + TS - R, R, H,     0,    true); }
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
+function roundTileCorners(map, startR, endR, startC, endC, rows, cols) {
+  const TS = TILE_SIZE, col = t => TILE_BASE_COLOR[t];
+  const at = (r, c) => (r >= 0 && r < rows && c >= 0 && c < cols) ? map[r][c] : -1;
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      if (col(map[r][c]) === undefined) continue;     // not a roundable terrain
+      const t = map[r][c];
+      const dx = Math.floor(c * TS - camX), dy = Math.floor(r * TS - camY);
+      const up = at(r - 1, c), dn = at(r + 1, c), lf = at(r, c - 1), rt = at(r, c + 1);
+      const ul = at(r - 1, c - 1), ur = at(r - 1, c + 1), dl = at(r + 1, c - 1), dr = at(r + 1, c + 1);
+      if (up !== t && up === lf && up === ul && col(up) !== undefined) roundOuterCorner(dx, dy, 'tl', col(up));
+      if (up !== t && up === rt && up === ur && col(up) !== undefined) roundOuterCorner(dx, dy, 'tr', col(up));
+      if (dn !== t && dn === lf && dn === dl && col(dn) !== undefined) roundOuterCorner(dx, dy, 'bl', col(dn));
+      if (dn !== t && dn === rt && dn === dr && col(dn) !== undefined) roundOuterCorner(dx, dy, 'br', col(dn));
+    }
+  }
+}
+
 function drawWorld(ts) {
   const renderPos = getRenderPos(ts);
   updateCamera(getRenderPos(ts, true));   // centre on the true grid position, not the bob/hop
@@ -3502,6 +3541,7 @@ function drawWorld(ts) {
       }
     }
   }
+  if (TILE_ROUND && TILE_ROUND_R > 0) roundTileCorners(map, startR, endR, startC, endC, rows, cols);
   ctx.imageSmoothingEnabled = smPrev;
   const zoneTints = {
     4: 'rgba(255,80,0,0.14)',
