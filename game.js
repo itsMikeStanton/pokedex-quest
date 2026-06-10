@@ -587,9 +587,26 @@ function npcAtNightSpot(n) { return !!(n.nightSpot && isNightNow()); }
 function npcView(n) {                                 // effective {zone,x,y} right now
   return npcAtNightSpot(n) ? n.nightSpot : { zone: n.zone, x: n.x, y: n.y };
 }
-function npcIsHome(n) { return isNightNow() && !n.nightOwl && !n.nightSpot; }
+// How visible an NPC is right now (1 = full daylight, 0 = tucked in for the night).
+// As dusk deepens they fade out (and walk off home — see tickNpcBedtime); at dawn
+// they fade back in. Night owls & relocated NPCs (Surfer) never bed down.
+const NPC_BED_LO = 0.12, NPC_BED_HI = 0.60;          // fade across this slice of the night ramp
+function npcNightFactor() { return nightMode ? 1 : (nightCycle ? autoNight(performance.now()) : 0); }
+function npcNightRising() {                           // true while heading INTO night (dusk), false at dawn
+  if (nightMode) return true;
+  if (!nightCycle) return false;
+  const p = (performance.now() % DAYNIGHT_CYCLE_MS) / DAYNIGHT_CYCLE_MS;
+  return p >= 0.45 && p < 0.95;                       // dusk→night; the dawn window (p≥0.95) is falling
+}
+function npcBedAlpha(n) {
+  if (n.nightOwl || n.nightSpot) return 1;
+  if (ZONE_INFO[n.zone] && ZONE_INFO[n.zone].night) return 0;   // always-night zone → nobody about
+  if (ZONE_INFO[n.zone] && (ZONE_INFO[n.zone].interior || ZONE_INFO[n.zone].cave)) return 1;  // indoors/caves: unaffected
+  const nf = npcNightFactor();
+  return Math.max(0, Math.min(1, (NPC_BED_HI - nf) / (NPC_BED_HI - NPC_BED_LO)));
+}
 function npcAt(zone, x, y) {
-  return NPCS.find(n => { if (npcIsHome(n)) return false; const v = npcView(n); return v.zone === zone && v.x === x && v.y === y; }) || null;
+  return NPCS.find(n => { if (npcBedAlpha(n) < 0.5) return false; const v = npcView(n); return v.zone === zone && v.x === x && v.y === y; }) || null;
 }
 function collectibleAt(zone, x, y) {
   return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
@@ -1785,6 +1802,7 @@ function loop(ts) {
       if (moved) { lastMoveTs = ts; if (buddyIsSwift()) learnTip('swift'); }
     }
     tickGhosts(ts);
+    tickNpcBedtime(ts);
     tickNpcs(ts);
     tickTrainer(ts);
     if (zoneSlide) drawZoneSlide(ts);
@@ -2502,6 +2520,8 @@ function tickNpcs(ts) {
   for (const n of NPCS) {
     if (n.wander == null || n.zone !== currentZone) continue;
     if (npcAtNightSpot(n)) continue;                   // off at their night spot — don't wander the day position
+    if (n._bt && n._bt.phase !== 'awake') continue;    // heading to bed / asleep → the bedtime system drives them, not the wander
+    if (npcBedAlpha(n) < 0.98) continue;               // dusk/night/dawn → fading out, hold the wander
     if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
     let w = n._w;
     if (!w) { w = n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts + 1200 + Math.random() * 3000, destX: n.x, destY: n.y }; }
@@ -2518,6 +2538,65 @@ function tickNpcs(ts) {
         if (n.x === n.hx && n.y === n.hy) w.dir = 'down';   // back home → face forward; otherwise keep last facing
         w.until = ts + 2500 + Math.random() * 4500;
       } else if (!npcStartStep(n, ts)) { w.st = 'idle'; w.until = ts + 1500; }   // blocked → stop, keep facing
+    }
+  }
+}
+// Pick an exit for an NPC heading to bed: the nearest reachable tile beside a
+// building door, else a map-edge tile (they wander off the screen). Returns a
+// BFS path, [] if already at an exit, or null if boxed in.
+function npcBedTarget(n) {
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone], { cols, rows } = z;
+  if (!map) return null;
+  const isBldg = t => t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
+  const cand = [];
+  for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
+    if (!(c === n.x && r === n.y) && !npcStandOK(c, r, n)) continue;
+    const nearBldg = isBldg(map[r - 1] && map[r - 1][c]) || isBldg(map[r + 1] && map[r + 1][c]) || isBldg(map[r][c - 1]) || isBldg(map[r][c + 1]);
+    const edge = (c <= 1 || c >= cols - 2 || r <= 1 || r >= rows - 2);
+    if (nearBldg || edge) cand.push({ x: c, y: r, pri: nearBldg ? 0 : 1 });
+  }
+  if (!cand.length) return null;
+  const d = p => Math.abs(p.x - n.x) + Math.abs(p.y - n.y);
+  cand.sort((a, b) => (a.pri - b.pri) || (d(a) - d(b)));   // a building door first, then nearest
+  for (const c of cand.slice(0, 10)) {
+    if (c.x === n.x && c.y === n.y) return [];
+    const p = bfsPath(n.x, n.y, c.x, c.y);
+    if (p && p.length) return p;
+  }
+  return null;
+}
+// Drive the dusk walk-off and dawn return for NPCs in the current zone. Off-zone
+// NPCs just aren't there at night (nobody's watching), handled by npcBedAlpha.
+function tickNpcBedtime(ts) {
+  if (ZONE_INFO[currentZone].interior || ZONE_INFO[currentZone].cave) return;
+  for (const n of NPCS) {
+    if (n.nightOwl || n.nightSpot || n.zone !== currentZone) continue;
+    if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
+    if (!n._w) n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts, destX: n.x, destY: n.y };
+    const a = npcBedAlpha(n), bt = n._bt || (n._bt = { phase: 'awake', path: null, pi: 0, gone: false });
+    const w = n._w;
+    if (a <= 0.03) {                                   // fully dark → asleep; reset home invisibly so dawn brings them back there
+      if (!bt.gone) {
+        bt.gone = true; bt.phase = 'asleep'; bt.path = null;
+        n.x = n.hx; n.y = n.hy;
+        w.st = 'idle'; w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE; w.destX = n.x; w.destY = n.y; w.until = ts + 1500; w.dir = 'down';
+      }
+      continue;
+    }
+    if (bt.phase !== 'awake' && a >= 0.98) { bt.phase = 'awake'; bt.gone = false; w.st = 'idle'; }   // full daylight → resume normal life
+    if (bt.phase === 'awake' && npcNightRising() && npcNightFactor() > 0.02) {   // first hint of dusk → set off for an exit (once)
+      const p = npcBedTarget(n);
+      bt.path = (p && p.length) ? p : null; bt.pi = 0; bt.phase = 'leaving'; w.st = 'idle';
+    }
+    if (bt.phase === 'leaving' && bt.path && !(w.st === 'walk' && ts - w.animTs < NPC_STEP_MS)) {
+      const next = bt.path[bt.pi];
+      if (next && npcStandOK(next.x, next.y, n)) {
+        bt.pi++;
+        w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
+        const dx = next.x - n.x, dy = next.y - n.y;
+        n.x = next.x; n.y = next.y; w.animTs = ts; w.st = 'walk';
+        w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+      } else { w.st = 'idle'; bt.path = null; }        // arrived (or blocked) → stand and finish fading
     }
   }
 }
@@ -3452,9 +3531,13 @@ function drawWorld(ts) {
   for (const s of STONE_FINDS)
     if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
   for (const n of NPCS) {
-    if (npcIsHome(n)) continue;
+    const a = npcBedAlpha(n);
+    if (a <= 0.02) continue;                           // tucked in for the night
     const v = npcView(n);
-    if (v.zone === currentZone) sprites.push({ y: (v.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+    if (v.zone === currentZone) sprites.push({ y: (v.y + 1) * TILE_SIZE, o: 1, draw: () => {
+      if (a >= 0.99) { drawNPCE(n, ts); return; }
+      ctx.save(); ctx.globalAlpha = a; drawNPCE(n, ts); ctx.restore();   // fading out at dusk / in at dawn
+    } });
   }
   if (wildTrainer && wildTrainer.zone === currentZone)
     sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
