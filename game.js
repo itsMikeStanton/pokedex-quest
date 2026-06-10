@@ -262,7 +262,7 @@ const NPCS = [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, lines: () => [
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, nightSpot: { zone: 20, x: 14, y: 3, dir: 'left' }, lines: () => [
     `Waves are perfect today, ${saveName}!`,
     'Water Lukeymon really love a gentle pet. 🤚',
   ] },
@@ -573,12 +573,17 @@ function checkEvoNotify() {
 }
 function tickBond(id) { bondSteps[id] = (bondSteps[id] || 0) + 1; checkEvoNotify(); }
 
-// Most folks head home to bed at night; only "night owls" (the wild Hermit, the
-// patrolling Officer) stay out. Interiors never count as night, so families at
-// home are unaffected.
-function npcIsHome(n) { return isNightNow() && !n.nightOwl; }
+// Most folks head home to bed at night; "night owls" (the wild Hermit, the
+// patrolling Officer) stay out, and anyone with a nightSpot relocates there for
+// the evening (the Surfer goes to hang by the beach fire). Interiors never count
+// as night, so families at home are unaffected.
+function npcAtNightSpot(n) { return !!(n.nightSpot && isNightNow()); }
+function npcView(n) {                                 // effective {zone,x,y} right now
+  return npcAtNightSpot(n) ? n.nightSpot : { zone: n.zone, x: n.x, y: n.y };
+}
+function npcIsHome(n) { return isNightNow() && !n.nightOwl && !n.nightSpot; }
 function npcAt(zone, x, y) {
-  return NPCS.find(n => n.zone === zone && n.x === x && n.y === y && !npcIsHome(n)) || null;
+  return NPCS.find(n => { if (npcIsHome(n)) return false; const v = npcView(n); return v.zone === zone && v.x === x && v.y === y; }) || null;
 }
 function collectibleAt(zone, x, y) {
   return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
@@ -953,6 +958,29 @@ const _decorSolid = {};
 function decorSolidAt(zone, x, y) {
   let s = _decorSolid[zone];
   if (!s) { s = _decorSolid[zone] = new Set(); (DECOR[zone] || []).forEach(d => { if (d.solid) s.add(d.x + ',' + d.y); }); }
+  return s.has(x + ',' + y);
+}
+
+// ── Outdoor light props (streetlights, beach fire pit) ──
+// Placeholder art for now. Each casts a warm glow that blooms at night and fades
+// by day. light:'steady' = constant pool (streetlight); 'fire' = flickering campfire.
+const PROPS = [
+  { zone: 2,  x: 4,  y: 4,  s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
+  { zone: 2,  x: 13, y: 4,  s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
+  { zone: 2,  x: 4,  y: 11, s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
+  { zone: 2,  x: 13, y: 11, s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
+  { zone: 20, x: 13, y: 3,  s: 'firepit',     light: 'fire',   solid: true, h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
+];
+const _propImg = {};
+function propImg(key) {
+  let i = _propImg[key];
+  if (!i) { i = new Image(); i.src = 'art/prop/' + key + '.png?v=' + ART_V; _propImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+const _propSolid = {};
+function propSolidAt(zone, x, y) {
+  let s = _propSolid[zone];
+  if (!s) { s = _propSolid[zone] = new Set(); PROPS.forEach(p => { if (p.solid && p.zone === zone) s.add(p.x + ',' + p.y); }); }
   return s.has(x + ',' + y);
 }
 
@@ -1989,6 +2017,14 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // Outdoor light props (streetlight pole, fire pit) block movement too.
+  if (propSolidAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
   if (isObstacleTile(tile) && !surfing) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
@@ -2333,7 +2369,7 @@ function ghostAt(zone, x, y) { return (nightGhost && nightGhost.zone === zone &&
 function ghostTileOK(map, z, c, r) {
   const t = map[r][c];
   if (isObstacleTile(t) || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
-  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r)) return false;
+  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r) || propSolidAt(currentZone, c, r)) return false;
   if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r) || trainerAt(currentZone, c, r)) return false;
   return true;
 }
@@ -2417,7 +2453,7 @@ function npcStandOK(x, y, self) {
   const t = m[y][x];
   if (isObstacleTile(t) || t === T.WATER || t === T.ICE || t === T.LAVA ||
       t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
-  if (decorSolidAt(currentZone, x, y) || portalAt(currentZone, x, y) || buildingFootprintSolid(currentZone, x, y)) return false;
+  if (decorSolidAt(currentZone, x, y) || portalAt(currentZone, x, y) || buildingFootprintSolid(currentZone, x, y) || propSolidAt(currentZone, x, y)) return false;
   if (x === playerX && y === playerY) return false;
   if (lairAt(currentZone, x, y) || roamerAt(currentZone, x, y) || trainerAt(currentZone, x, y)) return false;
   for (const o of NPCS) if (o !== self && o.zone === currentZone && o.x === x && o.y === y) return false;
@@ -2458,6 +2494,7 @@ function tickNpcs(ts) {
   if (ZONE_INFO[currentZone].interior) return;
   for (const n of NPCS) {
     if (n.wander == null || n.zone !== currentZone) continue;
+    if (npcAtNightSpot(n)) continue;                   // off at their night spot — don't wander the day position
     if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
     let w = n._w;
     if (!w) { w = n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts + 1200 + Math.random() * 3000, destX: n.x, destY: n.y }; }
@@ -2899,6 +2936,15 @@ function drawStoneE(s, ts) {
   ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
 }
 function drawNPCE(n, ts) {
+  if (npcAtNightSpot(n)) {                            // relocated for the evening — stand still at the spot
+    const ns = n.nightSpot;
+    const px = ns.x * TILE_SIZE - camX + TILE_SIZE / 2, py = ns.y * TILE_SIZE - camY;
+    drawShadow(px, ns.y * TILE_SIZE - camY + TILE_SIZE - 4, 11);
+    if (n.art && drawCharField(n.art, ns.dir || 'down', px, py, 53)) return;
+    ctx.textAlign = 'center'; ctx.font = '22px serif';
+    ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+    return;
+  }
   const w = n._w;
   let bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE, dir = (w ? w.dir : 'down'), hop = 0;   // idle keeps the last facing
   if (w && w.st === 'walk') {                        // sliding between tiles
@@ -3222,6 +3268,33 @@ function zoneRain() {
   return rainLevel;                // elsewhere: the roaming weather
 }
 
+// Warm radial pools cast by the light props at night. Drawn with 'lighter' so
+// they brighten the dark overlay. Streetlights hold steady (a hair of breathing);
+// the fire pit flickers on layered noise like a campfire.
+function drawPropGlows(ts, nf) {
+  for (const p of PROPS) {
+    if (p.zone !== currentZone) continue;
+    const sx = p.x * TILE_SIZE + TILE_SIZE / 2 - camX;
+    const sy = (p.y + 1) * TILE_SIZE - camY + (p.gy || -16);   // glow origin near the lamp head / flames
+    let amp = nf, radius = (p.rad || 2.5) * TILE_SIZE;
+    if (p.light === 'fire') {
+      const flick = 0.78 + 0.14 * Math.sin(ts * 0.018) + 0.06 * Math.sin(ts * 0.043 + 2.1) + 0.05 * Math.sin(ts * 0.007 + 0.7);
+      amp *= flick; radius *= 0.9 + 0.12 * flick;
+    } else {
+      amp *= 0.96 + 0.04 * Math.sin(ts * 0.0015);   // barely-there breathing
+    }
+    const a = Math.min(0.6, 0.62 * amp);
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
+    g.addColorStop(0,   `rgba(${p.rgb},${a})`);
+    g.addColorStop(0.5, `rgba(${p.rgb},${a * 0.4})`);
+    g.addColorStop(1,   `rgba(${p.rgb},0)`);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, radius, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
 function drawWeather(ts, renderPos) {
   updateRainState(ts);                            // weather keeps evolving everywhere…
   const z = ZONE_INFO[currentZone];
@@ -3233,6 +3306,7 @@ function drawWeather(ts, renderPos) {
     if (buddyLightsCave())
       drawLightField(renderPos, ts, 0.0, 0.55 * nf, 0.62 * nf, '10,15,42', true, 1.3, 4.3);
     else { ctx.fillStyle = `rgba(10,15,42,${0.62 * nf})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    drawPropGlows(ts, nf);                          // warm pools punched back through the dark
   }
 
   // ── Rain ──
@@ -3359,12 +3433,21 @@ function drawWorld(ts) {
     const img = decorImg(d.s);
     if (img) pushStruct(sprites, img, d.x, d.y, Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE)));
   }
+  // Outdoor light props (streetlights, fire pit) — y-sorted so you walk behind the pole.
+  for (const p of PROPS) {
+    if (p.zone !== currentZone) continue;
+    const img = propImg(p.s);
+    if (img) pushStruct(sprites, img, p.x, p.y, p.h || 40);
+  }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
   for (const s of STONE_FINDS)
     if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
-  for (const n of NPCS)
-    if (n.zone === currentZone && !npcIsHome(n)) sprites.push({ y: (n.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+  for (const n of NPCS) {
+    if (npcIsHome(n)) continue;
+    const v = npcView(n);
+    if (v.zone === currentZone) sprites.push({ y: (v.y + 1) * TILE_SIZE, o: 1, draw: () => drawNPCE(n, ts) });
+  }
   if (wildTrainer && wildTrainer.zone === currentZone)
     sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
   if (nightGhost && nightGhost.zone === currentZone)
