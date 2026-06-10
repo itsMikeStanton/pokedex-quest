@@ -35,41 +35,9 @@ const EXITS = WORLD.exits;
 // Point-portals (cave mouths etc.): step onto (from, fx, fy) to warp to (to, tx, ty).
 const PORTALS = WORLD.portals || [];
 
-// ─── Building interiors ──────────────────────────────
-// Home & the Poké Mart are authored in world.js now (so the editor can manage
-// them). This is just a FALLBACK for an older world.js that predates them: it
-// appends the interiors at the next free ids — never the fixed 9/10 — so it can
-// never collide with zones the editor added.
-(function setupInteriors() {
-  if (WORLD.zones.some(z => z.interior)) return;     // already defined in world.js
-  const F = T.FLOOR, W = T.WALL, D = T.DOOR;
-  function room(cols, rows, door) {
-    const m = [];
-    for (let y = 0; y < rows; y++) {
-      const row = [];
-      for (let x = 0; x < cols; x++)
-        row.push(x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ? W : F);
-      m.push(row);
-    }
-    m[door[1]][door[0]] = D;
-    return m;
-  }
-  const homeId = WORLD.zones.length;
-  WORLD.zones.push({ id: homeId, name: 'Home', cols: 11, rows: 9, base: F, mapCol: null, mapRow: null, icon: '🏠', interior: true });
-  WORLD.maps[homeId] = room(11, 9, [5, 8]);
-  const martId = WORLD.zones.length;
-  WORLD.zones.push({ id: martId, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
-  WORLD.maps[martId] = room(11, 8, [5, 7]);
-
-  // (The Meadow's home tile @8,7 and re-spaced houses now live in world.js so the
-  // editor stays in sync; here we only build the home/mart interior rooms + portals.)
-  WORLD.portals.push(
-    { from: 0,      fx: 8,  fy: 7, to: homeId, tx: 5,  ty: 7 },   // step on the house → inside home
-    { from: homeId, fx: 5,  fy: 8, to: 0,      tx: 8,  ty: 8 },   // home door → in front of the house
-    { from: 0,      fx: 10, fy: 5, to: martId, tx: 5,  ty: 6 },   // step on the shop → inside the mart
-    { from: martId, fx: 5,  fy: 7, to: 0,      tx: 10, ty: 6 },   // mart door → in front of the shop
-  );
-})();
+// Every building interior — Home, Poké Mart, Hospital, Gym, Dad's House, the
+// outlying marts/lodges — is authored entirely in world.js (zones + portals) and
+// editable in editor.html. No buildings are special-cased in code.
 
 const BARRIERS = {
   log:   { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to burn these logs!',       cleared: '🔥 Your Fire buddy burns away the logs!',      sign: '🔥' },
