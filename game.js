@@ -2366,6 +2366,8 @@ function npcStandOK(x, y, self) {
 }
 function npcPickDest(n) {
   const free = n.wander === 'free';
+  // A third of the time a bounded wanderer heads back to its starting square.
+  if (!free && Math.random() < 0.33 && (n.hx !== n.x || n.hy !== n.y) && npcStandOK(n.hx, n.hy, n)) return { x: n.hx, y: n.hy };
   const rad = free ? 6 : n.wander;                 // free roams from where it stands; bounded from home
   const ox = free ? n.x : n.hx, oy = free ? n.y : n.hy;
   for (let tries = 0; tries < 14; tries++) {
@@ -2408,8 +2410,11 @@ function tickNpcs(ts) {
         else w.until = ts + 1500;
       }
     } else if (ts - w.animTs >= NPC_STEP_MS) {
-      if (n.x === w.destX && n.y === w.destY) { w.st = 'idle'; w.dir = 'down'; w.until = ts + 2500 + Math.random() * 4500; }
-      else if (!npcStartStep(n, ts)) { w.st = 'idle'; w.until = ts + 1500; }
+      if (n.x === w.destX && n.y === w.destY) {
+        w.st = 'idle';
+        if (n.x === n.hx && n.y === n.hy) w.dir = 'down';   // back home → face forward; otherwise keep last facing
+        w.until = ts + 2500 + Math.random() * 4500;
+      } else if (!npcStartStep(n, ts)) { w.st = 'idle'; w.until = ts + 1500; }   // blocked → stop, keep facing
     }
   }
 }
@@ -2458,7 +2463,7 @@ function spawnWild() {
   if (NO_WILD_ZONES.has(currentZone)) { scheduleSpawn(); return; }   // fully-peaceful passage zone
 
   // Now and then a wandering trainer turns up instead, looking for a quick battle.
-  if (!wildTrainer && Math.random() < 0.18 && spawnTrainer()) return;
+  if (!wildTrainer && Math.random() < 0.09 && spawnTrainer()) return;
 
   // Pick an uncaught Pokémon for the current zone — respecting night & rain.
   const night = isNightNow(), rain = isRainNow();
@@ -2836,7 +2841,7 @@ function drawStoneE(s, ts) {
 }
 function drawNPCE(n, ts) {
   const w = n._w;
-  let bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE, dir = 'down', hop = 0;
+  let bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE, dir = (w ? w.dir : 'down'), hop = 0;   // idle keeps the last facing
   if (w && w.st === 'walk') {                        // sliding between tiles
     const t = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
     bx = w.fromX + (n.x * TILE_SIZE - w.fromX) * t;
