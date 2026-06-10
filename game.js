@@ -61,11 +61,18 @@ const PORTALS = WORLD.portals || [];
   WORLD.zones.push({ id: martId, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
   WORLD.maps[martId] = room(11, 8, [5, 7]);
 
-  WORLD.maps[0][6][8] = T.HOUSE;   // your home, placed in the Meadow (the shop tile already exists)
+  WORLD.maps[0][7][8] = T.HOUSE;   // your home, placed in the Meadow — one tile down so its
+                                   // footprint clears the mart's (the shop tile already exists)
+  // Re-space the Meadow's decorative houses so every building gets a clear 3×2
+  // footprint (the enterable house stays at 16,11; these two had overlapping /
+  // off-edge footprints).
+  WORLD.maps[0][11][14] = T.PATH;    // clear the old decorative house (overlapped 16,11)
+  WORLD.maps[0][11][18] = T.PATH;    // clear the old edge-jammed house
+  WORLD.maps[0][11][13] = T.HOUSE;   // re-placed, spaced clear of the enterable house
 
   WORLD.portals.push(
-    { from: 0,      fx: 8,  fy: 6, to: homeId, tx: 5,  ty: 7 },   // step on the house → inside home
-    { from: homeId, fx: 5,  fy: 8, to: 0,      tx: 8,  ty: 7 },   // home door → in front of the house
+    { from: 0,      fx: 8,  fy: 7, to: homeId, tx: 5,  ty: 7 },   // step on the house → inside home
+    { from: homeId, fx: 5,  fy: 8, to: 0,      tx: 8,  ty: 8 },   // home door → in front of the house
     { from: 0,      fx: 10, fy: 5, to: martId, tx: 5,  ty: 6 },   // step on the shop → inside the mart
     { from: martId, fx: 5,  fy: 7, to: 0,      tx: 10, ty: 6 },   // mart door → in front of the shop
   );
@@ -170,6 +177,17 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   // ICE is walkable but slippery
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
+const _BUILDING_TILES = new Set([T.HOUSE, T.SHOP, T.HOSPITAL, T.GYM]);
+// A building reserves a solid 3×2 footprint: the door tile (entrance) plus the
+// two tiles flanking it and the three tiles directly above are all blocked.
+// Returns true if (x,y) is one of those 5 blocked tiles for ANY building in the
+// zone (the door tile itself is handled separately as the entrance).
+function buildingFootprintSolid(zone, x, y) {
+  const m = (typeof MAPS !== 'undefined' ? MAPS : WORLD.maps)[zone]; if (!m) return false;
+  const ent = (xx, yy) => { const row = m[yy]; return !!row && _BUILDING_TILES.has(row[xx]); };
+  return ent(x + 1, y) || ent(x - 1, y)              // flanking a door on the same row
+      || ent(x - 1, y + 1) || ent(x, y + 1) || ent(x + 1, y + 1);   // the 3-wide row above a door
+}
 
 // Fallback for a zone missing/mismatched in WORLD.maps: a blank walkable
 // field ringed by trees, with the exit openings carved out.
@@ -390,7 +408,7 @@ const NPCS = [
     return ['Stay warm out there! 💗', 'Come back tomorrow for more free PokéBalls.']; } },
 
   // ── Seaside hamlet (Beach, zone 1) ──
-  { zone: 1, x: 7, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
+  { zone: 1, x: 5, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
     `Mornin', ${saveName}! The fish are biting today.`,
     'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
   { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'sailor', gift: 0, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
@@ -1951,6 +1969,14 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // A building's reserved 3×2 footprint (tiles beside and above the door) is solid.
+  if (buildingFootprintSolid(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
   if (isObstacleTile(tile) && !surfing) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
@@ -1966,6 +1992,7 @@ function move(dx, dy, ts) {
       if (ux < 0 || ux >= mc || uy < 0 || uy >= mr) break;
       const ut = MAPS[currentZone][uy][ux];
       if (isObstacleTile(ut) || ut === T.HOUSE || ut === T.SHOP || ut === T.HOSPITAL || ut === T.GYM || ut === T.CAVE_ENTRANCE) break;
+      if (buildingFootprintSolid(currentZone, ux, uy)) break;
       if (decorSolidAt(currentZone, ux, uy)) break;
       if (npcAt(currentZone, ux, uy) || lairAt(currentZone, ux, uy) || roamerAt(currentZone, ux, uy)) break;
       nx = ux; ny = uy;
@@ -2192,7 +2219,7 @@ function spawnTrainer() {
   for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
     const t = map[r][c];
     if (isObstacleTile(t) || t === T.GRASS || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) continue;
-    if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r)) continue;
+    if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r)) continue;
     if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r)) continue;
     const d = Math.abs(c - playerX) + Math.abs(r - playerY);
     if (d >= 3 && d <= 8) cands.push({ x: c, y: r });
@@ -2220,7 +2247,7 @@ function ghostAt(zone, x, y) { return (nightGhost && nightGhost.zone === zone &&
 function ghostTileOK(map, z, c, r) {
   const t = map[r][c];
   if (isObstacleTile(t) || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
-  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r)) return false;
+  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r)) return false;
   if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r) || trainerAt(currentZone, c, r)) return false;
   return true;
 }
