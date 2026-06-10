@@ -61,15 +61,8 @@ const PORTALS = WORLD.portals || [];
   WORLD.zones.push({ id: martId, name: 'Poké Mart', cols: 11, rows: 8, base: F, mapCol: null, mapRow: null, icon: '🏪', interior: true });
   WORLD.maps[martId] = room(11, 8, [5, 7]);
 
-  WORLD.maps[0][7][8] = T.HOUSE;   // your home, placed in the Meadow — one tile down so its
-                                   // footprint clears the mart's (the shop tile already exists)
-  // Re-space the Meadow's decorative houses so every building gets a clear 3×2
-  // footprint (the enterable house stays at 16,11; these two had overlapping /
-  // off-edge footprints).
-  WORLD.maps[0][11][14] = T.PATH;    // clear the old decorative house (overlapped 16,11)
-  WORLD.maps[0][11][18] = T.PATH;    // clear the old edge-jammed house
-  WORLD.maps[0][11][13] = T.HOUSE;   // re-placed, spaced clear of the enterable house
-
+  // (The Meadow's home tile @8,7 and re-spaced houses now live in world.js so the
+  // editor stays in sync; here we only build the home/mart interior rooms + portals.)
   WORLD.portals.push(
     { from: 0,      fx: 8,  fy: 7, to: homeId, tx: 5,  ty: 7 },   // step on the house → inside home
     { from: homeId, fx: 5,  fy: 8, to: 0,      tx: 8,  ty: 8 },   // home door → in front of the house
@@ -427,6 +420,29 @@ const NPCS = [
   { zone: 12, x: 2, y: 6, emoji: '🧑‍🏫', name: 'Dojo Master', art: 'dojomaster', gift: 0, dojo: true,
     lines: ['Train as much as you like! Send out a Lukéymon each round — win or lose, the practice helps it grow.'] },
 ];
+
+// ── NPC ids + editor-driven placement ────────────────
+// Each NPC gets a stable id (its name, with a #2/#3 suffix for repeats) so the
+// world editor can pin where it stands. Positions in WORLD.npcs (authored in
+// editor.html) override the x/y/zone defaults above, matched by id — dialogue &
+// gifts stay here in code. NPCS keeps a `.id` for the editor to round-trip.
+(function applyNpcPlacements() {
+  const seen = {};
+  for (const n of NPCS) {
+    const base = n.name || 'npc';
+    const k = (seen[base] = (seen[base] || 0) + 1);
+    n.id = base + (k > 1 ? '#' + k : '');
+  }
+  if (typeof WORLD !== 'undefined' && Array.isArray(WORLD.npcs)) {
+    const byId = {}; for (const n of NPCS) byId[n.id] = n;
+    for (const o of WORLD.npcs) {
+      const n = byId[o.id]; if (!n) continue;
+      if (o.zone != null) n.zone = o.zone;
+      if (o.x != null) n.x = o.x;
+      if (o.y != null) n.y = o.y;
+    }
+  }
+})();
 
 // Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
 // until its bird is caught. Bump into one → Rocket mini-boss battle → bird battle.

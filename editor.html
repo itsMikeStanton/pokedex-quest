@@ -89,6 +89,15 @@
       <div class="palette" id="decor-palette" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px"></div>
     </div>
     <div class="panel">
+      <h2>Characters (NPCs)</h2>
+      <div class="tools">
+        <button class="btn" id="t-npc">🧑 Move</button>
+        <span class="hint" id="npc-sel" style="margin-left:6px">Pick an NPC below or on the map, then click/drag to place it.</span>
+      </div>
+      <p class="hint" style="margin-top:4px">Bold = in this zone. Dialogue &amp; gifts stay in code (edit via strings.html).</p>
+      <div id="npc-list" style="max-height:240px;overflow:auto;margin-top:4px;display:grid;gap:2px"></div>
+    </div>
+    <div class="panel">
       <h2>World file</h2>
       <div class="tools">
         <button class="btn go" id="copy-json">📋 Copy world.js</button>
@@ -207,10 +216,16 @@ let decorSel = null, decorSolid = false;       // selected décor prop + whether
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; return; } } catch (_) {}
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); return; } } catch (_) {}
   world = clone(WORLD);
   if (!world.portals) world.portals = [];
   if (!world.decor) world.decor = {};
+  ensureNpcs();
+}
+// Seed NPC positions from the game's world.js if an older autosave lacks them.
+function ensureNpcs() {
+  if (Array.isArray(world.npcs) && world.npcs.length) return;
+  world.npcs = (typeof WORLD !== 'undefined' && Array.isArray(WORLD.npcs)) ? clone(WORLD.npcs) : [];
 }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
 function zone() { return world.zones[zi]; }
@@ -286,6 +301,15 @@ function render() {
     });
     if (z.id === 0) { ctx.strokeStyle='#60f060'; ctx.strokeRect(10*cell+2, 7*cell+2, cell-4, cell-4); }
   }
+  // NPCs standing in this zone
+  (world.npcs || []).forEach(n => {
+    if (n.zone !== z.id) return;
+    const cx = n.x*cell + cell/2, cy = n.y*cell + cell/2;
+    if (n.id === npcSel) { ctx.fillStyle = 'rgba(255,226,77,.35)'; ctx.fillRect(n.x*cell, n.y*cell, cell, cell);
+                           ctx.strokeStyle = '#ffe24d'; ctx.lineWidth = 2; ctx.strokeRect(n.x*cell+1, n.y*cell+1, cell-2, cell-2); }
+    ctx.font = (cell*0.66)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(n.emoji || '🧑', cx, cy);
+  });
   document.getElementById('zone-status').textContent = `${z.name}  ${z.cols}×${z.rows}  ·  id ${z.id}`;
 }
 
@@ -315,9 +339,42 @@ function flood(x, y, from, to) {
     g[cy][cx] = to; st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
   }
 }
-canvas.addEventListener('pointerdown', e => { const c=cellAt(e); if(!c) return; painting=true; applyAt(c.x,c.y); render(); });
-canvas.addEventListener('pointermove', e => { if(!painting) return; const c=cellAt(e); if(!c) return; applyAt(c.x,c.y); render(); });
-window.addEventListener('pointerup', () => { if (painting) { painting=false; save(); } });
+canvas.addEventListener('pointerdown', e => { const c=cellAt(e); if(!c) return;
+  if (tool==='npc') { npcDown(c.x,c.y); render(); return; }
+  painting=true; applyAt(c.x,c.y); render(); });
+canvas.addEventListener('pointermove', e => { const c=cellAt(e); if(!c) return;
+  if (tool==='npc' && npcDragging) { npcPlace(c.x,c.y); render(); return; }
+  if(!painting) return; applyAt(c.x,c.y); render(); });
+window.addEventListener('pointerup', () => {
+  if (npcDragging) { npcDragging=false; save(); renderNpcList(); }
+  if (painting) { painting=false; save(); } });
+
+// ── NPC placement layer ─────────────────────────────────────────
+let npcSel = null, npcDragging = false;
+function npcsArr() { return world.npcs || (world.npcs = []); }
+function npcById(id) { return npcsArr().find(n => n.id === id); }
+function npcAtCell(x, y) { const z = zone(); return npcsArr().find(n => n.zone === z.id && n.x === x && n.y === y); }
+function npcDown(x, y) {
+  const hit = npcAtCell(x, y);
+  if (hit) { npcSel = hit.id; npcDragging = true; }      // grab the one under the cursor
+  else if (npcSel) { npcPlace(x, y); }                   // drop the selected one here
+  renderNpcList();
+}
+function npcPlace(x, y) { const n = npcById(npcSel); if (n) { n.zone = zone().id; n.x = x; n.y = y; } }
+function renderNpcList() {
+  const el = document.getElementById('npc-list'); if (!el) return;
+  const z = zone();
+  el.innerHTML = '';
+  (world.npcs || []).slice().sort((a,b)=> (a.zone-b.zone) || (a.name||'').localeCompare(b.name||'')).forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'btn' + (n.id === npcSel ? ' on' : '');
+    b.style.cssText = 'text-align:left;width:100%;font-weight:' + (n.zone===z.id?'700':'400');
+    b.innerHTML = `${n.emoji||'🧑'} ${n.name||n.id} <span class="hint">· z${n.zone} (${n.x},${n.y})</span>`;
+    b.onclick = () => { npcSel = n.id; tool='npc'; document.getElementById('npc-sel').textContent = 'Selected: '+(n.name||n.id)+' — click the map to place'; syncTools(); renderNpcList(); };
+    el.appendChild(b);
+  });
+}
+document.getElementById('t-npc').onclick = () => { tool='npc'; syncTools(); };
 
 // ── décor (furniture) layer ─────────────────────────────────────
 const _edImg = {};
@@ -410,7 +467,7 @@ function renderPalette() {
   });
 }
 function syncTools() {
-  ['paint','fill','pick','decor','derase'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
+  ['paint','fill','pick','decor','derase','npc'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
 }
 document.getElementById('t-paint').onclick = () => { tool='paint'; syncTools(); };
 document.getElementById('t-fill').onclick  = () => { tool='fill'; syncTools(); };
@@ -603,6 +660,11 @@ function exportText() {
     s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
   });
   s += '  },\n';
+  if ((world.npcs || []).length) {
+    s += '  npcs: [\n';
+    world.npcs.forEach((n, i) => { s += '    ' + JSON.stringify(n) + (i < world.npcs.length-1 ? ',' : '') + '\n'; });
+    s += '  ],\n';
+  }
   const dz = Object.keys(world.decor || {}).filter(k => (world.decor[k] || []).length);
   if (dz.length) {
     s += '  decor: {\n';
@@ -626,7 +688,7 @@ document.getElementById('import-json').onclick = () => {
   let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
   if (i<0||j<i) return alert('No object found.');
   try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
-    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
   } catch (err) { alert('Parse error: ' + err.message); }
 };
 function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }
@@ -826,7 +888,7 @@ document.getElementById('atlas-zoomin').onclick = () => { aScale=Math.min(14,aSc
 document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aScale-1); renderAtlas(); };
 
 // ── boot ────────────────────────────────────────────────────────
-function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); render(); }
+function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); renderNpcList(); render(); }
 loadWorld(); ensureCoords(); renderPalette(); renderDecorPalette(); syncTools(); refresh();
 </script>
 </body>
