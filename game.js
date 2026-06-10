@@ -136,6 +136,9 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ═══════════════════════════════════════════════════
 // Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
 const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   // ICE is walkable but slippery
+// Calm starter zone(s): your home Meadow stays peaceful — no night ghosts, no
+// trainers challenging you out of nowhere.
+const PEACEFUL_ZONES = new Set([0]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 const _BUILDING_TILES = new Set([T.HOUSE, T.SHOP, T.HOSPITAL, T.GYM]);
@@ -2215,7 +2218,7 @@ function trainerAt(zone, x, y) {
 }
 function spawnTrainer() {
   const z = ZONE_INFO[currentZone];
-  if (z.interior || z.base === T.CAVE) return false;     // outdoors only
+  if (z.interior || z.base === T.CAVE || PEACEFUL_ZONES.has(currentZone)) return false;   // not in caves/indoors/your home meadow
   if (caughtIds.size === 0) return false;                // need a team before trainers appear
   const map = MAPS[currentZone], { cols, rows } = z;
   const okTile = (c, r) => npcStandOK(c, r, null) && map[r][c] !== T.GRASS;   // clear, unoccupied, off the tall grass
@@ -2328,7 +2331,7 @@ function engageGhost() {
 // Per-frame ghost tick from the game loop (world only).
 function tickGhosts(ts) {
   const z = ZONE_INFO[currentZone];
-  if (z.interior || z.base === T.CAVE) { nightGhost = null; return; }
+  if (z.interior || z.base === T.CAVE || PEACEFUL_ZONES.has(currentZone)) { nightGhost = null; return; }
   const lit = buddyLightsCave();
   if (nightGhost && (nightGhost.zone !== currentZone || !isNightNow() || ts > _ghostDespawnTs || lit)) {
     if (lit && nightGhost.zone === currentZone) showMessage('🔦 The ghost shrinks from your glowing buddy and slips away!');
