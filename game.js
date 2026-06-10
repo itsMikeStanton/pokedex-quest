@@ -3521,7 +3521,7 @@ function roundTileCorners(map, startR, endR, startC, endC, rows, cols) {
 // gentle, world-anchored light/dark blotches that span several tiles and ignore the
 // grid — so the surface feels organic without bringing back per-tile checkerboarding.
 let GROUND_SHADE = true;          // master toggle
-const GROUND_SHADE_ALPHA = 0.78;  // strength of the soft-light blend (0..1)
+const GROUND_SHADE_ALPHA = 0.67;  // strength of the soft-light blend (0..1)
 let _groundNoise = null;
 function buildGroundNoise() {
   const N = 384;                                  // texture size (tiles seamlessly)
