@@ -2541,31 +2541,46 @@ function tickNpcs(ts) {
     }
   }
 }
-// Pick an exit for an NPC heading to bed: the nearest reachable tile beside a
-// building door, else a map-edge tile (they wander off the screen). Returns a
-// BFS path, [] if already at an exit, or null if boxed in.
-function npcBedTarget(n) {
+// Find an "exit" tile from (fx,fy): the nearest reachable tile beside a building
+// door, else a map-edge tile (off the screen). Returns { tx, ty, path } where path
+// is the BFS route fx,fy → tx,ty (possibly []), or null if boxed in.
+function npcExitFrom(fx, fy, self) {
   const z = ZONE_INFO[currentZone], map = MAPS[currentZone], { cols, rows } = z;
   if (!map) return null;
   const isBldg = t => t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
   const cand = [];
   for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
-    if (!(c === n.x && r === n.y) && !npcStandOK(c, r, n)) continue;
+    if (!(c === fx && r === fy) && !npcStandOK(c, r, self)) continue;
     const nearBldg = isBldg(map[r - 1] && map[r - 1][c]) || isBldg(map[r + 1] && map[r + 1][c]) || isBldg(map[r][c - 1]) || isBldg(map[r][c + 1]);
     const edge = (c <= 1 || c >= cols - 2 || r <= 1 || r >= rows - 2);
     if (nearBldg || edge) cand.push({ x: c, y: r, pri: nearBldg ? 0 : 1 });
   }
   if (!cand.length) return null;
-  const d = p => Math.abs(p.x - n.x) + Math.abs(p.y - n.y);
+  const d = p => Math.abs(p.x - fx) + Math.abs(p.y - fy);
   cand.sort((a, b) => (a.pri - b.pri) || (d(a) - d(b)));   // a building door first, then nearest
   for (const c of cand.slice(0, 10)) {
-    if (c.x === n.x && c.y === n.y) return [];
-    const p = bfsPath(n.x, n.y, c.x, c.y);
-    if (p && p.length) return p;
+    if (c.x === fx && c.y === fy) return { tx: c.x, ty: c.y, path: [] };
+    const p = bfsPath(fx, fy, c.x, c.y);
+    if (p && p.length) return { tx: c.x, ty: c.y, path: p };
   }
   return null;
 }
-// Drive the dusk walk-off and dawn return for NPCs in the current zone. Off-zone
+// Take one step along an NPC's bedtime path (shared by the dusk walk-off and the
+// dawn walk-in). Returns true while still walking, false once the path is spent.
+function npcStepPath(n, ts) {
+  const w = n._w, bt = n._bt;
+  if (!bt.path) return false;
+  if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return true;   // mid-stride
+  const next = bt.path[bt.pi];
+  if (!next || !npcStandOK(next.x, next.y, n)) { w.st = 'idle'; bt.path = null; return false; }
+  bt.pi++;
+  w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
+  const dx = next.x - n.x, dy = next.y - n.y;
+  n.x = next.x; n.y = next.y; w.animTs = ts; w.st = 'walk';
+  w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+  return true;
+}
+// Drive the dusk walk-off and dawn walk-in for NPCs in the current zone. Off-zone
 // NPCs just aren't there at night (nobody's watching), handled by npcBedAlpha.
 function tickNpcBedtime(ts) {
   if (ZONE_INFO[currentZone].interior || ZONE_INFO[currentZone].cave) return;
@@ -2575,7 +2590,7 @@ function tickNpcBedtime(ts) {
     if (!n._w) n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts, destX: n.x, destY: n.y };
     const a = npcBedAlpha(n), bt = n._bt || (n._bt = { phase: 'awake', path: null, pi: 0, gone: false });
     const w = n._w;
-    if (a <= 0.03) {                                   // fully dark → asleep; reset home invisibly so dawn brings them back there
+    if (a <= 0.03) {                                   // fully dark → asleep (hidden); park at home for now
       if (!bt.gone) {
         bt.gone = true; bt.phase = 'asleep'; bt.path = null;
         n.x = n.hx; n.y = n.hy;
@@ -2583,20 +2598,29 @@ function tickNpcBedtime(ts) {
       }
       continue;
     }
-    if (bt.phase !== 'awake' && a >= 0.98) { bt.phase = 'awake'; bt.gone = false; w.st = 'idle'; }   // full daylight → resume normal life
-    if (bt.phase === 'awake' && npcNightRising() && npcNightFactor() > 0.02) {   // first hint of dusk → set off for an exit (once)
-      const p = npcBedTarget(n);
-      bt.path = (p && p.length) ? p : null; bt.pi = 0; bt.phase = 'leaving'; w.st = 'idle';
+    if (bt.phase !== 'awake' && bt.phase !== 'arriving' && a >= 0.98) { bt.phase = 'awake'; bt.gone = false; w.st = 'idle'; }
+    // DUSK: first hint of night → head for an exit and fade out (once).
+    if (bt.phase === 'awake' && npcNightRising() && npcNightFactor() > 0.02) {
+      const ex = npcExitFrom(n.x, n.y, n);
+      bt.path = (ex && ex.path.length) ? ex.path : null; bt.pi = 0; bt.phase = 'leaving'; w.st = 'idle';
     }
-    if (bt.phase === 'leaving' && bt.path && !(w.st === 'walk' && ts - w.animTs < NPC_STEP_MS)) {
-      const next = bt.path[bt.pi];
-      if (next && npcStandOK(next.x, next.y, n)) {
-        bt.pi++;
-        w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
-        const dx = next.x - n.x, dy = next.y - n.y;
-        n.x = next.x; n.y = next.y; w.animTs = ts; w.st = 'walk';
-        w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
-      } else { w.st = 'idle'; bt.path = null; }        // arrived (or blocked) → stand and finish fading
+    // DAWN: asleep and the sky is brightening → appear at an entrance and walk home.
+    if (bt.phase === 'asleep' && !npcNightRising()) {
+      const ex = npcExitFrom(n.hx, n.hy, n);           // an entrance near home, + route home→entrance
+      if (ex && ex.path.length) {
+        const back = ex.path.slice(0, ex.path.length - 1).reverse();   // entrance → home
+        back.push({ x: n.hx, y: n.hy });
+        n.x = ex.tx; n.y = ex.ty;                       // pop in at the entrance (still near-invisible)
+        w.st = 'idle'; w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE; w.destX = n.x; w.destY = n.y;
+        bt.path = back; bt.pi = 0;
+      } else { n.x = n.hx; n.y = n.hy; bt.path = null; }   // no route → just fade in at home
+      bt.gone = false; bt.phase = 'arriving';
+    }
+    // Walk the active route (dusk out, or dawn in). When the dawn walk finishes
+    // AND it's fully light, hand back to the wander system.
+    if (bt.phase === 'leaving' || bt.phase === 'arriving') {
+      const walking = npcStepPath(n, ts);
+      if (bt.phase === 'arriving' && !walking && a >= 0.98) { bt.phase = 'awake'; w.st = 'idle'; }
     }
   }
 }
