@@ -902,7 +902,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '18';   // bump to bust the image cache when art files change
+const ART_V = '19';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
