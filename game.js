@@ -136,9 +136,10 @@ const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coi
 // ═══════════════════════════════════════════════════
 // Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
 const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   // ICE is walkable but slippery
-// Calm starter zone(s): your home Meadow stays peaceful — no night ghosts, no
-// trainers challenging you out of nowhere.
-const PEACEFUL_ZONES = new Set([0]);
+// Calm zones — no night ghosts, no trainers challenging you out of nowhere:
+//   0  your home Meadow
+//   20 the western beach (Coral Coast), mostly a trek north to the hidden island
+const PEACEFUL_ZONES = new Set([0, 20]);
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 const _BUILDING_TILES = new Set([T.HOUSE, T.SHOP, T.HOSPITAL, T.GYM]);
