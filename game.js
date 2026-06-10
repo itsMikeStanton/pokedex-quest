@@ -139,15 +139,23 @@ const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   
 function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
 function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
 const _BUILDING_TILES = new Set([T.HOUSE, T.SHOP, T.HOSPITAL, T.GYM]);
-// A building reserves a solid 3×2 footprint: the door tile (entrance) plus the
-// two tiles flanking it and the three tiles directly above are all blocked.
-// Returns true if (x,y) is one of those 5 blocked tiles for ANY building in the
-// zone (the door tile itself is handled separately as the entrance).
+// A building reserves a solid footprint: the door tile (entrance) plus the tiles
+// flanking it and the rows directly above are all blocked. Standard buildings get
+// 3 wide × 2 tall; oversized ones (the giant blue house on Champion's Cove) get
+// 5 wide × 3 tall. Returns true if (x,y) is a blocked footprint tile for ANY
+// building in the zone (the door tile itself is the entrance, handled elsewhere).
+const _BIG_FOOTPRINT_ZONES = new Set([21]);   // Champion's Cove — the 6-tile-wide blue house
 function buildingFootprintSolid(zone, x, y) {
   const m = (typeof MAPS !== 'undefined' ? MAPS : WORLD.maps)[zone]; if (!m) return false;
   const ent = (xx, yy) => { const row = m[yy]; return !!row && _BUILDING_TILES.has(row[xx]); };
-  return ent(x + 1, y) || ent(x - 1, y)              // flanking a door on the same row
-      || ent(x - 1, y + 1) || ent(x, y + 1) || ent(x + 1, y + 1);   // the 3-wide row above a door
+  const big = _BIG_FOOTPRINT_ZONES.has(zone);
+  const hw = big ? 2 : 1, up = big ? 2 : 1;   // half-width either side, rows blocked above the door
+  for (let dy = 0; dy <= up; dy++)
+    for (let dx = -hw; dx <= hw; dx++) {
+      if (dx === 0 && dy === 0) continue;       // (x,y) being a door doesn't block itself
+      if (ent(x - dx, y + dy)) return true;     // a door sits so that (x,y) is in its footprint
+    }
+  return false;
 }
 
 // Fallback for a zone missing/mismatched in WORLD.maps: a blank walkable
@@ -1076,6 +1084,14 @@ function tileVariant(zone, r, c, n) {
   let h = ((zone + 1) * 73856093) ^ ((r + 1) * 19349663) ^ ((c + 1) * 83492791);
   h = (h ^ (h >>> 13)) >>> 0;
   return h % n;
+}
+// Deterministic [0,1) per tile — used to give each tree/cactus a tiny unique
+// scale so a forest doesn't look like stamped clones. Different salt than the
+// variant picker so size and variant vary independently.
+function tileNoise(zone, r, c) {
+  let h = ((zone + 7) * 2654435761) ^ ((r + 3) * 40503) ^ ((c + 5) * 1000003);
+  h = (h ^ (h >>> 15)) >>> 0;
+  return (h % 100000) / 100000;
 }
 
 function paintPath(x, rng) {
@@ -3151,7 +3167,7 @@ function drawWorld(ts) {
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 93 : 87); }
       else if (t === T.HOSPITAL) { const hp = hospitalArtImg(); pushStruct(sprites, hp || buildingSprites[T.HOSPITAL], c, r, hp ? 93 : 90); }
       else if (t === T.GYM)      { const gy = gymArtImg();      pushStruct(sprites, gy || buildingSprites[T.GYM],      c, r, gy ? 93 : 90); }
-      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, 54); }
+      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, Math.round(54 * (0.9 + tileNoise(currentZone, r, c) * 0.2))); }   // ±10% size jitter so each reads unique
     }
   }
   // Interior décor props (furniture) — y-sorted like structures so the player
