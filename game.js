@@ -1741,6 +1741,7 @@ function loop(ts) {
     }
     tickGhosts(ts);
     tickNpcs(ts);
+    tickTrainer(ts);
     if (zoneSlide) drawZoneSlide(ts);
     else           drawWorld(ts);
   }
@@ -2216,24 +2217,44 @@ function spawnTrainer() {
   const z = ZONE_INFO[currentZone];
   if (z.interior || z.base === T.CAVE) return false;     // outdoors only
   if (caughtIds.size === 0) return false;                // need a team before trainers appear
-  const map = MAPS[currentZone], { cols, rows } = z, cands = [];
+  const map = MAPS[currentZone], { cols, rows } = z;
+  const okTile = (c, r) => npcStandOK(c, r, null) && map[r][c] !== T.GRASS;   // clear, unoccupied, off the tall grass
+  // 1) Where they'll stop — a spot NEAR you, like they're trying to get your attention.
+  const targets = [];
   for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
-    const t = map[r][c];
-    if (isObstacleTile(t) || t === T.GRASS || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) continue;
-    if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r)) continue;
-    if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r)) continue;
     const d = Math.abs(c - playerX) + Math.abs(r - playerY);
-    if (d >= 3 && d <= 8) cands.push({ x: c, y: r });
+    if (d >= 2 && d <= 4 && okTile(c, r)) targets.push({ x: c, y: r });
   }
-  if (!cands.length) return false;
-  const tile = cands[Math.floor(Math.random() * cands.length)];
-  const i = Math.floor(Math.random() * TRAINER_NAMES.length);
-  wildTrainer = { x: tile.x, y: tile.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i] };
+  if (!targets.length) return false;
+  const tgt = targets[(Math.random() * targets.length) | 0];
+  // 2) Where they come FROM: off-screen if the zone is big enough, else a map-edge
+  //    entrance, else stepping out of a building doorway.
+  const vc0 = Math.floor(camX / TILE_SIZE), vc1 = vc0 + Math.ceil(canvas.width / TILE_SIZE);
+  const vr0 = Math.floor(camY / TILE_SIZE), vr1 = vr0 + Math.ceil(canvas.height / TILE_SIZE);
+  const collect = pred => { const a = []; for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) if (okTile(c, r) && pred(c, r)) a.push({ x: c, y: r }); return a; };
+  const dToT = p => Math.abs(p.x - tgt.x) + Math.abs(p.y - tgt.y);
+  let pool = collect((c, r) => (c < vc0 || c > vc1 || r < vr0 || r > vr1) && dToT({ x: c, y: r }) <= 12);   // off-screen, not too far
+  if (!pool.length) pool = collect((c, r) => c === 1 || c === cols - 2 || r === 1 || r === rows - 2);        // edge entrance
+  if (!pool.length) pool = collect((c, r) => { const a = map[r - 1] && map[r - 1][c]; return a === T.HOUSE || a === T.SHOP || a === T.HOSPITAL || a === T.GYM; });  // a building door
+  const sp = pool.length ? pool.sort((a, b) => dToT(a) - dToT(b))[0] : tgt;   // closest approach point, or just appear
+  const i = (Math.random() * TRAINER_NAMES.length) | 0;
+  wildTrainer = { x: sp.x, y: sp.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i],
+                  approaching: (sp !== tgt),
+                  _w: { st: 'idle', dir: 'down', fromX: sp.x * TILE_SIZE, fromY: sp.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y } };
   beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
-  showMessage(`❗ ${wildTrainer.name} wants to battle! Walk up to them.`);
+  showMessage(wildTrainer.approaching ? `👀 ${wildTrainer.name} spotted you — here they come!` : `❗ ${wildTrainer.name} wants to battle! Walk up to them.`);
   clearTimeout(trainerTimerId);
-  trainerTimerId = setTimeout(() => { wildTrainer = null; scheduleSpawn(); }, 24000);  // wanders off if ignored
+  trainerTimerId = setTimeout(() => { wildTrainer = null; scheduleSpawn(); }, 30000);  // wanders off if ignored
   return true;
+}
+// Walk an approaching trainer toward their target spot, one tile at a time.
+function tickTrainer(ts) {
+  const t = wildTrainer;
+  if (!t || t.zone !== currentZone || !t.approaching || !t._w) return;
+  const w = t._w;
+  if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return;       // mid-step
+  if (t.x === w.destX && t.y === w.destY) { t.approaching = false; w.st = 'idle'; w.dir = 'down'; return; }   // arrived → ready to battle
+  if (!npcStartStep(t, ts)) { t.approaching = false; w.st = 'idle'; w.dir = 'down'; }   // boxed in → just wait here
 }
 function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
 
@@ -2823,16 +2844,22 @@ function drawNPCE(n, ts) {
   ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
 }
 function drawTrainerE(t, ts) {
-  const px = t.x * TILE_SIZE - camX + TILE_SIZE / 2;
-  const py = t.y * TILE_SIZE - camY;
-  drawShadow(px, py + TILE_SIZE - 4, 11);
-  if (!(t.art && drawCharField(t.art, 'down', px, py, 53))) {   // sliced sprite, else emoji
-    const bob = Math.sin(ts * 0.004) * 2;
+  const w = t._w;
+  let bx = t.x * TILE_SIZE, by = t.y * TILE_SIZE, dir = 'down', hop = 0;
+  if (w && w.st === 'walk') {                          // striding toward you
+    const k = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
+    bx = w.fromX + (t.x * TILE_SIZE - w.fromX) * k;
+    by = w.fromY + (t.y * TILE_SIZE - w.fromY) * k;
+    dir = w.dir; hop = Math.sin(k * Math.PI * 2) * -1.5;
+  }
+  const px = bx - camX + TILE_SIZE / 2, py = by - camY + hop;
+  drawShadow(px, by - camY + TILE_SIZE - 4, 11);
+  if (!(t.art && drawCharField(t.art, dir, px, py, 53))) {   // sliced sprite, else emoji
     ctx.textAlign = 'center'; ctx.font = '22px serif';
-    ctx.fillText(t.emoji, px, py + 24 + bob);
+    ctx.fillText(t.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
   }
   ctx.textAlign = 'center'; ctx.font = '14px serif';
-  ctx.fillText('❗', px, py - 8 + Math.sin(ts * 0.006) * 2);   // "battle me!" tag
+  ctx.fillText(t.approaching ? '👀' : '❗', px, py - 8 + Math.sin(ts * 0.006) * 2);   // approaching → spotted; arrived → battle me!
 }
 function drawGhostE(g, ts) {
   const px = g.x * TILE_SIZE - camX, py = g.y * TILE_SIZE - camY;
