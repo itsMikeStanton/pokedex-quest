@@ -262,10 +262,16 @@ const NPCS = [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
   ] },
-  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, nightSpot: { zone: 20, x: 14, y: 3, dir: 'left' }, lines: () => [
-    `Waves are perfect today, ${saveName}!`,
-    'Water Lukeymon really love a gentle pet. 🤚',
-  ] },
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, nightSpot: { zone: 20, x: 14, y: 3, dir: 'left' }, lines: () => (
+    isNightNow() ? [                                  // hanging by the beach fire after dark
+      `Evenin', ${saveName}. Pull up a log — the fire's warm.`,
+      'Night surfing? Nah. After dark I just watch the embers and listen to the waves. 🔥',
+      'They say the rarest Water Lukeymon only surface under the moon... ever seen one? 🌙',
+    ] : [
+      `Waves are perfect today, ${saveName}!`,
+      'Water Lukeymon really love a gentle pet. 🤚',
+    ]
+  ) },
   { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', wander: 'free', nightOwl: true, lines: () => [
     `...you wandered this deep into the forest, ${saveName}? Impressive.`,
     `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
@@ -964,13 +970,14 @@ function decorSolidAt(zone, x, y) {
 // ── Outdoor light props (streetlights, beach fire pit) ──
 // Placeholder art for now. Each casts a warm glow that blooms at night and fades
 // by day. light:'steady' = constant pool (streetlight); 'fire' = flickering campfire.
-const PROPS = [
-  { zone: 2,  x: 4,  y: 4,  s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
-  { zone: 2,  x: 13, y: 4,  s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
-  { zone: 2,  x: 4,  y: 11, s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
-  { zone: 2,  x: 13, y: 11, s: 'streetlight', light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
-  { zone: 20, x: 13, y: 3,  s: 'firepit',     light: 'fire',   solid: true, h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
-];
+// Per-type visuals/light live here; placements (just {zone,x,y,s}) live in
+// WORLD.props so the world editor can drag them around.
+const PROP_TYPES = {
+  streetlight: { light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
+  firepit:     { light: 'fire',   solid: true, h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
+};
+const PROPS = WORLD.props || [];
+function propType(p) { return PROP_TYPES[p.s] || {}; }
 const _propImg = {};
 function propImg(key) {
   let i = _propImg[key];
@@ -980,7 +987,7 @@ function propImg(key) {
 const _propSolid = {};
 function propSolidAt(zone, x, y) {
   let s = _propSolid[zone];
-  if (!s) { s = _propSolid[zone] = new Set(); PROPS.forEach(p => { if (p.solid && p.zone === zone) s.add(p.x + ',' + p.y); }); }
+  if (!s) { s = _propSolid[zone] = new Set(); PROPS.forEach(p => { if (propType(p).solid && p.zone === zone) s.add(p.x + ',' + p.y); }); }
   return s.has(x + ',' + y);
 }
 
@@ -3274,10 +3281,11 @@ function zoneRain() {
 function drawPropGlows(ts, nf) {
   for (const p of PROPS) {
     if (p.zone !== currentZone) continue;
+    const ty = propType(p); if (!ty.light) continue;
     const sx = p.x * TILE_SIZE + TILE_SIZE / 2 - camX;
-    const sy = (p.y + 1) * TILE_SIZE - camY + (p.gy || -16);   // glow origin near the lamp head / flames
-    let amp = nf, radius = (p.rad || 2.5) * TILE_SIZE;
-    if (p.light === 'fire') {
+    const sy = (p.y + 1) * TILE_SIZE - camY + (ty.gy || -16);   // glow origin near the lamp head / flames
+    let amp = nf, radius = (ty.rad || 2.5) * TILE_SIZE;
+    if (ty.light === 'fire') {
       const flick = 0.78 + 0.14 * Math.sin(ts * 0.018) + 0.06 * Math.sin(ts * 0.043 + 2.1) + 0.05 * Math.sin(ts * 0.007 + 0.7);
       amp *= flick; radius *= 0.9 + 0.12 * flick;
     } else {
@@ -3285,9 +3293,9 @@ function drawPropGlows(ts, nf) {
     }
     const a = Math.min(0.6, 0.62 * amp);
     const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
-    g.addColorStop(0,   `rgba(${p.rgb},${a})`);
-    g.addColorStop(0.5, `rgba(${p.rgb},${a * 0.4})`);
-    g.addColorStop(1,   `rgba(${p.rgb},0)`);
+    g.addColorStop(0,   `rgba(${ty.rgb},${a})`);
+    g.addColorStop(0.5, `rgba(${ty.rgb},${a * 0.4})`);
+    g.addColorStop(1,   `rgba(${ty.rgb},0)`);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = g;
@@ -3437,7 +3445,7 @@ function drawWorld(ts) {
   for (const p of PROPS) {
     if (p.zone !== currentZone) continue;
     const img = propImg(p.s);
-    if (img) pushStruct(sprites, img, p.x, p.y, p.h || 40);
+    if (img) pushStruct(sprites, img, p.x, p.y, propType(p).h || 40);
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });

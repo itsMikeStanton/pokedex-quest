@@ -714,6 +714,13 @@ const WORLD = {
       [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
     ]
   },
+  props: [
+    {"zone":2,"x":4,"y":4,"s":"streetlight"},
+    {"zone":2,"x":13,"y":4,"s":"streetlight"},
+    {"zone":2,"x":4,"y":11,"s":"streetlight"},
+    {"zone":2,"x":13,"y":11,"s":"streetlight"},
+    {"zone":20,"x":13,"y":3,"s":"firepit"}
+  ],
   npcs: [
     {"id":"Dad","name":"Dad","emoji":"🧔","zone":22,"x":4,"y":2},
     {"id":"Mom","name":"Mom","emoji":"👩","zone":22,"x":2,"y":3},

@@ -98,6 +98,15 @@
       <div id="npc-list" style="max-height:240px;overflow:auto;margin-top:4px;display:grid;gap:2px"></div>
     </div>
     <div class="panel">
+      <h2>Light props (night glow)</h2>
+      <div class="tools">
+        <button class="btn" id="t-prop">💡 Place</button>
+        <button class="btn" id="t-perase">🧹 Erase</button>
+        <span class="hint" id="pr-sel" style="margin-left:6px">Pick a prop, then click the map. (Always solid.)</span>
+      </div>
+      <div class="palette" id="prop-palette" style="margin-top:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px"></div>
+    </div>
+    <div class="panel">
       <h2>World file</h2>
       <div class="tools">
         <button class="btn go" id="copy-json">📋 Copy world.js</button>
@@ -213,19 +222,26 @@ const LS_KEY = 'lukeymon_world_v1';
 
 let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = true, painting = false;
 let decorSel = null, decorSolid = false;       // selected décor prop + whether placed props block movement
+let propSel = null;                            // selected outdoor light prop key (streetlight / firepit)
+const PROP_KEYS = ['streetlight', 'firepit']; // outdoor light props, art in art/prop/
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); return; } } catch (_) {}
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); ensureProps(); return; } } catch (_) {}
   world = clone(WORLD);
   if (!world.portals) world.portals = [];
   if (!world.decor) world.decor = {};
-  ensureNpcs();
+  ensureNpcs(); ensureProps();
 }
 // Seed NPC positions from the game's world.js if an older autosave lacks them.
 function ensureNpcs() {
   if (Array.isArray(world.npcs) && world.npcs.length) return;
   world.npcs = (typeof WORLD !== 'undefined' && Array.isArray(WORLD.npcs)) ? clone(WORLD.npcs) : [];
+}
+// Seed light props from the game's world.js if an older autosave lacks them.
+function ensureProps() {
+  if (Array.isArray(world.props)) return;
+  world.props = (typeof WORLD !== 'undefined' && Array.isArray(WORLD.props)) ? clone(WORLD.props) : [];
 }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
 function zone() { return world.zones[zi]; }
@@ -287,6 +303,7 @@ function render() {
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(c*cell+.5, r*cell+.5, cell, cell);
   }
   drawDecor(z);
+  drawProps(z);
   if (overlays) {
     ctx.lineWidth = 2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=(cell*0.5)+'px serif';
     openingCells().forEach((b, key) => { const [x,y] = key.split(',').map(Number);
@@ -323,6 +340,8 @@ function applyAt(x, y) {
   const z = zone(), g = gridOf(z);
   if (tool === 'decor')  { placeDecor(x, y); return; }
   if (tool === 'derase') { eraseDecor(x, y); return; }
+  if (tool === 'prop')   { placeProp(x, y); return; }
+  if (tool === 'perase') { eraseProp(x, y); return; }
   if (tool === 'pick') { sel = g[y][x]; renderPalette(); return; }
   if (tool === 'fill') { flood(x, y, g[y][x], sel); return; }
   const off = Math.floor(brush/2);
@@ -439,6 +458,53 @@ document.getElementById('t-decor').onclick  = () => { tool='decor'; syncTools();
 document.getElementById('t-derase').onclick = () => { tool='derase'; syncTools(); };
 document.getElementById('dc-solid').onchange = e => { decorSolid = e.target.checked; };
 
+// ── Outdoor light props (streetlight / fire pit) ────────────────
+const _propEdImg = {};
+function propEdImg(key) {
+  let i = _propEdImg[key];
+  if (!i) { i = new Image(); i.onload = render; i.src = 'art/prop/' + key + '.png'; _propEdImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+function propsArr() { return world.props || (world.props = []); }
+function drawProps(z) {
+  propsArr().forEach(p => {
+    if (p.zone !== z.id) return;
+    const img = propEdImg(p.s), cx = p.x*cell + cell/2, by = (p.y+1)*cell;
+    if (img) {
+      const h = cell*1.6, w = img.naturalWidth*(h/img.naturalHeight);   // a touch taller than a tile
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, cx - w/2, by - h, w, h);
+    } else { ctx.fillStyle = '#ffd86a'; ctx.beginPath(); ctx.arc(cx, by-cell*0.5, cell*0.2, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = '#ff5050'; ctx.lineWidth = 1; ctx.strokeRect(p.x*cell+1.5, p.y*cell+1.5, cell-3, cell-3);  // always solid
+  });
+}
+function placeProp(x, y) {
+  if (!propSel) return;
+  const list = propsArr(), z = zone().id, i = list.findIndex(p => p.zone===z && p.x===x && p.y===y);
+  const obj = { zone: z, x, y, s: propSel };
+  if (i>=0) list[i] = obj; else list.push(obj);
+}
+function eraseProp(x, y) {
+  const list = propsArr(), z = zone().id, i = list.findIndex(p => p.zone===z && p.x===x && p.y===y);
+  if (i>=0) list.splice(i,1);
+}
+function renderPropPalette() {
+  const pal = document.getElementById('prop-palette'); if (!pal) return; pal.innerHTML='';
+  PROP_KEYS.forEach(key => {
+    const b = document.createElement('div');
+    b.className = 'swatch' + (key===propSel?' sel':'');
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:54px;background:#1a1a26';
+    b.title = key;
+    const im = document.createElement('img'); im.src = 'art/prop/'+key+'.png';
+    im.style.cssText = 'max-width:40px;max-height:50px;image-rendering:pixelated';
+    b.appendChild(im);
+    b.onclick = () => { propSel = key; tool='prop'; document.getElementById('pr-sel').textContent='Selected: '+key+' — click the map'; syncTools(); renderPropPalette(); };
+    pal.appendChild(b);
+  });
+}
+document.getElementById('t-prop').onclick   = () => { tool='prop'; syncTools(); };
+document.getElementById('t-perase').onclick = () => { tool='perase'; syncTools(); };
+
 // ── UI: tabs, palette, tools ────────────────────────────────────
 function renderTabs() {
   const el = document.getElementById('tabs'); el.innerHTML = '';
@@ -467,7 +533,7 @@ function renderPalette() {
   });
 }
 function syncTools() {
-  ['paint','fill','pick','decor','derase','npc'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
+  ['paint','fill','pick','decor','derase','npc','prop','perase'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
 }
 document.getElementById('t-paint').onclick = () => { tool='paint'; syncTools(); };
 document.getElementById('t-fill').onclick  = () => { tool='fill'; syncTools(); };
@@ -660,6 +726,11 @@ function exportText() {
     s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
   });
   s += '  },\n';
+  if ((world.props || []).length) {
+    s += '  props: [\n';
+    world.props.forEach((p, i) => { s += '    ' + JSON.stringify(p) + (i < world.props.length-1 ? ',' : '') + '\n'; });
+    s += '  ],\n';
+  }
   if ((world.npcs || []).length) {
     s += '  npcs: [\n';
     world.npcs.forEach((n, i) => { s += '    ' + JSON.stringify(n) + (i < world.npcs.length-1 ? ',' : '') + '\n'; });
@@ -889,7 +960,7 @@ document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aSc
 
 // ── boot ────────────────────────────────────────────────────────
 function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); renderNpcList(); render(); }
-loadWorld(); ensureCoords(); renderPalette(); renderDecorPalette(); syncTools(); refresh();
+loadWorld(); ensureCoords(); renderPalette(); renderDecorPalette(); renderPropPalette(); syncTools(); refresh();
 </script>
 </body>
 </html>
