@@ -149,7 +149,7 @@ function buildingFootprintSolid(zone, x, y) {
   const m = (typeof MAPS !== 'undefined' ? MAPS : WORLD.maps)[zone]; if (!m) return false;
   const ent = (xx, yy) => { const row = m[yy]; return !!row && _BUILDING_TILES.has(row[xx]); };
   const big = _BIG_FOOTPRINT_ZONES.has(zone);
-  const hw = big ? 2 : 1, up = big ? 2 : 1;   // half-width either side, rows blocked above the door
+  const hw = big ? 2 : 1, up = 1;   // half-width either side; one row blocked behind (above) the door
   for (let dy = 0; dy <= up; dy++)
     for (let dx = -hw; dx <= hw; dx++) {
       if (dx === 0 && dy === 0) continue;       // (x,y) being a door doesn't block itself
@@ -3167,7 +3167,7 @@ function drawWorld(ts) {
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 93 : 87); }
       else if (t === T.HOSPITAL) { const hp = hospitalArtImg(); pushStruct(sprites, hp || buildingSprites[T.HOSPITAL], c, r, hp ? 93 : 90); }
       else if (t === T.GYM)      { const gy = gymArtImg();      pushStruct(sprites, gy || buildingSprites[T.GYM],      c, r, gy ? 93 : 90); }
-      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, Math.round(54 * (0.9 + tileNoise(currentZone, r, c) * 0.2))); }   // ±10% size jitter so each reads unique
+      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, Math.round(54 * (0.9 + tileNoise(currentZone, r, c) * 0.28))); }   // size jitter (0.9–1.18×) so each reads unique
     }
   }
   // Interior décor props (furniture) — y-sorted like structures so the player
