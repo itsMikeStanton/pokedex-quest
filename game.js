@@ -392,7 +392,7 @@ const NPCS = [
   { zone: 1, x: 5, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
     `Mornin', ${saveName}! The fish are biting today.`,
     'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
-  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'sailor', gift: 0, wander: 3, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
+  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'seadog', gift: 0, wander: 3, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
   // ── Sunpetal village (zone 13) ──
   { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', art: 'gardener', gift: 20, lines: () => [
     `These sunpetals only bloom for kind hearts like yours, ${saveName}. 🌻`,
@@ -2348,7 +2348,7 @@ function clearWild() {
 // ── Wandering trainers ───────────────────────────────
 const TRAINER_NAMES  = ['Hiker Joe', 'Bug Catcher Lia', 'Camper Sam', 'Picnicker Mae', 'Youngster Tim', 'Lass Ivy', 'Fisher Gil', 'Bird Keeper Ann', 'Sailor Moe', 'Painter Bea'];
 const TRAINER_EMOJIS = ['🧗', '🧒', '🎒', '🧺', '👦', '👧', '🎣', '🦅', '⚓', '🎨'];
-const TRAINER_ART    = ['hiker', 'bugcatcher', 'camper', 'picnicker', 'youngster', 'lass', 'angler', 'birdkeeper', 'seadog', 'painter'];
+const TRAINER_ART    = ['hiker', 'bugcatcher', 'camper', 'picnicker', 'youngster', 'lass', 'angler', 'birdkeeper', 'sailor', 'painter'];
 function trainerAt(zone, x, y) {
   return (wildTrainer && wildTrainer.zone === zone && wildTrainer.x === x && wildTrainer.y === y) ? wildTrainer : null;
 }
