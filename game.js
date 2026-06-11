@@ -915,7 +915,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '27';   // bump to bust the image cache when art files change
+const ART_V = '28';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -3986,10 +3986,10 @@ function drawBarriers(ts) {
     const signEmoji = BARRIERS[exit.barrier].sign;
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     if (exit.barrier === 'lullaby') { drawSlumberingTitan(exit, zc, zr, ts); continue; }
-    for (const p of exit.pos) {
+    exit.pos.forEach((p, i) => {
       const { bx, by } = barrierBlockPos(exit, p, zc, zr);
-      drawBarrierTile(ctx, exit.barrier, bx, by, ts);
-    }
+      drawBarrierTile(ctx, exit.barrier, bx, by, ts, i, exit.pos.length);
+    });
     // Sign sits ON the middle barrier block (what type breaks it).
     const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
     const bob = Math.sin(ts * 0.003) * 2;
@@ -4024,16 +4024,16 @@ function drawBarrierFX(exit, fx, zc, zr, ts) {
   const scale = p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4);     // blocks shrink over the last 40%
   const bfade = p < 0.65 ? 1 : Math.max(0, 1 - (p - 0.65) / 0.35);
   // dissolving blocks underneath
-  for (const pp of exit.pos) {
+  exit.pos.forEach((pp, i) => {
     const { bx, by } = barrierBlockPos(exit, pp, zc, zr);
     const jx = (Math.random() * 2 - 1) * shake, jy = (Math.random() * 2 - 1) * shake;
     ctx.save();
     ctx.globalAlpha = bfade;
     ctx.translate(bx + TILE_SIZE / 2 + jx, by + TILE_SIZE / 2 + jy);
     ctx.scale(scale, scale);
-    drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts);
+    drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts, i, exit.pos.length);
     ctx.restore();
-  }
+  });
   // the particle storm of type-icons
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const pt of fx.parts) {
@@ -4131,7 +4131,24 @@ function drawSlumberingTitan(exit, zc, zr, ts) {
   ctx.fillText('🔥', cx + cw * 0.45, Math.round(cy - ch * 0.6) + bob);
 }
 
-function drawBarrierTile(ctx, key, bx, by, ts) {
+// Real barrier art: a 3-tile-wide strip per type, sliced across the barrier's blocks.
+const BARRIER_ART = new Set(['log', 'fence', 'lava', 'vine', 'frost', 'sand']);
+const _barrierStrip = {};
+function barrierStripImg(key) {
+  let i = _barrierStrip[key];
+  if (!i) { i = new Image(); i.src = 'art/barrier/' + key + '.png?v=' + ART_V; _barrierStrip[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+function drawBarrierTile(ctx, key, bx, by, ts, idx, n) {
+  if (BARRIER_ART.has(key)) {                          // sliced strip art
+    const img = barrierStripImg(key);
+    if (img) {
+      const total = n || 1, i = idx || 0;
+      const sliceW = img.naturalWidth / total;
+      ctx.drawImage(img, i * sliceW, 0, sliceW, img.naturalHeight, bx, by + TILE_SIZE - 34, TILE_SIZE, 34);
+      return;
+    }
+  }
   if (key === 'log') {
     ctx.fillStyle = '#5C2A0A';
     ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
