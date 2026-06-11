@@ -780,7 +780,7 @@ let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
 let barrierFX = {};                // barrier key -> { start, sign } while its break animation plays
-const BARRIER_FX_MS = 850;         // how long the shake/shrink break effect runs
+const BARRIER_FX_MS = 1000;        // how long the break / particle-storm effect runs
 let collected = new Set();         // ids of badges/collectibles found
 let stones = {};                   // evolution-stone inventory { fire: n, water: n, … }
 let foundStones = new Set();       // ids of stone finds already picked up
@@ -3998,31 +3998,56 @@ function drawBarriers(ts) {
     ctx.textBaseline = 'alphabetic';
   }
 }
-// The break effect: a type icon pops onto each block and wiggles while the blocks
-// shake, then everything shrinks and fades away — and the path opens.
+// The break effect: each block erupts in a storm of little type-icons that fly
+// out and grow, while the blocks shake then shrink — then the path opens.
 function drawBarrierFX(exit, fx, zc, zr, ts) {
+  if (!fx.parts) {                                  // spawn the particle storm once
+    fx.parts = [];
+    const PER = 14;                                 // little icons per block
+    for (let bi = 0; bi < exit.pos.length; bi++) {
+      for (let k = 0; k < PER; k++) {
+        fx.parts.push({
+          bi,
+          ang: Math.random() * Math.PI * 2,
+          spd: 16 + Math.random() * 46,             // how far it flies over the effect
+          delay: Math.random() * 0.4,               // staggered bursts
+          s0: 3 + Math.random() * 3,                // starts tiny
+          s1: 15 + Math.random() * 16,              // grows big
+          rise: 4 + Math.random() * 12,             // slight upward drift
+          wob: Math.random() * 6.28,
+        });
+      }
+    }
+  }
   const p = Math.min((ts - fx.start) / BARRIER_FX_MS, 1);
-  const shake = (p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4) * 3.2;          // shaking, eases off as it shrinks
-  const scale = p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4);     // shrink over the last 40%
-  const fade  = p < 0.7 ? 1 : Math.max(0, 1 - (p - 0.7) / 0.3);
-  const popIn = Math.min(1, p / 0.15);                              // icon pops in
+  const shake = (p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4)) * 3.2;
+  const scale = p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4);     // blocks shrink over the last 40%
+  const bfade = p < 0.65 ? 1 : Math.max(0, 1 - (p - 0.65) / 0.35);
+  // dissolving blocks underneath
   for (const pp of exit.pos) {
     const { bx, by } = barrierBlockPos(exit, pp, zc, zr);
     const jx = (Math.random() * 2 - 1) * shake, jy = (Math.random() * 2 - 1) * shake;
     ctx.save();
-    ctx.globalAlpha = fade;
+    ctx.globalAlpha = bfade;
     ctx.translate(bx + TILE_SIZE / 2 + jx, by + TILE_SIZE / 2 + jy);
     ctx.scale(scale, scale);
     drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts);
     ctx.restore();
-    // little type icon wiggling on the block
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.font = Math.round(18 * popIn * (0.6 + 0.4 * scale)) + 'px serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const wig = Math.sin(ts * 0.022 + pp * 1.7) * 4;
-    ctx.fillText(fx.sign, bx + TILE_SIZE / 2 + wig + jx, by + TILE_SIZE / 2 - 4 + Math.sin(ts * 0.018 + pp) * 3 + jy);
-    ctx.restore();
+  }
+  // the particle storm of type-icons
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const pt of fx.parts) {
+    const a = (p - pt.delay) / (1 - pt.delay);
+    if (a <= 0) continue;
+    const { bx, by } = barrierBlockPos(exit, exit.pos[pt.bi], zc, zr);
+    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2;
+    const dist = pt.spd * a;
+    const x = cx + Math.cos(pt.ang) * dist + Math.sin(ts * 0.02 + pt.wob) * 2;
+    const y = cy + Math.sin(pt.ang) * dist - pt.rise * a;
+    const size = pt.s0 + (pt.s1 - pt.s0) * a;       // tiny → big
+    ctx.globalAlpha = a < 0.6 ? 1 : Math.max(0, 1 - (a - 0.6) / 0.4);
+    ctx.font = Math.round(size) + 'px serif';
+    ctx.fillText(fx.sign, x, y);
   }
   ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
 }
