@@ -902,7 +902,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '26';   // bump to bust the image cache when art files change
+const ART_V = '27';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -991,7 +991,7 @@ function decorSolidAt(zone, x, y) {
 // WORLD.props so the world editor can drag them around.
 const PROP_TYPES = {
   streetlight:    { light: 'steady', solid: true,  h: 56, gy: -38, rgb: '255,224,150', rad: 2.6 },
-  firepit:        { light: 'fire',   solid: true,  h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
+  firepit:        { light: 'fire',   solid: true,  h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9, frames: 5, fps: 9 },
   boulder:        { solid: true,  h: 30 },
   cave_entrance:  { solid: true,  h: 40 },
   pier:           { solid: false, h: 38 },
@@ -3241,6 +3241,18 @@ function pushStruct(sprites, img, c, r, targetH) {
     blitImg(img, bx - camX - w / 2, by - camY - targetH, w, targetH);
   } });
 }
+// Like pushStruct, but cycles through key_0..key_(frames-1) at draw time (animated props).
+function pushAnimStruct(sprites, key, frames, fps, c, r, targetH) {
+  const bx = c * TILE_SIZE + TILE_SIZE / 2, by = (r + 1) * TILE_SIZE;
+  sprites.push({ y: by, o: 0, draw: () => {
+    const f = Math.floor(performance.now() / (1000 / fps)) % frames;
+    const img = propImg(key + '_' + f) || propImg(key);
+    if (!img) return;
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    const w = Math.round(targetH * iw / ih);
+    blitImg(img, bx - camX - w / 2, by - camY - targetH, w, targetH);
+  } });
+}
 
 // A ripple under the player while surfing on water.
 function surfRipple(renderPos) {
@@ -3666,7 +3678,9 @@ function drawWorld(ts) {
       // A structure (building, or a tree we have art for) sits on grass; its body is
       // drawn later in the depth pass. Everything else just uses its own tile art.
       const isBuild = t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
-      const isStruct = isBuild || (t === T.TREE && treeArtImg(currentZone));
+      const _zo = ZONE_INFO[currentZone];
+      const isCaveEnt = t === T.CAVE_ENTRANCE && _zo.base !== T.CAVE && !_zo.cave && !_zo.interior && propImg('cave_entrance');   // new arch art → sit on natural ground (outdoor mouths only)
+      const isStruct = isBuild || isCaveEnt || (t === T.TREE && treeArtImg(currentZone));
       const zbase = ZONE_INFO[currentZone].base;
       // Trees carry their own grass patch, so on sandy zones (beach/desert/coast)
       // sit them on SAND and let that patch ground them — no hard grass square.
@@ -3715,12 +3729,13 @@ function drawWorld(ts) {
     for (let c = startC; c < endC; c++) {
       const t = map[r][c];
       if (t === T.HOUSE) {
-        if (ZONE_INFO[currentZone].name === "Champion's Cove") { const bh = blueHouseArtImg(); pushStruct(sprites, bh || buildingSprites.HOUSE_BLUE, c, r, bh ? 93 : 87); }
+        if (ZONE_INFO[currentZone].name === "Champion's Cove") { const bh = blueHouseArtImg(); pushStruct(sprites, bh || buildingSprites.HOUSE_BLUE, c, r, bh ? 104 : 87); }
         else { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 93 : 87); }
       }
       else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 93 : 87); }
       else if (t === T.HOSPITAL) { const hp = hospitalArtImg(); pushStruct(sprites, hp || buildingSprites[T.HOSPITAL], c, r, hp ? 93 : 90); }
       else if (t === T.GYM)      { const gy = gymArtImg();      pushStruct(sprites, gy || buildingSprites[T.GYM],      c, r, gy ? 93 : 90); }
+      else if (t === T.CAVE_ENTRANCE) { const z = ZONE_INFO[currentZone]; const cv = (z.base !== T.CAVE && !z.cave && !z.interior) && propImg('cave_entrance'); if (cv) pushStruct(sprites, cv, c, r, 50); }   // new rocky arch art (outdoor mouths)
       else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, Math.round(54 * (0.9 + tileNoise(currentZone, r, c) * 0.28))); }   // size jitter (0.9–1.18×) so each reads unique
     }
   }
@@ -3733,8 +3748,10 @@ function drawWorld(ts) {
   // Outdoor light props (streetlights, fire pit) — y-sorted so you walk behind the pole.
   for (const p of PROPS) {
     if (p.zone !== currentZone) continue;
+    const ty = propType(p);
+    if (ty.frames) { pushAnimStruct(sprites, p.s, ty.frames, ty.fps || 8, p.x, p.y, ty.h || 40); continue; }
     const img = propImg(p.s);
-    if (img) pushStruct(sprites, img, p.x, p.y, propType(p).h || 40);
+    if (img) pushStruct(sprites, img, p.x, p.y, ty.h || 40);
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
