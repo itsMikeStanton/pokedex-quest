@@ -253,17 +253,20 @@ const NPCS = [
     'mrow. Mew? MEOW! ...meeeeeeeeeow.',
     '❤️',
   ] },
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => [
-    `Good to see you out and about, ${saveName}!`,
-    'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
-    `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
-    // Second time you visit, he remembers it's your birthday and hands over the cake.
-    ...((metNPCs.has('Prof. Birch') && !gotBirthdayCake) ? [
-      `Oh — hey ${saveName}!`,
-      'I heard it was your birthday!',
-      `Happy birthday ${saveName}!! 🎂`,
-    ] : []),
-  ] },
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => (
+    // The second time you visit, it's purely the birthday moment; before & after, his normal advice.
+    (metNPCs.has('Prof. Birch') && !gotBirthdayCake)
+      ? [
+          `Oh — hey ${saveName}!`,
+          'I heard it was your birthday!',
+          `Happy birthday ${saveName}!! 🎂`,
+        ]
+      : [
+          `Good to see you out and about, ${saveName}!`,
+          'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
+          `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
+        ]
+  ) },
   { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
     `Keeping the city safe, ${saveName}.`,
     'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
@@ -2838,7 +2841,7 @@ function talkNPC(npc) {
   // birthday cake — a fanfare, then it's waiting back at your house.
   if (!asleep && npc.name === 'Prof. Birch' && !firstMeet && !gotBirthdayCake) {
     gotBirthdayCake = true;
-    pendingFanfare = { badge: '🎂', label: 'Birthday Cake!', after: `🎂 Prof. Birch left your cake at home — head back to enjoy it!` };
+    pendingFanfare = { badge: `<img src="art/prop/birthday_cake.png?v=${ART_V}" style="height:70px;image-rendering:pixelated">`, label: 'Birthday Cake!', after: `Prof. Birch left your cake at home — head back to enjoy it! 🎂` };
     saveGame();
   }
 
@@ -2921,7 +2924,8 @@ function advanceNPC() {
 let _fanfareDone = null;
 function showFanfare(badge, label, onDone, title) {
   document.getElementById('gift-title').textContent = title || 'A GIFT!';
-  document.getElementById('gift-badge').textContent = badge;
+  const gb = document.getElementById('gift-badge');
+  if (badge && badge.charAt(0) === '<') gb.innerHTML = badge; else gb.textContent = badge;   // HTML (e.g. cake img) or emoji
   document.getElementById('gift-amount').textContent = label;
   _fanfareDone = onDone || null;
   showScreen('gift');
@@ -4677,7 +4681,8 @@ function startBossBattle(cfg) {
   battleRoundNum = 0;
   document.getElementById('battle-header').textContent = cfg.title;
   const bossEl = document.getElementById('battle-mewtwo');
-  if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
+  if (cfg.imgSrc) { bossEl.innerHTML = '<img class="boss-char" src="' + cfg.imgSrc + '" alt="">'; }   // arbitrary art (e.g. the cake)
+  else if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
   else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/portrait/' + cfg.charArt + '.png?v=' + ART_V + '" alt="">'; } // Team Rocket grunt portrait
   else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; }                         // emoji fallback
   // The trainer sits in the corner once their Pokémon takes the field.
@@ -4867,11 +4872,12 @@ function startTrainerBattle() {
 // any Lukeymon to share a slice.
 function startCakeBattle() {
   if (caughtIds.size === 0) { showMessage('🎂 Catch a Lukeymon first to share the cake!'); return; }
+  const cakeImg = 'art/prop/birthday_cake.png?v=' + ART_V;
   startBossBattle({
-    title: '🎂 Birthday Cake', emoji: '🎂', rounds: 1, rule: 'any', pickDemand: () => 'Normal',
-    motto: `<b>Wow! A delicious birthday cake! 🎂</b><br>“Send out any Lukéymon to share a slice!”`,
+    title: 'Birthday Cake', emoji: '🎂', imgSrc: cakeImg, rounds: 1, rule: 'any', pickDemand: () => 'Normal',
+    motto: `<b>Wow! A delicious birthday cake!</b><br>“Send out any Lukéymon to share a slice!”`,
     intro: () => rocketIntro(),
-    onWin:  () => { coins += 20; updateHud(); saveGame(); showFanfare('🎂', `Yum! Happy birthday, ${saveName}! 🍰  +20 💰`, returnToWorld, 'DELICIOUS!'); },
+    onWin:  () => { coins += 20; updateHud(); saveGame(); showFanfare(`<img src="${cakeImg}" style="height:70px;image-rendering:pixelated">`, `Yum! Happy birthday, ${saveName}! 🍰  +20 💰`, returnToWorld, 'DELICIOUS!'); },
     onLose: () => returnToWorld(),
   });
 }
@@ -4943,7 +4949,7 @@ function nextBattleRound() {
   document.getElementById('battle-demand-pre').textContent  = cfg.rule === 'any' ? '' : demandPre;
   document.getElementById('battle-demand-post').textContent = cfg.rule === 'any' ? '' : demandPost;
   const tEl = document.getElementById('battle-type');
-  tEl.textContent = cfg.rule === 'any' ? '🎂' : battleType;
+  tEl.textContent = cfg.rule === 'any' ? '' : battleType;
   tEl.style.background = cfg.rule === 'any' ? 'transparent' : typeColor(battleType);
   document.getElementById('battle-instruction').textContent =
     cfg.rule === 'any'
