@@ -257,6 +257,11 @@ const NPCS = [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
+    ...(gotBirthdayCake ? [] : [
+      `Oh — hey ${saveName}!`,
+      'I heard it was your birthday!',
+      `Happy birthday ${saveName}!! 🎂 I left a little something back at your house — enjoy!`,
+    ]),
   ] },
   { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
     `Keeping the city safe, ${saveName}.`,
@@ -779,6 +784,8 @@ let lastHeal  = '';                // date key of the last free Hospital rest (d
 const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the Hospital
 function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
+let gotBirthdayCake = false;       // Prof. Birch gave the birthday cake → it appears in your home
+const HOME_CAKE = { zone: 9, x: 5, y: 3 };   // where the cake sits once you have it
 let pendingGift = 0;               // coins held back for the end-of-conversation reveal
 let pendingFanfare = null;         // {badge,label} an NPC's lines() queues to fanfare at dialog end
 let knownTips = new Set();         // ids of field-notes tips the player has discovered
@@ -2060,6 +2067,14 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3c1. The birthday cake in your home — bump it for a little message (and it blocks).
+  if (gotBirthdayCake && currentZone === HOME_CAKE.zone && nx === HOME_CAKE.x && ny === HOME_CAKE.y) {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    showMessage(`🎂 Wow! Look at this birthday cake!<br>Happy birthday, ${saveName}!`);
+    beep(523, 0.08, 0.1); setTimeout(() => beep(659, 0.08, 0.1), 110); setTimeout(() => beep(784, 0.12, 0.14), 230);
+    return;
+  }
+
   // 3c2. A wandering trainer on the destination tile → a quick battle.
   if (trainerAt(currentZone, nx, ny)) {
     bumpVec    = { dx, dy };
@@ -2816,6 +2831,9 @@ function talkNPC(npc) {
   const firstMeet = !metNPCs.has(mk);
   if (!asleep) metNPCs.add(mk);        // "greeted" — counts toward Quest "Characters Met"
   pendingGift = (!asleep && firstMeet && npc.gift > 0) ? npc.gift : 0;
+
+  // Prof. Birch's birthday gift: the cake appears back in your home from now on.
+  if (!asleep && npc.name === 'Prof. Birch' && !gotBirthdayCake) { gotBirthdayCake = true; saveGame(); }
 
   renderNpcLine();
   showScreen('npc');
@@ -3752,6 +3770,11 @@ function drawWorld(ts) {
     if (ty.frames) { pushAnimStruct(sprites, p.s, ty.frames, ty.fps || 8, p.x, p.y, ty.h || 40); continue; }
     const img = propImg(p.s);
     if (img) pushStruct(sprites, img, p.x, p.y, ty.h || 40);
+  }
+  // Birthday cake — appears in your home once Prof. Birch gives it.
+  if (gotBirthdayCake && currentZone === HOME_CAKE.zone) {
+    const ck = propImg('birthday_cake');
+    if (ck) pushStruct(sprites, ck, HOME_CAKE.x, HOME_CAKE.y, 44);
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
@@ -6327,6 +6350,7 @@ function startNewGame() {
   unlockedBarriers.clear();
   collected.clear();
   metNPCs.clear();
+  gotBirthdayCake = false;
   knownTips.clear();
   notesUnread = false;
   rocketDefeated.clear();
@@ -6376,6 +6400,7 @@ function saveGame() {
       barriers:  [...unlockedBarriers],
       collected: [...collected],
       metNPCs:   [...metNPCs],
+      gotBirthdayCake,
       knownTips: [...knownTips],
       rocketDefeated: [...rocketDefeated],
       wonGame,
@@ -6415,6 +6440,7 @@ function loadSlot(n) {
       unlockedBarriers = new Set(data.barriers || []);
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
+      gotBirthdayCake  = !!data.gotBirthdayCake;
       knownTips        = new Set(data.knownTips || []);
       rocketDefeated   = new Set(data.rocketDefeated || []);
       // Legacy saves that already had all 4 land badges count as won (don't re-fire).
