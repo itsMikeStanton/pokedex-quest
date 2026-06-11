@@ -253,14 +253,14 @@ const NPCS = [
     'mrow. Mew? MEOW! ...meeeeeeeeeow.',
     '❤️',
   ] },
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, giftKind: 'cake', art: 'professor', wander: 3, lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
     ...(gotBirthdayCake ? [] : [
       `Oh — hey ${saveName}!`,
       'I heard it was your birthday!',
-      `Happy birthday ${saveName}!! 🎂 I left a little something back at your house — enjoy!`,
+      `Happy birthday ${saveName}!! 🎂`,
     ]),
   ] },
   { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
@@ -785,7 +785,7 @@ const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the 
 function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
 let gotBirthdayCake = false;       // Prof. Birch gave the birthday cake → it appears in your home
-const HOME_CAKE = { zone: 9, x: 5, y: 3 };   // where the cake sits once you have it
+const HOME_CAKE = { zone: 9, x: 5, y: 5 };   // where the cake sits once you have it (room for the big cake)
 let pendingGift = 0;               // coins held back for the end-of-conversation reveal
 let pendingFanfare = null;         // {badge,label} an NPC's lines() queues to fanfare at dialog end
 let knownTips = new Set();         // ids of field-notes tips the player has discovered
@@ -2761,6 +2761,7 @@ function spawnWild() {
   if (ZONE_INFO[currentZone].interior) return;   // no wild Lukeymon indoors
 
   clearWild();
+  if (!metNPCs.has('Prof. Birch')) { scheduleSpawn(); return; }       // no wild Lukeymon until the Professor sends you off
   if (NO_WILD_ZONES.has(currentZone)) { scheduleSpawn(); return; }   // fully-peaceful passage zone
 
   // Now and then a wandering trainer turns up instead, looking for a quick battle.
@@ -2926,14 +2927,18 @@ function showFanfare(badge, label, onDone, title) {
 function revealGift(amount) {
   pendingGift = 0;
   const gg = currentNPC && currentNPC.ghostGift;   // ghost reward (already granted) → custom badge/label
-  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'] };
+  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'], cake: ['🎂', 'Birthday Cake!'] };
   const kind = currentNPC && KINDS[currentNPC.giftKind];
   if (!gg && !kind) coins += amount;   // novelty foods are useless; ghost gift already paid out
   updateHud();
   saveGame();
+  // The birthday cake: after the fanfare, the Professor tells you it's waiting at home.
+  const done = (currentNPC && currentNPC.giftKind === 'cake')
+    ? () => { closeNPC(); showMessage(`🎂 Prof. Birch left your cake at home — head back to enjoy it!`); }
+    : closeNPC;
   showFanfare(gg ? gg.badge : (kind ? kind[0] : '💰'),
               gg ? gg.label : (kind ? kind[1] : `+${amount} coins`),
-              closeNPC);
+              done);
 }
 
 function continueGift() {
@@ -3774,7 +3779,7 @@ function drawWorld(ts) {
   // Birthday cake — appears in your home once Prof. Birch gives it.
   if (gotBirthdayCake && currentZone === HOME_CAKE.zone) {
     const ck = propImg('birthday_cake');
-    if (ck) pushStruct(sprites, ck, HOME_CAKE.x, HOME_CAKE.y, 44);
+    if (ck) pushStruct(sprites, ck, HOME_CAKE.x, HOME_CAKE.y, 132);
   }
   for (const c of COLLECTIBLES)
     if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
