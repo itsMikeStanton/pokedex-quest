@@ -902,7 +902,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '21';   // bump to bust the image cache when art files change
+const ART_V = '22';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -990,8 +990,17 @@ function decorSolidAt(zone, x, y) {
 // Per-type visuals/light live here; placements (just {zone,x,y,s}) live in
 // WORLD.props so the world editor can drag them around.
 const PROP_TYPES = {
-  streetlight: { light: 'steady', solid: true, h: 58, gy: -34, rgb: '255,224,150', rad: 2.6 },
-  firepit:     { light: 'fire',   solid: true, h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
+  streetlight:    { light: 'steady', solid: true,  h: 56, gy: -38, rgb: '255,224,150', rad: 2.6 },
+  firepit:        { light: 'fire',   solid: true,  h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9 },
+  boulder:        { solid: true,  h: 30 },
+  cave_entrance:  { solid: true,  h: 40 },
+  pier:           { solid: false, h: 38 },
+  beach_umbrella: { solid: true,  h: 50 },
+  beach_chair:    { solid: false, h: 30 },
+  powerplant:     { solid: true,  h: 54 },
+  generator:      { light: 'steady', solid: true, h: 48, gy: -22, rgb: '120,200,255', rad: 2.0 },
+  genpod:         { light: 'steady', solid: true, h: 44, gy: -20, rgb: '120,200,255', rad: 1.8 },
+  fence:          { solid: true,  h: 22 },
 };
 const PROPS = WORLD.props || [];
 function propType(p) { return PROP_TYPES[p.s] || {}; }

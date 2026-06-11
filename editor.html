@@ -223,7 +223,7 @@ const LS_KEY = 'lukeymon_world_v1';
 let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = true, painting = false;
 let decorSel = null, decorSolid = false;       // selected décor prop + whether placed props block movement
 let propSel = null;                            // selected outdoor light prop key (streetlight / firepit)
-const PROP_KEYS = ['streetlight', 'firepit']; // outdoor light props, art in art/prop/
+const PROP_KEYS = ['streetlight', 'firepit', 'boulder', 'cave_entrance', 'pier', 'beach_umbrella', 'beach_chair', 'powerplant', 'generator', 'genpod', 'fence']; // props, art in art/prop/
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
