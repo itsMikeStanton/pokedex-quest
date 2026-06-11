@@ -915,7 +915,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '28';   // bump to bust the image cache when art files change
+const ART_V = '29';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -2032,7 +2032,7 @@ function move(dx, dy, ts) {
         unlockedBarriers.add(barrierKey); saveGame();
       } else {
         // Kick off the break effect; the barrier stays solid until it finishes, then opens.
-        barrierFX[barrierKey] = { start: ts, sign: BARRIERS[barrierKey].sign };
+        barrierFX[barrierKey] = { start: ts, sign: BARRIERS[barrierKey].sign, needsType: BARRIERS[barrierKey].needsType };
         setTimeout(() => { unlockedBarriers.add(barrierKey); delete barrierFX[barrierKey]; saveGame(); }, BARRIER_FX_MS);
         setTimeout(() => beep(392, 0.16, 0.2, 'square'), BARRIER_FX_MS - 200);   // crumble thud
       }
@@ -3990,12 +3990,18 @@ function drawBarriers(ts) {
       const { bx, by } = barrierBlockPos(exit, p, zc, zr);
       drawBarrierTile(ctx, exit.barrier, bx, by, ts, i, exit.pos.length);
     });
-    // Sign sits ON the middle barrier block (what type breaks it).
+    // Sign sits ON the middle barrier block (what TYPE breaks it).
     const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
     const bob = Math.sin(ts * 0.003) * 2;
-    ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(signEmoji, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + bob);
-    ctx.textBaseline = 'alphabetic';
+    const icon = typeIconImg(BARRIERS[exit.barrier].needsType);
+    if (icon) {
+      const h = 26, w = Math.round(h * icon.naturalWidth / icon.naturalHeight);
+      ctx.drawImage(icon, bx + TILE_SIZE / 2 - w / 2, by + TILE_SIZE / 2 - h / 2 + bob, w, h);
+    } else {
+      ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(signEmoji, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + bob);
+      ctx.textBaseline = 'alphabetic';
+    }
   }
 }
 // The break effect: each block erupts in a storm of little type-icons that fly
@@ -4034,7 +4040,8 @@ function drawBarrierFX(exit, fx, zc, zr, ts) {
     drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts, i, exit.pos.length);
     ctx.restore();
   });
-  // the particle storm of type-icons
+  // the particle storm of type-icons (glowy "fx" art, emoji fallback)
+  const fxIcon = typeFxImg(fx.needsType);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const pt of fx.parts) {
     const a = (p - pt.delay) / (1 - pt.delay);
@@ -4046,8 +4053,13 @@ function drawBarrierFX(exit, fx, zc, zr, ts) {
     const y = cy + Math.sin(pt.ang) * dist - pt.rise * a;
     const size = pt.s0 + (pt.s1 - pt.s0) * a;       // tiny → big
     ctx.globalAlpha = a < 0.6 ? 1 : Math.max(0, 1 - (a - 0.6) / 0.4);
-    ctx.font = Math.round(size) + 'px serif';
-    ctx.fillText(fx.sign, x, y);
+    if (fxIcon) {
+      const w = size * fxIcon.naturalWidth / fxIcon.naturalHeight;
+      ctx.drawImage(fxIcon, x - w / 2, y - size / 2, w, size);
+    } else {
+      ctx.font = Math.round(size) + 'px serif';
+      ctx.fillText(fx.sign, x, y);
+    }
   }
   ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
 }
@@ -4139,6 +4151,10 @@ function barrierStripImg(key) {
   if (!i) { i = new Image(); i.src = 'art/barrier/' + key + '.png?v=' + ART_V; _barrierStrip[key] = i; }
   return (i.complete && i.naturalWidth) ? i : null;
 }
+// Type symbols: framed "sign" icons (shown on the barrier block) + glowy "fx" icons (the break particles).
+const _typeIcon = {}, _typeFx = {};
+function typeIconImg(type) { let i = _typeIcon[type]; if (!i) { i = new Image(); i.src = 'art/typeicon/' + type + '.png?v=' + ART_V; _typeIcon[type] = i; } return (i.complete && i.naturalWidth) ? i : null; }
+function typeFxImg(type)   { let i = _typeFx[type];   if (!i) { i = new Image(); i.src = 'art/typefx/'   + type + '.png?v=' + ART_V; _typeFx[type]   = i; } return (i.complete && i.naturalWidth) ? i : null; }
 function drawBarrierTile(ctx, key, bx, by, ts, idx, n) {
   if (BARRIER_ART.has(key)) {                          // sliced strip art
     const img = barrierStripImg(key);
