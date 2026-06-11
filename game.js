@@ -915,7 +915,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '29';   // bump to bust the image cache when art files change
+const ART_V = '30';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -4144,7 +4144,7 @@ function drawSlumberingTitan(exit, zc, zr, ts) {
 }
 
 // Real barrier art: a 3-tile-wide strip per type, sliced across the barrier's blocks.
-const BARRIER_ART = new Set(['log', 'fence', 'lava', 'vine', 'frost', 'sand']);
+const BARRIER_ART = new Set(['log', 'fence', 'lava', 'vine', 'frost', 'sand', 'psychic']);
 const _barrierStrip = {};
 function barrierStripImg(key) {
   let i = _barrierStrip[key];
