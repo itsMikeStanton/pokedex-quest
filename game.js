@@ -978,6 +978,7 @@ function blueHouseArtImg() { return (_blueHouseImg.complete && _blueHouseImg.nat
 // Placements live in WORLD.decor: { "<zoneId>": [ {x,y,s:spriteKey,solid?}, … ] }.
 const DECOR        = WORLD.decor || {};
 const DECOR_SCALE  = 0.5;     // sliced props are ~2× a tile; halve to sit nicely in a room
+const RUG_KEYS = new Set(['household_11', 'household_12']);   // flat floor rugs — drawn under the player, over the floor
 const _decorImg = {};
 function decorImg(key) {
   let i = _decorImg[key];
@@ -2068,11 +2069,10 @@ function move(dx, dy, ts) {
     return;
   }
 
-  // 3c1. The birthday cake in your home — bump it for a little message (and it blocks).
+  // 3c1. The birthday cake in your home — bump it to start the (always-win) cake battle.
   if (gotBirthdayCake && currentZone === HOME_CAKE.zone && nx === HOME_CAKE.x && ny === HOME_CAKE.y) {
     bumpVec = { dx, dy }; bumpAnimTs = ts;
-    showMessage(`🎂 Wow! Look at this birthday cake!<br>Happy birthday, ${saveName}!`);
-    beep(523, 0.08, 0.1); setTimeout(() => beep(659, 0.08, 0.1), 110); setTimeout(() => beep(784, 0.12, 0.14), 230);
+    startCakeBattle();
     return;
   }
 
@@ -3746,6 +3746,16 @@ function drawWorld(ts) {
   }
   drawBarriers(ts);
 
+  // Rugs lie flat on the floor — drawn here (above the floor tiles, below every
+  //    structure/actor) so they never cover the player or furniture.
+  for (const d of (DECOR[currentZone] || [])) {
+    if (!RUG_KEYS.has(d.s)) continue;
+    const img = decorImg(d.s); if (!img) continue;
+    const h = Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE));
+    const w = Math.round(h * (img.naturalWidth || 32) / (img.naturalHeight || 32));
+    blitImg(img, d.x * TILE_SIZE + TILE_SIZE / 2 - camX - w / 2, (d.y + 1) * TILE_SIZE - camY - h, w, h);
+  }
+
   // ── Depth pass: tall structures + actors drawn back-to-front by their foot Y,
   //    so the player/buddy/NPCs are correctly occluded by buildings (and, later,
   //    tall trees). At an equal foot Y, structures (o:0) draw behind actors (o:1).
@@ -3765,8 +3775,9 @@ function drawWorld(ts) {
     }
   }
   // Interior décor props (furniture) — y-sorted like structures so the player
-  // walks correctly behind/in front of them.
+  // walks correctly behind/in front of them. (Rugs are drawn flat above, not here.)
   for (const d of (DECOR[currentZone] || [])) {
+    if (RUG_KEYS.has(d.s)) continue;
     const img = decorImg(d.s);
     if (img) pushStruct(sprites, img, d.x, d.y, Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE)));
   }
@@ -4852,6 +4863,19 @@ function startTrainerBattle() {
   });
 }
 
+// The birthday cake in your home — a friendly "battle" you always win: send out
+// any Lukeymon to share a slice.
+function startCakeBattle() {
+  if (caughtIds.size === 0) { showMessage('🎂 Catch a Lukeymon first to share the cake!'); return; }
+  startBossBattle({
+    title: '🎂 Birthday Cake', emoji: '🎂', rounds: 1, rule: 'any', pickDemand: () => 'Normal',
+    motto: `<b>Wow! A delicious birthday cake! 🎂</b><br>“Send out any Lukéymon to share a slice!”`,
+    intro: () => rocketIntro(),
+    onWin:  () => { coins += 20; updateHud(); saveGame(); showFanfare('🎂', `Yum! Happy birthday, ${saveName}! 🍰  +20 💰`, returnToWorld, 'DELICIOUS!'); },
+    onLose: () => returnToWorld(),
+  });
+}
+
 // Show the grunt + their Team Rocket motto, then begin the rounds on tap.
 function rocketIntro() {
   const cfg = currentBoss;
@@ -4901,26 +4925,32 @@ function nextBattleRound() {
     demandPre  = `${cfg.grunt} sent out ${mon.name}! `;
     demandPost = ' — counter it!';
   } else {
-    battleType = cfg.pickDemand(pool);
+    battleType = cfg.pickDemand ? cfg.pickDemand(pool) : 'Normal';
     // Keep it fair: if the player owns nothing that can answer this demand, re-roll
     // a few times to a type they CAN counter (so practice/dojo rounds stay winnable).
-    const owned = new Set(pool.map(p => p.type));
-    const answerable = t => (cfg.rule === 'beats' ? (BEATEN_BY[t] || [t]) : [t]).some(ct => owned.has(ct));
-    for (let i = 0; i < 8 && !answerable(battleType); i++) battleType = cfg.pickDemand(pool);
+    if (cfg.rule !== 'any') {
+      const owned = new Set(pool.map(p => p.type));
+      const answerable = t => (cfg.rule === 'beats' ? (BEATEN_BY[t] || [t]) : [t]).some(ct => owned.has(ct));
+      for (let i = 0; i < 8 && !answerable(battleType); i++) battleType = cfg.pickDemand(pool);
+    }
   }
-  // Which types count as a correct answer: the exact type (Mewtwo) or any type
-  // that is super-effective against the demanded one (birds / Team Rocket).
-  const correctTypes = cfg.rule === 'beats' ? (BEATEN_BY[battleType] || [battleType]) : [battleType];
+  // Which types count as a correct answer: ANY type (cake), the exact type (Mewtwo),
+  // or any type super-effective against the demand (birds / Team Rocket).
+  const correctTypes = cfg.rule === 'any'   ? Object.keys(BEATEN_BY)
+                     : cfg.rule === 'beats' ? (BEATEN_BY[battleType] || [battleType])
+                     : [battleType];
 
-  document.getElementById('battle-demand-pre').textContent  = demandPre;
-  document.getElementById('battle-demand-post').textContent = demandPost;
+  document.getElementById('battle-demand-pre').textContent  = cfg.rule === 'any' ? '' : demandPre;
+  document.getElementById('battle-demand-post').textContent = cfg.rule === 'any' ? '' : demandPost;
   const tEl = document.getElementById('battle-type');
-  tEl.textContent = battleType;
-  tEl.style.background = typeColor(battleType);
+  tEl.textContent = cfg.rule === 'any' ? '🎂' : battleType;
+  tEl.style.background = cfg.rule === 'any' ? 'transparent' : typeColor(battleType);
   document.getElementById('battle-instruction').textContent =
-    cfg.rule === 'beats'
-      ? `Send a Lukeymon that's STRONG against ${battleType} — try ${correctTypes.join(' / ')}!`
-      : 'Send out a Lukeymon of that type!';
+    cfg.rule === 'any'
+      ? 'Send out ANY Lukeymon to share the cake! 🍰'
+      : cfg.rule === 'beats'
+        ? `Send a Lukeymon that's STRONG against ${battleType} — try ${correctTypes.join(' / ')}!`
+        : 'Send out a Lukeymon of that type!';
   beep(150, 0.18, 0.3, 'square');
 
   // Up to six options from your roster. A counter only appears if you own one.
