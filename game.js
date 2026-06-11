@@ -319,7 +319,7 @@ const NPCS = [
   } },
 
   // ── Inside your home (zone 9) ──
-  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', lines: () => {
+  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', wander: 3, greetHop: true, lines: () => {
     if (wonGame) return [`${saveName}! A true master! So proud of you. 🏆`, `Come and visit any time, ${saveName}!`];
     return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
@@ -2079,6 +2079,14 @@ function move(dx, dy, ts) {
     return;
   }
 
+  // 3c1b. Can't leave home until you've said good morning to Mom.
+  if (currentZone === 9 && !metNPCs.has('Mom') && portalAt(currentZone, nx, ny)) {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    showMessage('💗 Say good morning to Mom before you head out!');
+    beep(440, 0.06, 0.08);
+    return;
+  }
+
   // 3c2. A wandering trainer on the destination tile → a quick battle.
   if (trainerAt(currentZone, nx, ny)) {
     bumpVec    = { dx, dy };
@@ -2615,9 +2623,9 @@ function npcStartStep(n, ts) {                       // step one tile toward the
   return false;                                      // boxed in — give up this trip
 }
 function tickNpcs(ts) {
-  if (ZONE_INFO[currentZone].interior) return;
   for (const n of NPCS) {
     if (n.wander == null || n.zone !== currentZone) continue;
+    if (n.greetHop && !metNPCs.has(n.metKey || n.name)) continue;   // excited greeter — holds still & hops until you talk
     if (npcAtNightSpot(n)) continue;                   // off at their night spot — don't wander the day position
     if (n._bt && n._bt.phase !== 'awake') continue;    // heading to bed / asleep → the bedtime system drives them, not the wander
     if (npcBedAlpha(n) < 0.98) continue;               // dusk/night/dawn → fading out, hold the wander
@@ -3162,6 +3170,23 @@ function drawNPCE(n, ts) {
     if (n.art && drawCharField(n.art, ns.dir || 'down', px, py, 53)) return;
     ctx.textAlign = 'center'; ctx.font = '22px serif';
     ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+    return;
+  }
+  // Excited greeting — bounce in place facing you (two little hops, a beat, repeat)
+  // until you've come over to talk. (Mom when you first wake up at home.)
+  if (n.greetHop && !metNPCs.has(n.metKey || n.name)) {
+    const bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE - camY;
+    const dx = playerX - n.x, dy = playerY - n.y;
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+    const cyc = ts % 1500;
+    let hop = 0;
+    if (cyc < 280) hop = -Math.abs(Math.sin((cyc / 280) * Math.PI)) * 7;
+    else if (cyc < 560) hop = -Math.abs(Math.sin(((cyc - 280) / 280) * Math.PI)) * 7;
+    const px = bx - camX + TILE_SIZE / 2, py = by + hop;
+    drawShadow(px, by + TILE_SIZE - 4, 11);
+    if (!(n.art && drawCharField(n.art, dir, px, py, 53))) { ctx.textAlign = 'center'; ctx.font = '22px serif'; ctx.fillText(n.emoji, px, py + 24); }
+    ctx.textAlign = 'center'; ctx.font = '14px serif';
+    ctx.fillText('❗', px, py - 8 + Math.sin(ts * 0.006) * 2);
     return;
   }
   const w = n._w;
