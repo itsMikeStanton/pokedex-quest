@@ -902,7 +902,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '24';   // bump to bust the image cache when art files change
+const ART_V = '25';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -1001,6 +1001,9 @@ const PROP_TYPES = {
   generator:      { light: 'steady', solid: true, h: 48, gy: -22, rgb: '120,200,255', rad: 2.0 },
   genpod:         { light: 'steady', solid: true, h: 44, gy: -20, rgb: '120,200,255', rad: 1.8 },
   fence:          { solid: true,  h: 22 },
+  blue_house:     { solid: true,  h: 88 },
+  birthday_cake:  { light: 'fire', solid: true, h: 46, gy: -42, rgb: '255,210,130', rad: 1.4 },
+  bigcake:        { solid: true,  h: 60 },
 };
 const PROPS = WORLD.props || [];
 function propType(p) { return PROP_TYPES[p.s] || {}; }
