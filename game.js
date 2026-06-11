@@ -253,15 +253,16 @@ const NPCS = [
     'mrow. Mew? MEOW! ...meeeeeeeeeow.',
     '❤️',
   ] },
-  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, giftKind: 'cake', art: 'professor', wander: 3, lines: () => [
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => [
     `Good to see you out and about, ${saveName}!`,
     'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
     `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
-    ...(gotBirthdayCake ? [] : [
+    // Second time you visit, he remembers it's your birthday and hands over the cake.
+    ...((metNPCs.has('Prof. Birch') && !gotBirthdayCake) ? [
       `Oh — hey ${saveName}!`,
       'I heard it was your birthday!',
       `Happy birthday ${saveName}!! 🎂`,
-    ]),
+    ] : []),
   ] },
   { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
     `Keeping the city safe, ${saveName}.`,
@@ -2833,8 +2834,13 @@ function talkNPC(npc) {
   if (!asleep) metNPCs.add(mk);        // "greeted" — counts toward Quest "Characters Met"
   pendingGift = (!asleep && firstMeet && npc.gift > 0) ? npc.gift : 0;
 
-  // Prof. Birch's birthday gift: the cake appears back in your home from now on.
-  if (!asleep && npc.name === 'Prof. Birch' && !gotBirthdayCake) { gotBirthdayCake = true; saveGame(); }
+  // Prof. Birch: 1st visit hands over coins (the normal gift); the 2nd visit is the
+  // birthday cake — a fanfare, then it's waiting back at your house.
+  if (!asleep && npc.name === 'Prof. Birch' && !firstMeet && !gotBirthdayCake) {
+    gotBirthdayCake = true;
+    pendingFanfare = { badge: '🎂', label: 'Birthday Cake!', after: `🎂 Prof. Birch left your cake at home — head back to enjoy it!` };
+    saveGame();
+  }
 
   renderNpcLine();
   showScreen('npc');
@@ -2901,7 +2907,7 @@ function advanceNPC() {
   if (typerActive()) { finishTyper(); return; }   // first tap finishes the line, next tap advances
   if (npcLineIdx >= npcLines.length - 1) {
     if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
-    if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, closeNPC); return; }
+    if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, f.after ? () => { closeNPC(); showMessage(f.after); } : closeNPC); return; }
     closeNPC();
     return;
   }
@@ -2927,18 +2933,14 @@ function showFanfare(badge, label, onDone, title) {
 function revealGift(amount) {
   pendingGift = 0;
   const gg = currentNPC && currentNPC.ghostGift;   // ghost reward (already granted) → custom badge/label
-  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'], cake: ['🎂', 'Birthday Cake!'] };
+  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'] };
   const kind = currentNPC && KINDS[currentNPC.giftKind];
   if (!gg && !kind) coins += amount;   // novelty foods are useless; ghost gift already paid out
   updateHud();
   saveGame();
-  // The birthday cake: after the fanfare, the Professor tells you it's waiting at home.
-  const done = (currentNPC && currentNPC.giftKind === 'cake')
-    ? () => { closeNPC(); showMessage(`🎂 Prof. Birch left your cake at home — head back to enjoy it!`); }
-    : closeNPC;
   showFanfare(gg ? gg.badge : (kind ? kind[0] : '💰'),
               gg ? gg.label : (kind ? kind[1] : `+${amount} coins`),
-              done);
+              closeNPC);
 }
 
 function continueGift() {
