@@ -4145,6 +4145,12 @@ function drawBarrierTile(ctx, key, bx, by, ts) {
     ctx.fillRect(bx + 5, by + 3, 3, 3);
     ctx.fillRect(bx + 22, by + 10, 3, 3);
   } else if (key === 'rock') {
+    const img = propImg('boulder');                  // real boulder art → a row of river rocks
+    if (img) {
+      const h = 34, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+      ctx.drawImage(img, bx + TILE_SIZE / 2 - w / 2, by + TILE_SIZE - h + 1, w, h);
+      return;
+    }
     ctx.fillStyle = '#3a3a3a';
     ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
     const rocks = [
