@@ -779,6 +779,8 @@ let audioUnlocked = false;   // iOS needs a silent buffer played inside a gestur
 let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
+let barrierFX = {};                // barrier key -> { start, sign } while its break animation plays
+const BARRIER_FX_MS = 850;         // how long the shake/shrink break effect runs
 let collected = new Set();         // ids of badges/collectibles found
 let stones = {};                   // evolution-stone inventory { fire: n, water: n, … }
 let foundStones = new Set();       // ids of stone finds already picked up
@@ -2024,9 +2026,16 @@ function move(dx, dy, ts) {
   if (barrierKey) {
     bumpVec    = { dx, dy };
     bumpAnimTs = ts;
+    if (barrierFX[barrierKey]) return;                 // already breaking — hold tight
     if (buddyClearsBarrier(barrierKey)) {
-      unlockedBarriers.add(barrierKey);
-      saveGame();
+      if (barrierKey === 'lullaby') {                  // the Gigantamax dragon has its own clear — no generic break FX
+        unlockedBarriers.add(barrierKey); saveGame();
+      } else {
+        // Kick off the break effect; the barrier stays solid until it finishes, then opens.
+        barrierFX[barrierKey] = { start: ts, sign: BARRIERS[barrierKey].sign };
+        setTimeout(() => { unlockedBarriers.add(barrierKey); delete barrierFX[barrierKey]; saveGame(); }, BARRIER_FX_MS);
+        setTimeout(() => beep(392, 0.16, 0.2, 'square'), BARRIER_FX_MS - 200);   // crumble thud
+      }
       beep(523, 0.1, 0.1);
       setTimeout(() => beep(784, 0.14, 0.18), 110);
       showMessage(BARRIERS[barrierKey].cleared);
@@ -3960,33 +3969,62 @@ function drawPet(ts) {
 }
 
 // ─── Barrier graphics ────────────────────────────────
+// Screen position of one barrier block (the tile at offset p along the exit edge).
+function barrierBlockPos(exit, p, zc, zr) {
+  if      (exit.dir === 'south') return { bx: p * TILE_SIZE - camX, by: (zr - 1) * TILE_SIZE - camY };
+  else if (exit.dir === 'north') return { bx: p * TILE_SIZE - camX, by: 0 - camY };
+  else if (exit.dir === 'west')  return { bx: 0 - camX,             by: p * TILE_SIZE - camY };
+  else                           return { bx: (zc - 1) * TILE_SIZE - camX, by: p * TILE_SIZE - camY };
+}
 function drawBarriers(ts) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
   for (const exit of zoneExits) {
-    if (!exit.barrier || isBarrierUnlocked(exit.barrier)) continue;
+    if (!exit.barrier) continue;
+    const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+    if (barrierFX[exit.barrier]) { drawBarrierFX(exit, barrierFX[exit.barrier], zc, zr, ts); continue; }   // breaking!
+    if (isBarrierUnlocked(exit.barrier)) continue;
     const signEmoji = BARRIERS[exit.barrier].sign;
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
-    const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
     if (exit.barrier === 'lullaby') { drawSlumberingTitan(exit, zc, zr, ts); continue; }
     for (const p of exit.pos) {
-      let bx, by;
-      if      (exit.dir === 'south') { bx = p * TILE_SIZE - camX; by = (zr - 1) * TILE_SIZE - camY; }
-      else if (exit.dir === 'north') { bx = p * TILE_SIZE - camX; by = 0 - camY; }
-      else if (exit.dir === 'west')  { bx = 0 - camX; by = p * TILE_SIZE - camY; }
-      else if (exit.dir === 'east')  { bx = (zc - 1) * TILE_SIZE - camX; by = p * TILE_SIZE - camY; }
+      const { bx, by } = barrierBlockPos(exit, p, zc, zr);
       drawBarrierTile(ctx, exit.barrier, bx, by, ts);
     }
-    // Draw a floating emoji sign above / beside the middle barrier tile
-    let sx, sy;
-    if      (exit.dir === 'south') { sx = midP * TILE_SIZE + 4 - camX; sy = (zr - 2) * TILE_SIZE + 4 - camY; }
-    else if (exit.dir === 'north') { sx = midP * TILE_SIZE + 4 - camX; sy = TILE_SIZE + 4 - camY; }
-    else if (exit.dir === 'west')  { sx = TILE_SIZE + 4 - camX;        sy = midP * TILE_SIZE + 4 - camY; }
-    else                           { sx = (zc - 2) * TILE_SIZE + 4 - camX; sy = midP * TILE_SIZE + 4 - camY; }
-    const bob = Math.sin(ts * 0.003) * 3;
-    ctx.font = '22px serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(signEmoji, sx, sy + bob + 20);
+    // Sign sits ON the middle barrier block (what type breaks it).
+    const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+    const bob = Math.sin(ts * 0.003) * 2;
+    ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(signEmoji, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + bob);
+    ctx.textBaseline = 'alphabetic';
   }
+}
+// The break effect: a type icon pops onto each block and wiggles while the blocks
+// shake, then everything shrinks and fades away — and the path opens.
+function drawBarrierFX(exit, fx, zc, zr, ts) {
+  const p = Math.min((ts - fx.start) / BARRIER_FX_MS, 1);
+  const shake = (p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4) * 3.2;          // shaking, eases off as it shrinks
+  const scale = p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4);     // shrink over the last 40%
+  const fade  = p < 0.7 ? 1 : Math.max(0, 1 - (p - 0.7) / 0.3);
+  const popIn = Math.min(1, p / 0.15);                              // icon pops in
+  for (const pp of exit.pos) {
+    const { bx, by } = barrierBlockPos(exit, pp, zc, zr);
+    const jx = (Math.random() * 2 - 1) * shake, jy = (Math.random() * 2 - 1) * shake;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(bx + TILE_SIZE / 2 + jx, by + TILE_SIZE / 2 + jy);
+    ctx.scale(scale, scale);
+    drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts);
+    ctx.restore();
+    // little type icon wiggling on the block
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.font = Math.round(18 * popIn * (0.6 + 0.4 * scale)) + 'px serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const wig = Math.sin(ts * 0.022 + pp * 1.7) * 4;
+    ctx.fillText(fx.sign, bx + TILE_SIZE / 2 + wig + jx, by + TILE_SIZE / 2 - 4 + Math.sin(ts * 0.018 + pp) * 3 + jy);
+    ctx.restore();
+  }
+  ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
 }
 
 // A colossal slumbering guardian beast — drawn once, looming across the whole
