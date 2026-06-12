@@ -498,6 +498,14 @@ const STONES = {
   leaf:    { name: 'Leaf Stone',    emoji: '🍃' },
   moon:    { name: 'Moon Stone',    emoji: '🌙' },
 };
+// Stone artwork (keyed gemstones). Src for <img> tags; img() for canvas draws.
+const _stoneImg = {};
+function stoneSrc(key) { return 'art/stone/' + key + '.png?v=' + ART_V; }
+function stoneImg(key) {
+  let i = _stoneImg[key];
+  if (!i) { i = new Image(); i.src = stoneSrc(key); _stoneImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
 const STONE_EVOS = [
   { from: 25,  stone: 'thunder', to: 26  },  // Pikachu    → Raichu
   { from: 133, stone: 'thunder', to: 135 },  // Eevee      → Jolteon
@@ -923,7 +931,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '31';   // bump to bust the image cache when art files change
+const ART_V = '32';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -3182,8 +3190,14 @@ function drawStoneE(s, ts) {
   pickupGlow(px, py + 13 + bob, ts, '150,230,255');   // bright cyan beacon
   ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
-  ctx.font = '12px serif'; ctx.fillText('💎', px, py - 11 + bob);
-  ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
+  ctx.font = '12px serif'; ctx.fillText('✨', px, py - 11 + bob);
+  const img = stoneImg(s.stone);
+  if (img) {
+    const h = 30, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    ctx.drawImage(img, px - w / 2, py + 4 + bob, w, h);
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
+  }
 }
 function drawNPCE(n, ts) {
   if (npcAtNightSpot(n)) {                            // relocated for the evening — stand still at the spot
@@ -5471,7 +5485,8 @@ function renderQuestPage() {
   const stoneN = STONE_FINDS.filter(s => foundStones.has(s.id)).length;
   const stoneBody = STONE_FINDS.map(s => {
     const got = foundStones.has(s.id), info = STONES[s.stone];
-    return row(info.emoji, info.name, got, got ? 'in your bag — reusable' : (ZONE_INFO[s.zone] ? 'Hidden in ' + ZONE_INFO[s.zone].name : ''));
+    const ic = `<img class="q-badge" src="${stoneSrc(s.stone)}" alt="">`;
+    return row(ic, info.name, got, got ? 'in your bag — reusable' : (ZONE_INFO[s.zone] ? 'Hidden in ' + ZONE_INFO[s.zone].name : ''));
   }).join('');
 
   // ── Areas explored ──
@@ -5659,18 +5674,24 @@ function showDetail(poke) {
   evoWrap.innerHTML = '';
   const nav = [buddyBtn];
   const got = id => POKEMON_DATA.find(p => p.id === id) && !caughtIds.has(id);
-  const mkBtn = (label, fn) => {
+  const stoneIc = key => `<img class="evo-stone" src="${stoneSrc(key)}" alt=""> `;
+  const mkBtn = (label, fn, stoneKey) => {
     const b = document.createElement('button');
-    b.className = 'pixel-btn small green'; b.textContent = label;
+    b.className = 'pixel-btn small green';
+    if (stoneKey) b.innerHTML = stoneIc(stoneKey) + label; else b.textContent = label;
     b.addEventListener('click', fn); evoWrap.appendChild(b); nav.push(b);
   };
-  const mkHint = txt => { const h = document.createElement('div'); h.className = 'detail-evo-hint'; h.textContent = txt; evoWrap.appendChild(h); };
+  const mkHint = (txt, stoneKey) => {
+    const h = document.createElement('div'); h.className = 'detail-evo-hint';
+    if (stoneKey) h.innerHTML = stoneIc(stoneKey) + txt; else h.textContent = txt;
+    evoWrap.appendChild(h);
+  };
 
   // Stone evolutions
   evolutionsFor(poke.id).filter(r => got(r.to)).forEach(r => {
     const t = POKEMON_DATA.find(p => p.id === r.to);
-    if ((stones[r.stone] || 0) > 0) mkBtn(`${STONES[r.stone].emoji} Evolve → ${t.name}`, () => evolveWithStone(poke, r));
-    else mkHint(`${STONES[r.stone].emoji} Needs a ${STONES[r.stone].name}`);
+    if ((stones[r.stone] || 0) > 0) mkBtn(`Evolve → ${t.name}`, () => evolveWithStone(poke, r), r.stone);
+    else mkHint(`Needs a ${STONES[r.stone].name}`, r.stone);
   });
   // Buddy / battle / dance evolutions
   evosFor(poke.id).filter(r => got(r.to)).forEach(r => {
@@ -6471,7 +6492,7 @@ function updateHud() {
   const hs = document.getElementById('hud-stones');
   if (hs) {
     const owned = Object.keys(STONES).filter(k => (stones[k] || 0) > 0);  // reusable → show icons, no counts
-    hs.innerHTML = owned.map(k => STONES[k].emoji).join('');
+    hs.innerHTML = owned.map(k => `<img class="hud-stone" src="${stoneSrc(k)}" alt="" title="${STONES[k].name}">`).join('');
     hs.classList.toggle('hidden', owned.length === 0);
   }
 
@@ -6972,7 +6993,7 @@ function celebrateStone(s) {
   const st = STONES[s.stone];
   document.getElementById('result-stars').classList.remove('hidden');
   document.getElementById('result-icon').innerHTML =
-    `<span style="font-size:76px;display:inline-block;animation:trophypop .5s ease-out both">${st.emoji}</span>`;
+    `<img src="${stoneSrc(s.stone)}" alt="" style="height:104px;image-rendering:pixelated;display:inline-block;animation:trophypop .5s ease-out both">`;
   document.getElementById('result-title').textContent   = '💎 STONE FOUND!';
   document.getElementById('result-name').textContent    = st.name;
   document.getElementById('result-message').textContent =

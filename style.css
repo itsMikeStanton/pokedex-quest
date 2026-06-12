@@ -2117,6 +2117,8 @@ body.immersive #fullscreen-btn {
   color: #c9a85a;
   letter-spacing: .5px;
 }
+.evo-stone { height: 14px; width: auto; vertical-align: middle; image-rendering: pixelated; }
+.hud-stone { height: 16px; width: auto; vertical-align: middle; image-rendering: pixelated; }
 
 /* ─── Atlas (true-shape) map view ──────────────────────────────────── */
 #map-atlas { position: absolute; inset: 0; width: 100%; height: 100%; display: none;
