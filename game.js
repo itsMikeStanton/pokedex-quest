@@ -225,7 +225,7 @@ const COLLECTIBLES = [
   { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', type: 'Electric', name: 'Tunnel Badge' },
   { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', type: 'Psychic',  name: 'Crystal Badge' },
   { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', type: 'Flying',   name: 'Echo Badge' },
-  { id: 'badge_lullaby', zone: 29, x:  9, y:  6, emoji: '😴', type: 'Fairy',    name: 'Lullaby Badge' },
+  { id: 'badge_lullaby', zone: 29, x:  3, y:  4, emoji: '😴', type: 'Fairy',    name: 'Lullaby Badge' },
   // Awarded automatically — not placed in the world.
   { id: 'badge_gym',  auto: true, emoji: '🥊', type: 'Fighting', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
   { id: 'badge_trio', auto: true, emoji: '🦅', type: 'Dragon',   name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
@@ -2074,6 +2074,31 @@ function move(dx, dy, ts) {
       showMessage(BARRIERS[barrierKey].hint);
       learnTip('barrier_' + barrierKey);
     }
+    return;
+  }
+
+  // 3·G. The Gigantamax Gengar's own body is the blocker (no box). Awake, it
+  //      guards the seam — sing it down with Jigglypuff; asleep, it just snoozes.
+  const gengar = gengarBlockAt(nx, ny);
+  if (gengar === 'awake') {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    if (buddyClearsBarrier('lullaby')) {
+      unlockedBarriers.add('lullaby');
+      lullabyClearFX = { start: ts };
+      setTimeout(() => { lullabyClearFX = null; }, LULLABY_FX_MS);
+      saveGame();
+      beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+      showMessage(BARRIERS.lullaby.cleared); learnTip('barrier_lullaby');
+    } else {
+      beep(160, 0.07, 0.1, 'square');
+      showMessage(BARRIERS.lullaby.hint); learnTip('barrier_lullaby');
+    }
+    return;
+  }
+  if (gengar === 'sleep') {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    beep(294, 0.09, 0.1);
+    showMessage("💤 ...he's not so scary now. What a big, sleepy guy.");
     return;
   }
 
@@ -4032,10 +4057,7 @@ function drawBarriers(ts) {
   for (const exit of zoneExits) {
     if (!exit.barrier) continue;
     const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
-    if (exit.barrier === 'lullaby') {                  // Gengar guardian: lay its lair ground here;
-      if (lullabyClearFX || !isBarrierUnlocked('lullaby')) drawTitanGround(exit, zc, zr);   // the body is drawn in the depth pass
-      continue;
-    }
+    if (exit.barrier === 'lullaby') continue;          // Gengar IS the blocker — body drawn in the depth pass, no box
     if (barrierFX[exit.barrier]) { drawBarrierFX(exit, barrierFX[exit.barrier], zc, zr, ts); continue; }   // breaking!
     if (isBarrierUnlocked(exit.barrier)) continue;
     const signEmoji = BARRIERS[exit.barrier].sign;
@@ -4132,18 +4154,18 @@ function titanSleepImg() {
 const GENGAR_SLEEP = { zone: 29, x: 13, y: 12 };
 let lullabyClearFX = null;   // { start } while the awake Gengar fades into sleep at the seam
 
-// Dark trampled "lair" ground over each blocked seam tile.
-function drawTitanGround(exit, zc, zr) {
-  for (const p of exit.pos) {
-    let bx, by;
-    if      (exit.dir === 'south') { bx = p * TILE_SIZE - camX; by = (zr - 1) * TILE_SIZE - camY; }
-    else if (exit.dir === 'north') { bx = p * TILE_SIZE - camX; by = 0 - camY; }
-    else if (exit.dir === 'west')  { bx = 0 - camX; by = p * TILE_SIZE - camY; }
-    else                           { bx = (zc - 1) * TILE_SIZE - camX; by = p * TILE_SIZE - camY; }
-    ctx.fillStyle = '#2a2620'; ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
-    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(bx + 3, by + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-  }
+// The tiles each Gengar's body physically blocks (≈ its footprint). The awake one
+// guards the east edge of Sunpetal Meadow; the sleeper sprawls across the SE meadow.
+function tileRect(x0, y0, x1, y1) { const s = new Set(); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) s.add(x + ',' + y); return s; }
+const AWAKE_GENGAR = { zone: 13, tiles: tileRect(27, 4, 29, 10) };
+const SLEEP_GENGAR = { zone: 29, tiles: tileRect(9, 8, 17, 13) };
+// What (if anything) a Gengar is blocking at a destination tile.
+function gengarBlockAt(nx, ny) {
+  if (currentZone === AWAKE_GENGAR.zone && !isBarrierUnlocked('lullaby') && AWAKE_GENGAR.tiles.has(nx + ',' + ny)) return 'awake';
+  if (currentZone === SLEEP_GENGAR.zone && isBarrierUnlocked('lullaby') && SLEEP_GENGAR.tiles.has(nx + ',' + ny)) return 'sleep';
+  return null;
 }
+
 // Screen centre of a barrier opening.
 function titanCenter(exit, zc, zr) {
   const ps = exit.pos, lo = Math.min(...ps), hi = Math.max(...ps) + 1;
@@ -4162,14 +4184,23 @@ function titanSortY(exit, zc, zr) {
   if (exit.dir === 'south') return (zr + 2) * TILE_SIZE;
   return 3 * TILE_SIZE;
 }
-// The awake Gengar's draw rect (2× big, dropped 1.5 tiles, with a breathing wobble).
+// The awake Gengar's draw rect (2.25× big, dropped 1.5 tiles, with a breathing wobble).
 function awakeGengarRect(cx, cy, ts) {
   const U = TILE_SIZE, down = U * 1.5;
   const breathe = Math.sin(ts * 0.0022) * 3;
   const img = titanImg();
-  const H = U * 2.8 * 2 + breathe;                       // 2× bigger
+  const H = U * 2.8 * 2.25 + breathe;                    // 2.25× bigger
   const W = img ? H * img.naturalWidth / img.naturalHeight : U * 2.8;
   return { img, W, H, x: cx - W / 2, y: cy + U * 0.55 + down - H, footY: cy + U * 0.5 + down };
+}
+// Sporadic little angry hop: most ~2.4s windows it stays put; some it leaps.
+function gengarHop(ts) {
+  const period = 2400, idx = Math.floor(ts / period);
+  const r = Math.abs(Math.sin(idx * 12.9898) * 43758.5453) % 1;   // pseudo-random per window
+  if (r > 0.55) return 0;                                          // this window: no jump
+  const local = (ts % period) / period, dur = 0.20;
+  if (local >= dur) return 0;
+  return Math.sin(local / dur * Math.PI) * TILE_SIZE * (0.45 + r * 0.7);
 }
 // A gentle rising stream of sleepy "z"s.
 function drawSleepZs(x, baseY, ts, scale, alpha) {
@@ -4190,16 +4221,17 @@ function drawSleepZs(x, baseY, ts, scale, alpha) {
 function drawSlumberingTitan(exit, zc, zr, ts) {
   const { cx, cy, vert } = titanCenter(exit, zc, zr);
   const r = awakeGengarRect(cx, cy, ts);
-  const jitter = Math.sin(ts * 0.021) * 0.8;          // tiny angry twitch
+  const hop = gengarHop(ts);                          // sporadic angry leap
+  const jitter = Math.sin(ts * 0.021) * 0.8 + (hop > 0 ? Math.sin(ts * 0.08) * 2 : 0);  // extra shake mid-jump
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,.3)';
-  ctx.beginPath(); ctx.ellipse(cx, r.footY, r.W * 0.30, 9, 0, 0, Math.PI * 2); ctx.fill();
-  if (r.img) ctx.drawImage(r.img, r.x + jitter, r.y, r.W, r.H);
-  else { ctx.fillStyle = '#3a1d4a'; ctx.fillRect(r.x, r.y, r.W, r.H); }
+  ctx.beginPath(); ctx.ellipse(cx, r.footY, r.W * (0.30 - hop * 0.0008), Math.max(4, 9 - hop * 0.06), 0, 0, Math.PI * 2); ctx.fill();  // shadow shrinks as it leaps
+  if (r.img) ctx.drawImage(r.img, r.x + jitter, r.y - hop, r.W, r.H);
+  else { ctx.fillStyle = '#3a1d4a'; ctx.fillRect(r.x, r.y - hop, r.W, r.H); }
   ctx.restore();
   const bob = Math.sin(ts * 0.003) * 3;               // hint it's AWAKE — sing it down
   ctx.font = '22px serif'; ctx.textAlign = 'left';
-  ctx.fillText('🎵', cx + (vert ? -14 : -4), Math.round(r.y - 6) + bob);
+  ctx.fillText('🎵', cx + (vert ? -14 : -4), Math.round(r.y - hop - 6) + bob);
 }
 // The lullaby lands: the awake Gengar fades out in a swelling cloud of zzz.
 function drawLullabyClear(exit, zc, zr, ts) {
