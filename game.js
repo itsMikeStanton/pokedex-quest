@@ -915,7 +915,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '30';   // bump to bust the image cache when art files change
+const ART_V = '31';   // bump to bust the image cache when art files change
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
@@ -5472,7 +5472,8 @@ function renderQuestPage() {
   const tipN = knownTips.size, tipT = allTips().length;
   const barrierKeys = Object.keys(BARRIERS);
   const barrN = barrierKeys.filter(k => unlockedBarriers.has(k)).length, barrT = barrierKeys.length;
-  const barrBody = barrierKeys.map(k => row(BARRIERS[k].sign, BARRIER_LABEL[k] || k, unlockedBarriers.has(k),
+  const badgeIc = k => `<img class="q-badge" src="art/typeicon/${BARRIERS[k].needsType}.png?v=${ART_V}" alt="" onerror="this.replaceWith(document.createTextNode('${BARRIERS[k].sign}'))">`;
+  const barrBody = barrierKeys.map(k => row(badgeIc(k), BARRIER_LABEL[k] || k, unlockedBarriers.has(k),
     unlockedBarriers.has(k) ? '' : 'needs a ' + BARRIERS[k].needsType + ' buddy')).join('');
 
   // ── Achievements (milestones) ──

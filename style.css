@@ -622,6 +622,8 @@ body {
 .q-row.q-done .q-tick { color: #5fe0a0; }
 .q-row.q-todo .q-tick { color: #44607c; }
 .q-ic { width: 12px; text-align: center; flex-shrink: 0; }
+.q-ic:has(.q-badge) { width: 26px; }
+.q-badge { height: 24px; width: auto; vertical-align: middle; image-rendering: pixelated; margin: -6px 0; }
 .q-lbl { color: #d8e6f2; }
 .q-row.q-todo .q-lbl { color: #8aa0b6; }
 .q-sub { display: block; font-size: 5px; color: #7a90a6; margin-top: 1px; }
