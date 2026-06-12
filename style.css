@@ -127,6 +127,10 @@ body {
   font-size: 16px;
   line-height: 1;
 }
+/* Framed UI icon art (each comes on its own little tile). */
+.ui-icon  { height: 24px; width: auto; image-rendering: pixelated; display: block; }
+.ui-stat  { height: 17px; width: auto; image-rendering: pixelated; vertical-align: middle; }
+.ui-inline { height: 14px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 
 /* ─── HUD buddy chip ────────────────────────────────── */
 #hud-buddy {
@@ -798,6 +802,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   gap: 8px;
 }
 #enc-thought-emoji { font-size: 18px; }
+.thought-icon { height: 24px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 #enc-thought-text  { font-size: 7px; color: #333; }
 .bubble-tail {
   position: absolute;
@@ -849,6 +854,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 .action-btn:active { transform: translateY(2px) !important; box-shadow: none !important; }
 
 .action-icon  { font-size: 22px; line-height: 1; }
+.action-img   { height: 30px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 .action-label { font-size: 6px; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,.5); }
 
 .feed-btn { background: #38a038; box-shadow: 0 4px 0 #1a6018; }

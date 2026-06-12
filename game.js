@@ -506,6 +506,15 @@ function stoneImg(key) {
   if (!i) { i = new Image(); i.src = stoneSrc(key); _stoneImg[key] = i; }
   return (i.complete && i.naturalWidth) ? i : null;
 }
+// Encounter action icons (the wild Pokémon's wish / the Feed-Pet-Play buttons).
+const ACTION_ICON = { '🍎': 'eat', '🤚': 'groom', '⚽': 'play' };
+function actionIconSrc(emoji) { const k = ACTION_ICON[emoji]; return k ? 'art/action/' + k + '.png?v=' + ART_V : null; }
+function setActionIcon(el, emoji, fallback) {
+  if (!el) return;
+  const src = actionIconSrc(emoji);
+  if (src) el.innerHTML = `<img class="thought-icon" src="${src}" alt="">`;
+  else el.textContent = emoji || fallback || '';
+}
 const STONE_EVOS = [
   { from: 25,  stone: 'thunder', to: 26  },  // Pikachu    → Raichu
   { from: 133, stone: 'thunder', to: 135 },  // Eevee      → Jolteon
@@ -4380,7 +4389,7 @@ function beginEncounter(poke, roamer = null) {
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
   setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 120);
   document.getElementById('enc-bottom').classList.remove('hidden');
-  document.getElementById('enc-thought-emoji').textContent   = poke.actionEmoji;
+  setActionIcon(document.getElementById('enc-thought-emoji'), poke.actionEmoji);
 
   // Enable/reset buttons
   document.querySelectorAll('.action-btn').forEach(b => {
@@ -5658,7 +5667,7 @@ function showDetail(poke) {
 
   document.getElementById('detail-desc').textContent   = poke.description;
 
-  document.getElementById('detail-befriend-icon').textContent = poke.actionEmoji || '💚';
+  setActionIcon(document.getElementById('detail-befriend-icon'), poke.actionEmoji, '💚');
   document.getElementById('detail-befriend-text').textContent = poke.befriendTip || '';
 
   detailPoke = poke;
@@ -6818,7 +6827,7 @@ function wakeAudio() {
 
 function updateMuteBtn() {
   const b = document.getElementById('mute-btn');
-  if (b) b.textContent = muted ? '🔇' : '🔊';
+  if (b) b.innerHTML = `<img class="ui-icon" src="art/ui/${muted ? 'sound_off' : 'sound'}.png?v=${ART_V}" alt="${muted ? 'muted' : 'sound'}">`;
 }
 function toggleMute() {
   muted = !muted;
