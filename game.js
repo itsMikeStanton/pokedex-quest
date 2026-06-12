@@ -212,24 +212,32 @@ const MAPS = ZONE_INFO.map((z) => {
 // just waiting to be found. Positions below are a preferred spot; they snap
 // to the nearest walkable tile of the (procedural) zone at load.
 const COLLECTIBLES = [
-  { id: 'badge_volcano', zone: 4, x: 10, y: 14, emoji: '🎖️', name: 'Ember Badge' },
-  { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', name: 'Thicket Badge' },
-  { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', name: 'Glacier Badge' },
-  { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', name: 'Dune Badge' },
+  { id: 'badge_volcano', zone: 4, x: 10, y: 14, emoji: '🎖️', type: 'Fire',     name: 'Ember Badge' },
+  { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', type: 'Grass',    name: 'Thicket Badge' },
+  { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', type: 'Ice',      name: 'Glacier Badge' },
+  { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', type: 'Ground',   name: 'Dune Badge' },
   // Optional badges hidden in the new lands (collectible — not needed to win).
-  { id: 'badge_safari',  zone: 15, x: 17, y: 11, emoji: '🦓', name: 'Savanna Badge' },
-  { id: 'badge_frost',   zone: 16, x: 10, y:  7, emoji: '❄️', name: 'Frost Badge' },
-  { id: 'badge_spirit',  zone: 19, x: 10, y:  7, emoji: '👻', name: 'Spirit Badge' },
+  { id: 'badge_safari',  zone: 15, x: 17, y: 11, emoji: '🦓', type: 'Normal',   name: 'Savanna Badge' },
+  { id: 'badge_frost',   zone: 16, x: 10, y:  7, emoji: '❄️', type: 'Water',    name: 'Frost Badge' },
+  { id: 'badge_spirit',  zone: 19, x: 10, y:  7, emoji: '👻', type: 'Ghost',    name: 'Spirit Badge' },
   // Cavern treasures — one hidden deep in each cave (bring a glowing buddy!).
-  { id: 'badge_cavern',  zone: 8,  x: 13, y:  9, emoji: '🕳️', name: 'Cavern Badge' },
-  { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', name: 'Tunnel Badge' },
-  { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', name: 'Crystal Badge' },
-  { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', name: 'Echo Badge' },
-  { id: 'badge_lullaby', zone: 29, x:  9, y:  6, emoji: '😴', name: 'Lullaby Badge' },
+  { id: 'badge_cavern',  zone: 8,  x: 13, y:  9, emoji: '🕳️', type: 'Rock',     name: 'Cavern Badge' },
+  { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', type: 'Electric', name: 'Tunnel Badge' },
+  { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', type: 'Psychic',  name: 'Crystal Badge' },
+  { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', type: 'Flying',   name: 'Echo Badge' },
+  { id: 'badge_lullaby', zone: 29, x:  9, y:  6, emoji: '😴', type: 'Fairy',    name: 'Lullaby Badge' },
   // Awarded automatically — not placed in the world.
-  { id: 'badge_gym',  auto: true, emoji: '🥊', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
-  { id: 'badge_trio', auto: true, emoji: '🦅', name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
+  { id: 'badge_gym',  auto: true, emoji: '🥊', type: 'Fighting', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
+  { id: 'badge_trio', auto: true, emoji: '🦅', type: 'Dragon',   name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
 ];
+// A collectible badge's artwork is the framed type badge it maps to.
+function collectibleBadgeSrc(c) { return 'art/typeicon/' + c.type + '.png?v=' + ART_V; }
+function collectibleBadgeImg(c) {
+  let i = _collBadge[c.id];
+  if (!i) { i = new Image(); i.src = collectibleBadgeSrc(c); _collBadge[c.id] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+const _collBadge = {};
 
 // Friendly characters you can walk up to and talk with. They stand on a tile
 // (snapped to an open walkable spot) and block it — bump into them to chat.
@@ -3158,7 +3166,13 @@ function drawCollectibleE(c, ts) {
   ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
   ctx.font = '13px serif'; ctx.fillText('✨', px, py - 11 + bob);
-  ctx.font = '26px serif'; ctx.fillText(c.emoji, px, py + 21 + bob);
+  const badge = collectibleBadgeImg(c);
+  if (badge) {
+    const h = 28, w = Math.round(h * badge.naturalWidth / badge.naturalHeight);
+    ctx.drawImage(badge, px - w / 2, py + 6 + bob, w, h);
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(c.emoji, px, py + 21 + bob);
+  }
 }
 function drawStoneE(s, ts) {
   const bob = Math.sin(ts * 0.005) * 3;
@@ -4702,8 +4716,9 @@ function showChampion() {
   row.innerHTML = '';
   LAND_BADGES.forEach(id => {
     const c = COLLECTIBLES.find(b => b.id === id);
-    const s = document.createElement('span');
-    s.textContent = c ? c.emoji : '🏅';
+    const s = c
+      ? Object.assign(new Image(), { src: collectibleBadgeSrc(c), className: 'champ-badge', alt: c.name })
+      : Object.assign(document.createElement('span'), { textContent: '🏅' });
     s.style.margin = '0 2px';
     row.appendChild(s);
   });
@@ -5448,7 +5463,8 @@ function renderQuestPage() {
   const badgeBody = COLLECTIBLES.map(b => {
     const got = collected.has(b.id);
     const where = b.auto ? b.hint : (b.zone != null && ZONE_INFO[b.zone] ? 'Hidden in ' + ZONE_INFO[b.zone].name : '');
-    return row(b.emoji, b.name, got, got ? '' : where);
+    const ic = `<img class="q-badge" src="${collectibleBadgeSrc(b)}" alt="">`;
+    return row(ic, b.name, got, got ? '' : where);
   }).join('');
 
   // ── Evolution Stones ──
@@ -6119,7 +6135,8 @@ function renderMap() {
     const b = document.createElement('span');
     const have = collected.has(c.id);
     b.className = 'map-badge' + (have ? ' have' : '');
-    b.textContent = have ? c.emoji : '❔';
+    if (have) b.innerHTML = `<img class="map-badge-img" src="${collectibleBadgeSrc(c)}" alt="">`;
+    else b.textContent = '❔';
     b.title = have ? c.name : '???';
     tray.appendChild(b);
   });
@@ -6150,7 +6167,8 @@ function renderBadgeCase() {
 
     const icon = document.createElement('div');
     icon.className = 'badge-card-icon';
-    icon.textContent = have ? c.emoji : '🔒';
+    if (have) icon.innerHTML = `<img class="badge-card-img" src="${collectibleBadgeSrc(c)}" alt="">`;
+    else icon.textContent = '🔒';
 
     const name = document.createElement('div');
     name.className = 'badge-card-name';
@@ -6934,7 +6952,7 @@ function celebrateBadge(item) {
 
   document.getElementById('result-stars').classList.remove('hidden');
   document.getElementById('result-icon').innerHTML =
-    `<span style="font-size:76px;display:inline-block;animation:trophypop .5s ease-out both">${item.emoji}</span>`;
+    `<img src="${collectibleBadgeSrc(item)}" alt="" style="height:96px;image-rendering:pixelated;display:inline-block;animation:trophypop .5s ease-out both">`;
   document.getElementById('result-title').textContent   = '🏅 BADGE GET!';
   document.getElementById('result-name').textContent    = item.name;
   document.getElementById('result-message').textContent =

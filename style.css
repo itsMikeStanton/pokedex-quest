@@ -1533,6 +1533,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 }
 .badge-card.have { border-color: #e0c040; background: #1c1a08; box-shadow: 0 0 8px rgba(224,192,64,.25); }
 .badge-card-icon { font-size: 30px; line-height: 1; }
+.badge-card-img { height: 40px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 .badge-card:not(.have) .badge-card-icon { filter: grayscale(1); opacity: .5; }
 .badge-card-name { font-size: 7px; color: #f8e8a0; }
 .badge-card:not(.have) .badge-card-name { color: #5a6070; }
@@ -1543,6 +1544,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   filter: grayscale(0);
 }
 .map-badge:not(.have) { font-size: 12px; opacity: .5; filter: grayscale(1); }
+.map-badge-img { height: 20px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 
 #map-legend {
   display: flex;
@@ -1686,6 +1688,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 }
 #champion-sub   { font-size: 7px; color: #e8e8c0; }
 #champion-row   { font-size: 22px; letter-spacing: 4px; }
+.champ-badge { height: 28px; width: auto; image-rendering: pixelated; vertical-align: middle; }
 #champion-praise { font-size: 6px; color: #a0d0a0; line-height: 1.7; max-width: 240px; }
 #champion-next {
   display: flex;
