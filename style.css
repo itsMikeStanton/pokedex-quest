@@ -1370,6 +1370,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 }
 .map-zone-tag.you { color: #1a1a00; background: #f8d030; }
 .map-zone-tag.req { color: #e0a0a0; background: #2a1414; border: 1px solid #5a3a3a; }
+.map-req-badge { height: 9px; width: auto; vertical-align: middle; image-rendering: pixelated; }
 
 #map-badges {
   display: flex;

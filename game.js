@@ -5822,7 +5822,7 @@ function renderAtlas(open) {
     const passable = isBarrierUnlocked(gate ? gate.barrier : null);
     const [x1, y1, x2, y2] = doorSeg(a, e.dir, e.pos);
     doorSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${passable ? '#f8e030' : '#d85050'}" stroke-width="1.4" stroke-linecap="round"/>`;
-    if (gate && !passable) gateSvg += `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 + 1.3}" text-anchor="middle" font-size="3.4">${BARRIERS[gate.barrier].sign}</text>`;
+    if (gate && !passable) { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2; gateSvg += `<image x="${mx - 2.6}" y="${my - 2.6}" width="5.2" height="5.2" href="art/typeicon/${BARRIERS[gate.barrier].needsType}.png?v=${ART_V}"/>`; }
   });
 
   // Secret hint: once Mewtwo is yours, a pulsing marker appears at the very top
@@ -6044,7 +6044,7 @@ function renderMap() {
       // Label at the path midpoint (the apex of the arc for routed edges).
       const lx = wp ? wp.reduce((s, p) => s + p[0], 0) / wp.length : (x1 + x2) / 2;
       const ly = wp ? wp.reduce((s, p) => s + p[1], 0) / wp.length : (y1 + y2) / 2;
-      svg += `<text x="${lx}" y="${ly + 5}" class="link-sign">${BARRIERS[barrier].sign}</text>`;
+      svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${BARRIERS[barrier].needsType}.png?v=${ART_V}"/>`;
     }
   });
   document.getElementById('map-lines').innerHTML = svg;
@@ -6092,7 +6092,7 @@ function renderMap() {
       if (gate) {
         const req = document.createElement('div');
         req.className = 'map-zone-tag req';
-        req.textContent = BARRIERS[gate.barrier].sign + ' ' + BARRIERS[gate.barrier].needsType;
+        req.innerHTML = `<img class="map-req-badge" src="art/typeicon/${BARRIERS[gate.barrier].needsType}.png?v=${ART_V}" alt=""> ${BARRIERS[gate.barrier].needsType}`;
         tile.appendChild(req);
       }
     }
