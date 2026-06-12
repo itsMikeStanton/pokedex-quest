@@ -5609,6 +5609,28 @@ function closePokedex() {
   scheduleSpawn();
 }
 
+// ─── Hidden cheat: tap a not-yet-caught species 10× in a row to befriend it ──
+let _dexTap = { id: null, n: 0 };
+function dexCheatTap(poke, card) {
+  if (_dexTap.id !== poke.id) _dexTap = { id: poke.id, n: 0 };   // a different card resets the streak
+  _dexTap.n++;
+  card.style.transition = 'transform .08s';
+  card.style.transform = 'scale(0.92)';
+  setTimeout(() => { card.style.transform = ''; }, 80);
+  beep(260 + _dexTap.n * 45, 0.04, 0.05);                        // pitch climbs with each tap
+  if (_dexTap.n >= 10) { _dexTap = { id: null, n: 0 }; dexCheatCatch(poke); }
+}
+function dexCheatCatch(poke) {
+  seenIds.add(poke.id);
+  caughtIds.add(poke.id);
+  refreshRoamers();                 // if it was a legendary roamer, take it out of the world
+  saveGame();
+  updateHud();
+  playCatchJingle();
+  renderPokedexGrid();              // redraw so the card flips to "caught"
+  showDetail(poke);                 // pop straight into its page, like a real catch
+}
+
 function renderPokedexGrid() {
   const grid = document.getElementById('pokedex-grid');
   grid.innerHTML = '';
@@ -5680,6 +5702,8 @@ function renderPokedexGrid() {
 
     if (caught) {
       card.addEventListener('click', () => showDetail(poke));
+    } else {
+      card.addEventListener('click', () => dexCheatTap(poke, card));   // tap 10× in a row to befriend it
     }
     grid.appendChild(card);
   });
