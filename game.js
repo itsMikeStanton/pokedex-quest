@@ -51,8 +51,8 @@ const BARRIERS = {
     hint: '🔮 A barrier of pure psychic force seals the path north. Only an ULTRA-POWERFUL Psychic-type — the very strongest of all — may pass.',
     cleared: '🔮 Mewtwo flares with unimaginable psychic power... the barrier dissolves!', sign: '🔮' },
   lullaby: { needsType: 'Normal', needsBuddyId: 39,
-    hint: '🔥 An enormous Gigantamax Charizard blocks this path! He\'s too dangerous to fight... Maybe he needs a nap!',
-    cleared: '🎵 Jigglypuff\'s lullaby drifts over the giant... its blue inferno fades to gentle embers and it slumps into a deep, rumbling sleep.', sign: '😴' },
+    hint: '👹 A monstrous Gigantamax Gengar looms over the path — wide awake, grinning, and spoiling for mischief! It\'s far too strong to battle... but maybe a sweet lullaby could lull it to sleep!',
+    cleared: '🎵 Jigglypuff\'s lullaby drifts over the giant Gengar... its wicked grin goes slack, its glaring eyes droop shut, and it sinks into a deep, rumbling sleep.', sign: '😴' },
 };
 
 // ── FIELD NOTES ──────────────────────────────────────
@@ -61,7 +61,7 @@ const BARRIERS = {
 const BARRIER_LABEL = {
   log:'Fallen logs', rock:'River rocks', fence:'Electric fence',
   lava:'Lava flow', vine:'Thick vines', frost:'Ice wall', sand:'Sand wall',
-  psychic:'Psychic seal', lullaby:'Gigantamax dragon',
+  psychic:'Psychic seal', lullaby:'Gigantamax Gengar',
 };
 const STATIC_TIPS = [
   { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
@@ -2053,7 +2053,7 @@ function move(dx, dy, ts) {
     bumpAnimTs = ts;
     if (barrierFX[barrierKey]) return;                 // already breaking — hold tight
     if (buddyClearsBarrier(barrierKey)) {
-      if (barrierKey === 'lullaby') {                  // the Gigantamax dragon has its own clear — no generic break FX
+      if (barrierKey === 'lullaby') {                  // the Gigantamax Gengar has its own clear — no generic break FX
         unlockedBarriers.add(barrierKey); saveGame();
       } else {
         // Kick off the break effect; the barrier stays solid until it finishes, then opens.
@@ -4101,8 +4101,14 @@ function drawBarrierFX(exit, fx, zc, zr, ts) {
   ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
 }
 
-// A colossal slumbering guardian beast — drawn once, looming across the whole
-// seam opening. Sing it to sleep (Jigglypuff buddy) to clear the barrier.
+// The Gigantamax Gengar art that guards the lullaby seam.
+let _titanImg = null;
+function titanImg() {
+  if (!_titanImg) { _titanImg = new Image(); _titanImg.src = 'art/titan/gengar.png?v=' + ART_V; }
+  return (_titanImg.complete && _titanImg.naturalWidth) ? _titanImg : null;
+}
+// A colossal guardian beast — drawn once, looming across the whole seam opening.
+// It's wide AWAKE; sing it to sleep (Jigglypuff buddy) to clear the barrier.
 function drawSlumberingTitan(exit, zc, zr, ts) {
   const ps = exit.pos, midP = ps[Math.floor(ps.length / 2)];
   const lo = Math.min(...ps), hi = Math.max(...ps) + 1;
@@ -4124,60 +4130,29 @@ function drawSlumberingTitan(exit, zc, zr, ts) {
   else if (exit.dir === 'south') { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = (zr - 1) * TILE_SIZE - camY - TILE_SIZE * 0.25; }
   else                           { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = TILE_SIZE * 1.25 - camY; }
 
-  const breathe = Math.sin(ts * 0.0022) * 2;
-  ctx.save();
-  // ── A colossal Gigantamax-style fire dragon (orange body, huge wings, blue G-Max flames) ──
   const U = TILE_SIZE;
-  const cw = U * 1.5, ch = U * 1.9 + breathe;
-  const bx = cx, by = cy + U * 0.15;
-  const flick = o => Math.sin(ts * 0.012 + o);
-  const flame = (x, yb, w, h, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x - w, yb); ctx.lineTo(x, yb - h); ctx.lineTo(x + w, yb); ctx.closePath(); ctx.fill(); };
-  const poly = (pts, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fill(); };
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(bx - cw * 0.55, by + ch * 0.52, cw * 1.1, 6);
-  // wings
-  const wing = side => {
-    poly([[bx, by - ch * 0.18], [bx + side * U * 2.0, by - ch * 0.62], [bx + side * U * 1.8, by + ch * 0.08], [bx + side * U * 0.5, by + ch * 0.05]], '#a8481a');
-    poly([[bx + side * U * 2.0, by - ch * 0.62], [bx + side * U * 1.62, by - ch * 0.5], [bx + side * U * 1.8, by + ch * 0.08]], '#e8731a');
-    flame(bx + side * U * 1.8, by - ch * 0.5, U * 0.18, U * 0.5, '#3aa0ff');
-  };
-  wing(-1); wing(1);
-  // blue Gigantamax flames roaring off the back
-  for (let i = 0; i < 4; i++) { const fxp = bx - U * 0.7 + i * U * 0.45, fh = U * (0.7 + 0.35 * flick(i)); flame(fxp, by - ch * 0.32, U * 0.22, fh, '#3aa0ff'); flame(fxp, by - ch * 0.32, U * 0.11, fh * 0.6, '#bfe3ff'); }
-  // tail with a flame
-  ctx.fillStyle = '#d8631a'; ctx.fillRect(bx + cw * 0.35, by + ch * 0.18, U * 0.9, U * 0.32);
-  flame(bx + cw * 0.35 + U, by + ch * 0.18, U * 0.2, U * (0.6 + 0.3 * flick(2)), '#ff8a1a');
-  flame(bx + cw * 0.35 + U, by + ch * 0.18, U * 0.1, U * 0.4, '#ffd24a');
-  // body + belly
-  ctx.fillStyle = '#e0701c'; ctx.fillRect(bx - cw / 2, by - ch * 0.22, cw, ch * 0.77);
-  ctx.fillStyle = '#f2d79a'; ctx.fillRect(bx - cw * 0.22, by + ch * 0.02, cw * 0.44, ch * 0.48);
-  // arms
-  ctx.fillStyle = '#cf6018'; ctx.fillRect(bx - cw * 0.5 - 7, by + ch * 0.05, 10, 16); ctx.fillRect(bx + cw * 0.5 - 3, by + ch * 0.05, 10, 16);
-  // head
-  const hy = by - ch * 0.42;
-  ctx.fillStyle = '#e0701c'; ctx.fillRect(bx - cw * 0.36, hy - U * 0.32, cw * 0.72, U * 0.62);
-  // horns
-  poly([[bx - cw * 0.30, hy - U * 0.28], [bx - cw * 0.5, hy - U * 0.78], [bx - cw * 0.14, hy - U * 0.34]], '#e8dcc0');
-  poly([[bx + cw * 0.30, hy - U * 0.28], [bx + cw * 0.5, hy - U * 0.78], [bx + cw * 0.14, hy - U * 0.34]], '#e8dcc0');
-  // angry brows
-  poly([[bx - cw * 0.32, hy - 3], [bx - cw * 0.05, hy + 6], [bx - cw * 0.05, hy + 1], [bx - cw * 0.32, hy - 9]], '#7a3410');
-  poly([[bx + cw * 0.32, hy - 3], [bx + cw * 0.05, hy + 6], [bx + cw * 0.05, hy + 1], [bx + cw * 0.32, hy - 9]], '#7a3410');
-  // fierce glowing eyes
-  const g = 0.5 + 0.5 * Math.sin(ts * 0.005);
-  ctx.fillStyle = `rgba(255,${200 + 50 * g | 0},50,1)`;
-  ctx.fillRect(bx - cw * 0.27, hy + 2, 8, 6); ctx.fillRect(bx + cw * 0.19, hy + 2, 8, 6);
-  ctx.fillStyle = '#000'; ctx.fillRect(bx - cw * 0.24, hy + 3, 2, 5); ctx.fillRect(bx + cw * 0.24, hy + 3, 2, 5);
-  // snarling mouth + fangs
-  ctx.fillStyle = '#3a1206'; ctx.fillRect(bx - cw * 0.24, hy + U * 0.26, cw * 0.48, 6);
-  for (let i = 0; i < 4; i++) { const fx = bx - cw * 0.2 + i * cw * 0.12; poly([[fx, hy + U * 0.26 + 6], [fx + 3, hy + U * 0.26 + 11], [fx + 6, hy + U * 0.26 + 6]], '#fff'); }
-  // breath flame
-  flame(bx, hy + U * 0.46, U * 0.28, U * (0.5 + 0.3 * flick(5)), '#ff7a1a');
-  flame(bx, hy + U * 0.46, U * 0.15, U * (0.3 + 0.2 * flick(5)), '#ffd24a');
-  ctx.restore();
-  // floating sleep-hint sign so the puzzle reads
+  // menacing "awake" idle: a slow breathing scale + a tiny angry jitter
+  const breathe = Math.sin(ts * 0.0022) * 2;
+  const jitter = Math.sin(ts * 0.021) * 0.8;
+  const img = titanImg();
+  if (img) {
+    const H = U * 2.8 + breathe;
+    const W = H * img.naturalWidth / img.naturalHeight;
+    const drawX = cx - W / 2 + jitter;
+    const drawY = cy + U * 0.55 - H;          // feet near the seam, body looming up
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath(); ctx.ellipse(cx, cy + U * 0.5, W * 0.34, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(img, drawX, drawY, W, H);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#3a1d4a';
+    ctx.fillRect(cx - U * 0.7, cy - U * 1.2, U * 1.4, U * 1.7);   // simple purple silhouette fallback
+  }
+  // floating hint so the puzzle reads: it's AWAKE — sing it to sleep
   const bob = Math.sin(ts * 0.003) * 3;
   ctx.font = '20px serif'; ctx.textAlign = 'left';
-  ctx.fillText('😴', cx + (vert ? -10 : 0), Math.round(cy - ch * 0.95) + bob);
-  ctx.fillText('🔥', cx + cw * 0.45, Math.round(cy - ch * 0.6) + bob);
+  ctx.fillText('🎵', cx + (vert ? -12 : -4), Math.round(cy - U * 2.4) + bob);
 }
 
 // Real barrier art: a 3-tile-wide strip per type, sliced across the barrier's blocks.
