@@ -4157,7 +4157,7 @@ let lullabyClearFX = null;   // { start } while the awake Gengar fades into slee
 // The tiles each Gengar's body physically blocks (≈ its footprint). The awake one
 // guards the east edge of Sunpetal Meadow; the sleeper sprawls across the SE meadow.
 function tileRect(x0, y0, x1, y1) { const s = new Set(); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) s.add(x + ',' + y); return s; }
-const AWAKE_GENGAR = { zone: 13, tiles: tileRect(27, 4, 29, 10) };
+const AWAKE_GENGAR = { zone: 13, tiles: tileRect(26, 3, 29, 11) };
 const SLEEP_GENGAR = { zone: 29, tiles: tileRect(9, 8, 17, 13) };
 // What (if anything) a Gengar is blocking at a destination tile.
 function gengarBlockAt(nx, ny) {
@@ -4189,7 +4189,7 @@ function awakeGengarRect(cx, cy, ts) {
   const U = TILE_SIZE, down = U * 1.5;
   const breathe = Math.sin(ts * 0.0022) * 3;
   const img = titanImg();
-  const H = U * 2.8 * 2.25 + breathe;                    // 2.25× bigger
+  const H = U * 2.8 * 3 + breathe;                       // 3× bigger
   const W = img ? H * img.naturalWidth / img.naturalHeight : U * 2.8;
   return { img, W, H, x: cx - W / 2, y: cy + U * 0.55 + down - H, footY: cy + U * 0.5 + down };
 }
