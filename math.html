@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>PokéMath Lab</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="math.css?v=2.12">
+  <link rel="stylesheet" href="math.css?v=2.13">
 </head>
 <body>
 
@@ -93,7 +93,11 @@
               <span class="mode-icon">✖️</span>
               <span class="mode-name">Groups</span>
             </button>
-            <button class="mode-btn" data-op="mix">
+            <button class="mode-btn" data-op="div">
+              <span class="mode-icon">➗</span>
+              <span class="mode-name">Sharing</span>
+            </button>
+            <button class="mode-btn wide" data-op="mix">
               <span class="mode-icon">🎲</span>
               <span class="mode-name">Mix It Up</span>
             </button>
@@ -103,6 +107,7 @@
           <div class="level-row">
             <button class="level-btn active" data-level="1">😊 Easy</button>
             <button class="level-btn" data-level="2">😎 Tricky</button>
+            <button class="level-btn" data-level="3">🤓 Expert</button>
           </div>
 
           <button id="mode-back" class="small-btn red">◀ Back</button>
@@ -143,6 +148,15 @@
             <button class="choice-btn" data-i="0"></button>
             <button class="choice-btn" data-i="1"></button>
             <button class="choice-btn" data-i="2"></button>
+          </div>
+
+          <!-- ten-frame drag answer (shown for some questions) -->
+          <div id="tenframe" class="hidden">
+            <div id="tf-frames" aria-hidden="true"></div>
+            <div id="tf-controls">
+              <div id="tf-pile" aria-label="Pokéball pile"></div>
+              <button id="tf-check" class="big-btn green">✓ Check</button>
+            </div>
           </div>
 
           <!-- professor + pikachu coach bar -->
@@ -192,7 +206,7 @@
     </div><!-- /screen-bezel -->
   </div><!-- /device -->
 
-  <script src="mathdata.js?v=2.12"></script>
-  <script src="math.js?v=2.12"></script>
+  <script src="mathdata.js?v=2.13"></script>
+  <script src="math.js?v=2.13"></script>
 </body>
 </html>
