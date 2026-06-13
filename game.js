@@ -812,6 +812,37 @@ let audioUnlocked = false;   // iOS needs a silent buffer played inside a gestur
 let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
+let clearedSeams = new Set();      // "from>to" seam-gates opened by walking in with the right buddy
+
+// Extra progression gates on otherwise-open seams (keyed by the inward direction
+// only, so you can always walk back out). friends:N opens once you've befriended N
+// Lukéymon; type/buddyId open permanently the moment you cross with the right buddy.
+const SEAM_GATES = {
+  '1>15': { friends: 12 }, '5>15': { friends: 12 },      // → Safari Savanna
+  '1>19': { friends: 12 }, '7>19': { friends: 12 },      // → Haunted Hollow
+  '18>20': { friends: 24 },                              // → Coral Coast (pre-finale)
+  '5>8':  { type: 'Water' },                             // → Hidden Cave
+  '6>27': { type: 'Fire' },                              // → Crystal Grotto
+  '3>28': { type: 'Electric' },                          // → Echo Cavern
+  '5>14': { buddyId: 35 }, '13>14': { buddyId: 35 },     // → Lunar Pass (Clefairy)
+  '4>26': { buddyId: 143 }, '7>26': { buddyId: 143 },    // → Great Tunnel (Snorlax)
+};
+function seamGateOpen(key, g) {
+  if (!g) return true;
+  if (g.friends != null) return caughtIds.size >= g.friends;
+  return clearedSeams.has(key);                          // type / buddyId gates
+}
+function seamGateHint(g) {
+  if (g.friends != null) return `🚧 A kindly guardian blocks the way: "Come back once you've befriended ${g.friends} Lukéymon!" (You have ${caughtIds.size}.)`;
+  if (g.type != null)    return `🚧 The path is blocked — bring a ${g.type} Lukéymon as your buddy to clear it!`;
+  const p = POKEMON_DATA.find(x => x.id === g.buddyId);
+  return `🚧 Only a trainer walking beside a ${p ? p.name : '?'} may pass here. Set it as your buddy!`;
+}
+function buddyClearsSeam(g) {
+  if (g.type != null) return buddyHasType(g.type);
+  if (g.buddyId != null) return activePet === g.buddyId;
+  return false;                                          // friend-count gates can't be "cleared", only met
+}
 let barrierFX = {};                // barrier key -> { start, sign } while its break animation plays
 const BARRIER_FX_MS = 1000;        // how long the break / particle-storm effect runs
 const LULLABY_FX_MS = 1800;        // the Gigantamax Gengar's fade-to-sleep at the seam
@@ -1714,6 +1745,7 @@ function activateKami() {
   kamiBuffer = [];
   POKEMON_DATA.forEach(p => caughtIds.add(p.id));
   Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k));
+  Object.keys(SEAM_GATES).forEach(k => clearedSeams.add(k));
   balls += 99;
   saveGame();
   updateHud();
@@ -2034,6 +2066,20 @@ function move(dx, dy, ts) {
   if (nx < 0 || nx >= mc || ny < 0 || ny >= mr) {
     const exit = findActiveExit(playerX, playerY, dx, dy);
     if (exit) {
+      // Extra progression gate on this (otherwise open) seam?
+      const sgKey = exit.from + '>' + exit.to, sg = SEAM_GATES[sgKey];
+      if (sg && !seamGateOpen(sgKey, sg)) {
+        bumpVec = { dx, dy }; bumpAnimTs = ts;
+        if (buddyClearsSeam(sg)) {                  // crossed with the right buddy → opens for good
+          clearedSeams.add(sgKey); saveGame();
+          beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+          showMessage('✨ The way opens!');
+        } else {
+          beep(160, 0.07, 0.1, 'square');
+          showMessage(seamGateHint(sg));
+        }
+        return;
+      }
       if (isBarrierUnlocked(exit.barrier)) {
         doTransition(exit, ts);
       } else {
@@ -3857,6 +3903,7 @@ function drawWorld(ts) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawBarriers(ts);
+  drawSeamGates(ts);
 
   // Rugs lie flat on the floor — drawn here (above the floor tiles, below every
   //    structure/actor) so they never cover the player or furniture.
@@ -4059,6 +4106,37 @@ function barrierBlockPos(exit, p, zc, zr) {
   else if (exit.dir === 'north') return { bx: p * TILE_SIZE - camX, by: 0 - camY };
   else if (exit.dir === 'west')  return { bx: 0 - camX,             by: p * TILE_SIZE - camY };
   else                           return { bx: (zc - 1) * TILE_SIZE - camX, by: p * TILE_SIZE - camY };
+}
+// Indicators for the extra seam-gates (friend count / required type / required buddy).
+function drawSeamGates(ts) {
+  const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+  for (const exit of EXITS) {
+    if (exit.from !== currentZone) continue;
+    const key = exit.from + '>' + exit.to, g = SEAM_GATES[key];
+    if (!g || seamGateOpen(key, g)) continue;
+    const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+    const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+    const bob = Math.sin(ts * 0.003) * 2;
+    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2 + bob;
+    ctx.save();
+    ctx.fillStyle = 'rgba(18,14,26,.62)';
+    ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (g.type != null) {
+      const ic = typeIconImg(g.type);
+      if (ic) { const h = 26, w = Math.round(h * ic.naturalWidth / ic.naturalHeight); ctx.drawImage(ic, cx - w / 2, cy - h / 2, w, h); }
+    } else if (g.buddyId != null) {
+      const p = POKEMON_DATA.find(x => x.id === g.buddyId), img = p && canvasSprite(p);
+      if (img && img.complete && img.naturalWidth) { const h = 28, w = Math.round(h * img.naturalWidth / img.naturalHeight); ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h); }
+      ctx.font = '11px serif'; ctx.fillText('🔒', cx + 10, cy - 9);
+    } else {
+      ctx.font = '15px serif'; ctx.fillText('🔒', cx, cy - 4);
+      ctx.fillStyle = caughtIds.size >= g.friends ? '#7fe0a0' : '#ffe070';
+      ctx.font = 'bold 10px sans-serif'; ctx.fillText(caughtIds.size + '/' + g.friends, cx, cy + 9);
+    }
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
 }
 function drawBarriers(ts) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
@@ -6678,6 +6756,7 @@ function startNewGame() {
   caughtIds.clear();
   seenIds.clear();
   unlockedBarriers.clear();
+  clearedSeams.clear();
   collected.clear();
   metNPCs.clear();
   gotBirthdayCake = false;
@@ -6728,6 +6807,7 @@ function saveGame() {
       caught:    [...caughtIds],
       seen:      [...seenIds],
       barriers:  [...unlockedBarriers],
+      clearedSeams: [...clearedSeams],
       collected: [...collected],
       metNPCs:   [...metNPCs],
       gotBirthdayCake,
@@ -6768,6 +6848,7 @@ function loadSlot(n) {
       caughtIds        = new Set(data.caught || []);
       seenIds          = new Set([...(data.seen || []), ...caughtIds]);   // caught ⇒ seen
       unlockedBarriers = new Set(data.barriers || []);
+      clearedSeams = new Set(data.clearedSeams || []);
       collected        = new Set(data.collected || []);
       metNPCs          = new Set(data.metNPCs || []);
       gotBirthdayCake  = !!data.gotBirthdayCake;
@@ -7289,8 +7370,8 @@ function setupDebugMenu() {
   btn('Clear caught',     () => { caughtIds.clear(); refreshRoamers(); });
 
   section('BARRIERS');
-  btn('Unlock all', () => { Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k)); });
-  btn('Lock all',   () => { unlockedBarriers.clear(); });
+  btn('Unlock all', () => { Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k)); Object.keys(SEAM_GATES).forEach(k => clearedSeams.add(k)); });
+  btn('Lock all',   () => { unlockedBarriers.clear(); clearedSeams.clear(); });
 
   section('BADGES');
   btn('Grant all', () => { COLLECTIBLES.forEach(c => collected.add(c.id)); });
