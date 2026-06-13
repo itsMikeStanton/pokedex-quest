@@ -886,6 +886,18 @@ const ZONE_SLIDE_MS = 380;        // how long the zone-to-zone scroll takes
 
 // ── Buddy / follower pet ─────────────────────────────
 let activePet   = null;   // pokeId of the Pokémon trailing the player (null = none)
+let buddyUses   = {};     // pokeId -> times set as buddy (powers "recent buddies")
+// Set the active buddy (and tally usage so the Pokédex can surface favourites).
+function setBuddy(id) {
+  activePet = id;
+  if (id != null) {
+    buddyUses[id] = (buddyUses[id] || 0) + 1;
+    learnTip('buddy');
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE; petMoveAnimTs = -9999;
+  }
+  saveGame(); updateHud();
+}
 let petX        = 10;
 let petY        = 7;
 let petFromPx   = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
@@ -1608,7 +1620,7 @@ function bindEvents() {
   });
 
   // Pokédex
-  document.getElementById('pokedex-back').addEventListener('click', closePokedex);
+  document.getElementById('pokedex-back').addEventListener('click', dexBack);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
   document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip => {
@@ -1619,7 +1631,6 @@ function bindEvents() {
 
   // World map + guide
   document.getElementById('map-back').addEventListener('click', closeMap);
-  document.getElementById('map-help').addEventListener('click', () => openHelp('map'));
   document.getElementById('map-atlas-toggle').addEventListener('click', () => {
     atlasMode = !atlasMode;
     document.getElementById('map-atlas-toggle').textContent = atlasMode ? '⊞ Grid' : '🗺️ Shapes';
@@ -1637,12 +1648,10 @@ function bindEvents() {
   document.getElementById('set-sound').addEventListener('click', () => { wakeAudio(); toggleMute(); updateSoundRow(); });
   document.getElementById('set-guide').addEventListener('click', () => openHelp('settings'));
 
-  // Badge case
-  document.getElementById('map-badges').addEventListener('click', openBadgeCase);
+  // Badge case (opened from the Pokédex hub)
   document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
 
-  // Field notes
-  document.getElementById('map-notes').addEventListener('click', openNotes);
+  // Field notes (opened from the Pokédex hub)
   document.getElementById('notes-back').addEventListener('click', closeNotes);
 
   // Mewtwo battle
@@ -1903,6 +1912,7 @@ function cycleBuddy(dir) {
   let i = ids.indexOf(activePet); if (i < 0) i = 0;
   activePet = ids[(i + dir + ids.length) % ids.length];
   if (activePet != null) {
+    buddyUses[activePet] = (buddyUses[activePet] || 0) + 1;
     learnTip('buddy');
     petX = playerX; petY = playerY;
     petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE; petMoveAnimTs = -9999;
@@ -4815,6 +4825,7 @@ function caught() {
   let becameBuddy = false;
   if (activePet == null) {
     activePet = currentPoke.id;
+    buddyUses[currentPoke.id] = (buddyUses[currentPoke.id] || 0) + 1;
     petX = playerX; petY = playerY;
     petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
     petMoveAnimTs = -9999;
@@ -4845,7 +4856,7 @@ function caught() {
                                                                  : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = becameBuddy
-    ? `${currentPoke.name} is now your buddy — it'll follow you around! 🐾  (Pick a different buddy anytime in the PokéDex.)`
+    ? `${currentPoke.name} is now your buddy — it'll follow you around! 🐾  To switch buddies, open the 📖 Pokédex and tap "Buddies".`
     : isNew
       ? `Added to your PokéDex!  +${NEW_CATCH_BOUNTY} 💰`
       : 'Already in your PokéDex — great job anyway!';
@@ -5594,30 +5605,69 @@ function dexLocationHint(poke) {
 
 function openPokedex() {
   clearTimeout(spawnTimerId);
-  showDexView('grid');
+  showDexView('home');
   document.getElementById('pokedex-detail').classList.add('hidden');
   showScreen('pokedex');
 }
 
-// Switch the Pokédex between the species grid and the overall Quest Log.
-let dexView = 'grid';
+// The Pokédex is the game's hub: a card menu (home) that opens the species grid,
+// the buddy picker, the quest/progress log, and (via cards) badges/notes/help.
+let dexView = 'home';
 function showDexView(view) {
   dexView = view;
-  const grid = document.getElementById('pokedex-grid');
-  const quest = document.getElementById('pokedex-quest');
+  ['pokedex-home', 'pokedex-buddies', 'pokedex-grid', 'pokedex-quest'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('pokedex-filters').classList.toggle('hidden', view !== 'grid');
   const title = document.getElementById('pokedex-title');
-  const qChip = document.getElementById('dexf-quest');
+  const counter = document.getElementById('pokedex-counter');
+  if (counter) counter.classList.toggle('hidden', view !== 'grid');
   if (view === 'quest') {
-    grid.classList.add('hidden'); quest.classList.remove('hidden');
-    if (title) title.textContent = 'QUEST LOG';
-    if (qChip) qChip.classList.add('active');
+    document.getElementById('pokedex-quest').classList.remove('hidden');
+    if (title) title.textContent = 'PROGRESS';
     renderQuestPage();
-  } else {
-    quest.classList.add('hidden'); grid.classList.remove('hidden');
-    if (title) title.textContent = 'POKÉDEX';
-    if (qChip) qChip.classList.remove('active');
+  } else if (view === 'buddies') {
+    document.getElementById('pokedex-buddies').classList.remove('hidden');
+    if (title) title.textContent = 'BUDDIES';
+    renderBuddies();
+  } else if (view === 'grid') {
+    document.getElementById('pokedex-grid').classList.remove('hidden');
+    if (title) title.textContent = 'ALL LUKÉYMON';
     renderPokedexGrid();
+  } else {
+    document.getElementById('pokedex-home').classList.remove('hidden');
+    if (title) title.textContent = 'POKÉDEX';
+    renderDexHome();
   }
+}
+// Back from the dex: a sub-view returns to the card menu; the menu closes the dex.
+function dexBack() { if (dexView === 'home') closePokedex(); else showDexView('home'); }
+function backToDexHome() { showDexView('home'); showScreen('pokedex'); }
+
+// The hub card menu.
+function renderDexHome() {
+  const home = document.getElementById('pokedex-home');
+  const buddy = buddyPoke();
+  const tipN = knownTips.size, tipT = allTips().length;
+  const cards = [
+    { view: 'buddies', icon: buddy ? `<img class="dex-card-sprite" src="${buddy.sprite}" alt="">` : '🚶',
+      label: 'Buddies', sub: buddy ? buddy.name : 'Walking solo' },
+    { view: 'grid', icon: '🔰', label: 'All Lukéymon', sub: `${caughtIds.size}/${POKEMON_DATA.length} befriended` },
+    { act: 'badges', icon: '🎖️', label: 'Badges', sub: `${collected.size}/${COLLECTIBLES.length} found` },
+    { act: 'notes', icon: '📝', label: 'Field Notes', sub: `${tipN}/${tipT} learned` },
+    { view: 'quest', icon: '🏆', label: 'Progress', sub: 'Everything to chase' },
+    { act: 'help', icon: '⚔️', label: 'Type Chart', sub: 'What beats what' },
+  ];
+  home.innerHTML = cards.map(c =>
+    `<button class="dex-menu-card" data-${c.view ? 'view="' + c.view : 'act="' + c.act}">` +
+    `<span class="dex-menu-ic">${c.icon}</span>` +
+    `<span class="dex-menu-lbl">${c.label}</span><span class="dex-menu-sub">${c.sub}</span></button>`
+  ).join('');
+  home.querySelectorAll('.dex-menu-card').forEach(el => el.addEventListener('click', () => {
+    if (el.dataset.view) showDexView(el.dataset.view);
+    else if (el.dataset.act === 'badges') openBadgeCase();
+    else if (el.dataset.act === 'notes') openNotes();
+    else if (el.dataset.act === 'help') openHelp('dex');
+  }));
 }
 
 // ─── Quest Log: one page with EVERYTHING there is to chase ────────────
@@ -5909,18 +5959,39 @@ function showDetail(poke) {
 // Toggle the open Pokémon as the player's buddy.
 function toggleBuddy() {
   if (!detailPoke) return;
-  if (activePet === detailPoke.id) {
-    activePet = null;
-  } else {
-    activePet = detailPoke.id;
-    learnTip('buddy');
-    petX = playerX; petY = playerY;
-    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
-    petMoveAnimTs = -9999;
-  }
-  saveGame();
+  setBuddy(activePet === detailPoke.id ? null : detailPoke.id);
   beep(523, 0.08, 0.08);
   showDetail(detailPoke);   // refresh the button label
+}
+
+// ─── Buddies hub: current buddy, your most-used favourites, and your whole team ──
+function renderBuddies() {
+  const el = document.getElementById('pokedex-buddies');
+  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
+  const cur = buddyPoke();
+  const tile = (p, big) => {
+    const on = p && activePet === p.id;
+    if (!p) return `<button class="buddy-tile solo${activePet == null ? ' on' : ''}" data-id="none"><span class="buddy-emoji">🚶</span><span class="buddy-nm">Solo</span></button>`;
+    return `<button class="buddy-tile${big ? ' big' : ''}${on ? ' on' : ''}" data-id="${p.id}">` +
+      `<img class="buddy-sprite" src="${p.sprite}" alt=""><span class="buddy-nm">${p.name}</span></button>`;
+  };
+  if (!team.length) {
+    el.innerHTML = `<div class="buddy-empty">Befriend a Lukéymon first — then come back to choose who follows you around!</div>`;
+    return;
+  }
+  const recent = team.slice().sort((a, b) => (buddyUses[b.id] || 0) - (buddyUses[a.id] || 0)).slice(0, 6);
+  const usedAny = recent.some(p => buddyUses[p.id]);
+  el.innerHTML =
+    `<div class="buddy-now">${cur ? `<img class="buddy-now-sprite" src="${cur.sprite}" alt="">` : '🚶'}` +
+      `<div class="buddy-now-txt"><b>${cur ? cur.name : 'Walking solo'}</b><span>${cur ? 'is following you' : 'tap a friend below to walk together'}</span></div></div>` +
+    `<div class="buddy-hint">Tap any Lukéymon to make it your buddy. Its <b>type</b> opens blocked paths, surfs water, and lights caves!</div>` +
+    (usedAny ? `<div class="buddy-sec">⭐ Favourites</div><div class="buddy-row">${recent.map(p => tile(p, true)).join('')}</div>` : '') +
+    `<div class="buddy-sec">Your team (${team.length})</div><div class="buddy-grid">${tile(null)}${team.map(p => tile(p)).join('')}</div>`;
+  el.querySelectorAll('.buddy-tile').forEach(b => b.addEventListener('click', () => {
+    setBuddy(b.dataset.id === 'none' ? null : +b.dataset.id);
+    beep(523, 0.06, 0.08);
+    renderBuddies();
+  }));
 }
 
 function closeDetail() {
@@ -6199,8 +6270,7 @@ function openHelp(from) {
 }
 function closeHelp() {
   if (helpReturn === 'settings') { showScreen('settings'); return; }
-  renderMap();
-  showScreen('map');
+  backToDexHome();
 }
 function renderHelp() {
   const box = document.getElementById('help-types');
@@ -6239,10 +6309,6 @@ function renderMap() {
   document.getElementById('map-open-count').textContent = open.size;
   document.getElementById('map-total').textContent = Object.keys(ZONE_MAP).length;
 
-  // Field-notes tally on its tray button (+ a dot when a new tip is waiting).
-  document.getElementById('map-notes-count').textContent = [...knownTips].length;
-  document.getElementById('map-notes-total').textContent = allTips().length;
-  document.getElementById('map-notes').classList.toggle('has-new', notesUnread);
 
   // Dynamic grid bounds so the world map scales as the world grows.
   const _cols = Object.values(ZONE_MAP).map(p => p.col), _rows = Object.values(ZONE_MAP).map(p => p.row);
@@ -6345,21 +6411,6 @@ function renderMap() {
     else                                           obj.textContent = `🎯 Complete the Pokédex  (${caughtIds.size}/${POKEMON_DATA.length})`;
   }
 
-  // Badge tray.
-  document.getElementById('badge-count').textContent = collected.size;
-  document.getElementById('badge-total').textContent = COLLECTIBLES.length;
-  const tray = document.getElementById('map-badges-row');
-  tray.innerHTML = '';
-  COLLECTIBLES.forEach(c => {
-    const b = document.createElement('span');
-    const have = collected.has(c.id);
-    b.className = 'map-badge' + (have ? ' have' : '');
-    if (have) b.innerHTML = `<img class="map-badge-img" src="${collectibleBadgeSrc(c)}" alt="">`;
-    else b.textContent = '❔';
-    b.title = have ? c.name : '???';
-    tray.appendChild(b);
-  });
-
   // Experimental true-shape atlas overlay (CSS shows it when atlas mode is on).
   document.getElementById('map-board').classList.toggle('atlas-on', atlasMode);
   renderAtlas(open);
@@ -6371,8 +6422,7 @@ function openBadgeCase() {
   showScreen('badges');
 }
 function closeBadgeCase() {
-  renderMap();
-  showScreen('map');
+  backToDexHome();
 }
 function renderBadgeCase() {
   document.getElementById('badges-count').textContent = collected.size;
@@ -6416,7 +6466,7 @@ function learnTip(id) {
 }
 // Flag the map + notepad buttons so the player notices a new note.
 function markNotesNew() {
-  ['map-btn', 'map-notes'].forEach(id => {
+  ['map-btn', 'pokedex-btn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('has-new', notesUnread);
   });
@@ -6428,8 +6478,7 @@ function openNotes() {
   showScreen('notes');
 }
 function closeNotes() {
-  renderMap();
-  showScreen('map');
+  backToDexHome();
 }
 function renderNotes() {
   const tips = allTips();
@@ -6634,8 +6683,8 @@ function setupNav(id) {
     case 'slot':      setNav(all('#slot-list .slot-info, #slot-list .slot-erase'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
-    case 'pokedex':   setNav(all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: closePokedex }); break;
-    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-help'), $('map-badges'), $('map-notes'), $('map-back')], { onBack: closeMap }); break;
+    case 'pokedex':   setNav(dexView === 'home' ? all('#pokedex-home .dex-menu-card') : all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: dexBack }); break;
+    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-back')], { onBack: closeMap }); break;
     case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
     case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
     case 'notes':     setNav([$('notes-back')], { onBack: closeNotes }); break;
@@ -6780,6 +6829,7 @@ function startNewGame() {
   moveAnimTs = -9999;
   bumpVec = null;
   activePet = null;
+  buddyUses = {};
   petX = 5; petY = 6;
   petFromPx.x = 5 * TILE_SIZE; petFromPx.y = 6 * TILE_SIZE;
   petMoveAnimTs = -9999;
@@ -6820,6 +6870,7 @@ function saveGame() {
       x:         playerX,
       y:         playerY,
       activePet,
+      buddyUses,
       balls,
       masterBalls,
       coins,
@@ -6873,6 +6924,7 @@ function loadSlot(n) {
       evoNotified.clear(); (data.evoNotified || []).forEach(k => evoNotified.add(k));
       visited = new Set([0, ...(data.visited || []), data.zone ?? 0]);
       activePet = data.activePet ?? null;
+      buddyUses = data.buddyUses || {};
       // Preload the buddy's sprite so it doesn't flash as its emoji for the first
       // frames after loading (drawPet falls back to the emoji until the image
       // is decoded — that brief swap looked like the buddy "changing" on login).
