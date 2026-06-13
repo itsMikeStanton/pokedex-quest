@@ -1623,11 +1623,7 @@ function bindEvents() {
   document.getElementById('pokedex-back').addEventListener('click', dexBack);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
-  document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip => {
-    chip.addEventListener('click', () => { dexFilter.status = chip.dataset.status; showDexView('grid'); refreshDexFilters(); });
-  });
-  document.getElementById('dexf-type').addEventListener('click', () => { showDexView('grid'); cycleDexType(); });
-  document.getElementById('dexf-quest').addEventListener('click', () => showDexView(dexView === 'quest' ? 'grid' : 'quest'));
+  document.getElementById('dexf-open').addEventListener('click', () => showDexView('filter'));
 
   // World map + guide
   document.getElementById('map-back').addEventListener('click', closeMap);
@@ -1900,8 +1896,8 @@ function gpShoulder(btn) {
     if (btn === 'lb') cycleBuddy(-1);
     else if (btn === 'rb') cycleBuddy(1);
   } else if (gameState === 'pokedex' && !dexDetailOpen()) {
-    if (btn === 'lb' || btn === 'rb') cycleDexStatus(btn === 'rb' ? 1 : -1);
-    else if (btn === 'lt' || btn === 'rt') { if (dexView !== 'grid') showDexView('grid'); cycleDexType(); }
+    if (btn === 'lb' || btn === 'rb' || btn === 'lt' || btn === 'rt')
+      cycleDexFilter(btn === 'rb' || btn === 'rt' ? 1 : -1);
   }
 }
 // Cycle the active buddy through your caught Lukeymon (and "no buddy").
@@ -1910,26 +1906,29 @@ function cycleBuddy(dir) {
   if (!team.length) { showMessage('Catch a Lukeymon first to pick a buddy!'); return; }
   const ids = [null, ...team.map(p => p.id)];
   let i = ids.indexOf(activePet); if (i < 0) i = 0;
-  activePet = ids[(i + dir + ids.length) % ids.length];
-  if (activePet != null) {
-    buddyUses[activePet] = (buddyUses[activePet] || 0) + 1;
-    learnTip('buddy');
-    petX = playerX; petY = playerY;
-    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE; petMoveAnimTs = -9999;
-  }
-  saveGame(); updateHud();
-  const bp = POKEMON_DATA.find(p => p.id === activePet);
+  setBuddy(ids[(i + dir + ids.length) % ids.length]);
+  const bp = buddyPoke();
   showMessage(bp ? `🤝 Buddy: ${bp.name}` : '🚶 Walking solo');
   beep(523, 0.06, 0.08);
 }
-// Cycle the Pokédex status filter (All / Caught / Missing).
-function cycleDexStatus(dir) {
-  const order = ['all', 'caught', 'missing'];
-  let i = order.indexOf(dexFilter.status); if (i < 0) i = 0;
-  dexFilter.status = order[(i + dir + order.length) % order.length];
+// All filters, in shoulder-button cycle order.
+function dexFilterList() {
+  return [{ mode: 'all' }, { mode: 'caught' }, { mode: 'missing' }, { mode: 'legendary' },
+    { mode: 'swift' }, ...DEX_TYPE_ORDER.map(t => ({ mode: 'type', type: t }))];
+}
+// Cycle the Pokédex filter with the shoulder buttons.
+function cycleDexFilter(dir) {
+  const list = dexFilterList();
+  let i = list.findIndex(f => f.mode === dexFilter.mode && (f.type || null) === (dexFilter.type || null));
+  if (i < 0) i = 0;
+  setDexFilter(list[(i + dir + list.length) % list.length]);
   if (dexView !== 'grid') showDexView('grid');
-  refreshDexFilters();
   beep(360, 0.03, 0.05);
+}
+function setDexFilter(f) {
+  dexFilter = { mode: f.mode, type: f.type || null };
+  refreshDexFilters();
+  if (dexView === 'grid') { renderPokedexGrid(); setupNav('pokedex'); }
 }
 window.addEventListener('gamepadconnected', () => {
   showMessage('🎮 Controller connected!');
@@ -2021,6 +2020,26 @@ function buddyLightsCave() {
   if (activePet == null) return false;
   const p = POKEMON_DATA.find(x => x.id === activePet);
   return !!p && (p.type === 'Fire' || p.light === true);
+}
+
+// The field abilities a given Lukéymon grants as a buddy — what makes it "useful".
+// kind 'star' = rare/standout (puzzle keys & speedsters); 'core' = type powers.
+const TYPE_BARRIER_LBL = {
+  Fire: 'Burns logs & melts ice', Water: 'Washes rocks & cools lava',
+  Electric: 'Shorts out fences', Grass: 'Cuts through vines', Ground: 'Clears sand walls',
+};
+const KEY_BUDDY_LBL = {
+  150: 'Breaks the psychic barrier', 39: 'Sings giant Gengar to sleep',
+  35: 'Opens the Lunar Pass', 143: 'Opens the Great Tunnel',
+};
+function buddyAbilities(p) {
+  const out = [];
+  if (SWIFT_BUDDIES.has(p.id)) out.push({ ic: '💨', lbl: 'Dash — travel faster', kind: 'star' });
+  if (KEY_BUDDY_LBL[p.id]) out.push({ ic: '🧩', lbl: KEY_BUDDY_LBL[p.id], kind: 'star' });
+  if (p.type === 'Water') out.push({ ic: '🌊', lbl: 'Surf across deep water', kind: 'core' });
+  if (p.type === 'Fire' || p.light) out.push({ ic: '🔦', lbl: 'Lights up dark caves', kind: 'core' });
+  if (TYPE_BARRIER_LBL[p.type]) out.push({ ic: '🚧', lbl: TYPE_BARRIER_LBL[p.type], kind: 'core' });
+  return out;
 }
 
 // A point-portal (cave mouth) sitting on (x, y) of the given zone, if any.
@@ -5584,7 +5603,33 @@ function buyMaster(cost) {
 // ═══════════════════════════════════════════════════
 // POKÉDEX
 // ═══════════════════════════════════════════════════
-let dexFilter = { status: 'all', type: 'all' };
+// The dex grid shows one filter at a time, chosen from a full-page card picker.
+// mode: all | caught | missing | legendary | swift | type (type uses .type)
+let dexFilter = { mode: 'all', type: null };
+const LEGEND_IDS = new Set([144, 145, 146, 150, 151]);   // birds + Mewtwo + Mew
+const TYPE_EMOJI = {
+  Grass: '🌿', Fire: '🔥', Water: '💧', Bug: '🐛', Flying: '🕊️', Normal: '⭐',
+  Electric: '⚡', Fairy: '✨', Ghost: '👻', Psychic: '🔮', Fighting: '🥊',
+  Poison: '☠️', Ground: '🌍', Rock: '🪨', Ice: '❄️', Dragon: '🐲',
+};
+const DEX_TYPE_ORDER = ['Fire', 'Water', 'Grass', 'Electric', 'Ground', 'Rock', 'Ice',
+  'Flying', 'Poison', 'Psychic', 'Bug', 'Normal', 'Fighting', 'Ghost', 'Dragon', 'Fairy'];
+// A short, human label for the current filter (shown on the grid's Filter button).
+function dexFilterLabel() {
+  const f = dexFilter;
+  if (f.mode === 'type') return (TYPE_EMOJI[f.type] || '') + ' ' + f.type;
+  return { all: 'All', caught: 'Caught', missing: 'Missing', legendary: '🌟 Legendary', swift: '💨 Speedsters' }[f.mode] || 'All';
+}
+// Does a species pass the active filter?
+function dexFilterPass(poke) {
+  const f = dexFilter, caught = caughtIds.has(poke.id);
+  if (f.mode === 'caught' && !caught) return false;
+  if (f.mode === 'missing' && caught) return false;
+  if (f.mode === 'legendary' && !LEGEND_IDS.has(poke.id)) return false;
+  if (f.mode === 'swift' && !SWIFT_BUDDIES.has(poke.id)) return false;
+  if (f.mode === 'type' && poke.type !== f.type) return false;
+  return true;
+}
 
 // Where to look for a not-yet-caught species (first home zone, or its legendary status).
 function dexLocationHint(poke) {
@@ -5615,13 +5660,17 @@ function openPokedex() {
 let dexView = 'home';
 function showDexView(view) {
   dexView = view;
-  ['pokedex-home', 'pokedex-buddies', 'pokedex-grid', 'pokedex-quest'].forEach(id =>
+  ['pokedex-home', 'pokedex-buddies', 'pokedex-filter-page', 'pokedex-grid', 'pokedex-quest'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('pokedex-filters').classList.toggle('hidden', view !== 'grid');
   const title = document.getElementById('pokedex-title');
   const counter = document.getElementById('pokedex-counter');
   if (counter) counter.classList.toggle('hidden', view !== 'grid');
-  if (view === 'quest') {
+  if (view === 'filter') {
+    document.getElementById('pokedex-filter-page').classList.remove('hidden');
+    if (title) title.textContent = 'FILTER';
+    renderDexFilterPage();
+  } else if (view === 'quest') {
     document.getElementById('pokedex-quest').classList.remove('hidden');
     if (title) title.textContent = 'PROGRESS';
     renderQuestPage();
@@ -5632,6 +5681,7 @@ function showDexView(view) {
   } else if (view === 'grid') {
     document.getElementById('pokedex-grid').classList.remove('hidden');
     if (title) title.textContent = 'ALL LUKÉYMON';
+    refreshDexFilters();
     renderPokedexGrid();
   } else {
     document.getElementById('pokedex-home').classList.remove('hidden');
@@ -5810,10 +5860,8 @@ function renderPokedexGrid() {
     const caught = caughtIds.has(poke.id);
     const seen   = !caught && seenIds.has(poke.id);   // encountered but not yet caught
 
-    // Apply filters.
-    if (dexFilter.status === 'caught'  && !caught) return;
-    if (dexFilter.status === 'missing' &&  caught) return;
-    if (dexFilter.type !== 'all' && poke.type !== dexFilter.type) return;
+    // Apply the active filter.
+    if (!dexFilterPass(poke)) return;
     shown++;
 
     const card = document.createElement('div');
@@ -5964,16 +6012,19 @@ function toggleBuddy() {
   showDetail(detailPoke);   // refresh the button label
 }
 
-// ─── Buddies hub: current buddy, your most-used favourites, and your whole team ──
+// ─── Buddies hub: current buddy, special abilities, favourites, and your team ──
 function renderBuddies() {
   const el = document.getElementById('pokedex-buddies');
   const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
   const cur = buddyPoke();
+  const abRow = p => {
+    const a = buddyAbilities(p);
+    return a.length ? `<span class="buddy-ab">${a.map(x => `<span title="${x.lbl}">${x.ic}</span>`).join('')}</span>` : '';
+  };
   const tile = (p, big) => {
-    const on = p && activePet === p.id;
     if (!p) return `<button class="buddy-tile solo${activePet == null ? ' on' : ''}" data-id="none"><span class="buddy-emoji">🚶</span><span class="buddy-nm">Solo</span></button>`;
-    return `<button class="buddy-tile${big ? ' big' : ''}${on ? ' on' : ''}" data-id="${p.id}">` +
-      `<img class="buddy-sprite" src="${p.sprite}" alt=""><span class="buddy-nm">${p.name}</span></button>`;
+    return `<button class="buddy-tile${big ? ' big' : ''}${activePet === p.id ? ' on' : ''}" data-id="${p.id}">` +
+      `<img class="buddy-sprite" src="${p.sprite}" alt="">${abRow(p)}<span class="buddy-nm">${p.name}</span></button>`;
   };
   if (!team.length) {
     el.innerHTML = `<div class="buddy-empty">Befriend a Lukéymon first — then come back to choose who follows you around!</div>`;
@@ -5981,13 +6032,20 @@ function renderBuddies() {
   }
   const recent = team.slice().sort((a, b) => (buddyUses[b.id] || 0) - (buddyUses[a.id] || 0)).slice(0, 6);
   const usedAny = recent.some(p => buddyUses[p.id]);
+  // Specialists: buddies with a standout (star) power — the hard-to-discover keys.
+  const specialists = team.filter(p => buddyAbilities(p).some(a => a.kind === 'star'));
+  const specTile = p => `<button class="buddy-spec${activePet === p.id ? ' on' : ''}" data-id="${p.id}">` +
+    `<img class="buddy-sprite" src="${p.sprite}" alt=""><span class="buddy-spec-txt"><b>${p.name}</b>` +
+    buddyAbilities(p).filter(a => a.kind === 'star').map(a => `<span>${a.ic} ${a.lbl}</span>`).join('') +
+    `</span></button>`;
   el.innerHTML =
     `<div class="buddy-now">${cur ? `<img class="buddy-now-sprite" src="${cur.sprite}" alt="">` : '🚶'}` +
       `<div class="buddy-now-txt"><b>${cur ? cur.name : 'Walking solo'}</b><span>${cur ? 'is following you' : 'tap a friend below to walk together'}</span></div></div>` +
-    `<div class="buddy-hint">Tap any Lukéymon to make it your buddy. Its <b>type</b> opens blocked paths, surfs water, and lights caves!</div>` +
+    `<div class="buddy-hint">Tap any Lukéymon to make it your buddy. The icons show its powers — 🌊 surf · 🔦 cave-light · 🚧 clear paths · 💨 dash · 🧩 puzzle key.</div>` +
+    (specialists.length ? `<div class="buddy-sec">🧩 Specialists — handy for puzzles & speed</div><div class="buddy-spec-list">${specialists.map(specTile).join('')}</div>` : '') +
     (usedAny ? `<div class="buddy-sec">⭐ Favourites</div><div class="buddy-row">${recent.map(p => tile(p, true)).join('')}</div>` : '') +
     `<div class="buddy-sec">Your team (${team.length})</div><div class="buddy-grid">${tile(null)}${team.map(p => tile(p)).join('')}</div>`;
-  el.querySelectorAll('.buddy-tile').forEach(b => b.addEventListener('click', () => {
+  el.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => {
     setBuddy(b.dataset.id === 'none' ? null : +b.dataset.id);
     beep(523, 0.06, 0.08);
     renderBuddies();
@@ -6215,18 +6273,45 @@ function fastTravel(zone) {
 
 // ─── Pokédex filters ─────────────────────────────────
 function refreshDexFilters() {
-  document.querySelectorAll('#pokedex-filters .dexf-chip[data-status]').forEach(chip =>
-    chip.classList.toggle('active', chip.dataset.status === dexFilter.status));
-  renderPokedexGrid();
-  setupNav('pokedex');
+  const btn = document.getElementById('dexf-open');
+  if (btn) btn.innerHTML = `<span class="dexf-open-ic">🔎</span> ${dexFilterLabel()}`;
 }
-function cycleDexType() {
-  const types = ['all', ...Array.from(new Set(POKEMON_DATA.filter(p => !p.legend).map(p => p.type))).sort()];
-  const i = types.indexOf(dexFilter.type);
-  dexFilter.type = types[(i + 1) % types.length];
-  const btn = document.getElementById('dexf-type');
-  btn.textContent = 'Type: ' + (dexFilter.type === 'all' ? 'All' : dexFilter.type);
-  refreshDexFilters();
+
+// The full-page filter picker: a card for each useful way to slice the dex.
+function renderDexFilterPage() {
+  const page = document.getElementById('pokedex-filter-page');
+  const countMode = f => POKEMON_DATA.filter(p => {
+    const save = dexFilter; dexFilter = f; const ok = dexFilterPass(p); dexFilter = save; return ok;
+  }).length;
+  const caughtIn = f => POKEMON_DATA.filter(p => {
+    const save = dexFilter; dexFilter = f; const ok = dexFilterPass(p); dexFilter = save;
+    return ok && caughtIds.has(p.id);
+  }).length;
+  const card = (f, icon, label, color) => {
+    const total = countMode(f), got = caughtIn(f);
+    const active = dexFilter.mode === f.mode && (dexFilter.type || null) === (f.type || null);
+    return `<button class="dex-filter-card${active ? ' active' : ''}" data-mode="${f.mode}" data-type="${f.type || ''}"` +
+      (color ? ` style="border-color:${color}"` : '') +
+      `><span class="dfc-ic"${color ? ` style="background:${color}"` : ''}>${icon}</span>` +
+      `<span class="dfc-lbl">${label}</span><span class="dfc-ct">${got}/${total}</span></button>`;
+  };
+  const section = (title, body) => `<div class="dex-filter-sec">${title}</div><div class="dex-filter-grid">${body}</div>`;
+  page.innerHTML =
+    section('Show', [
+      card({ mode: 'all' }, '🔰', 'All'),
+      card({ mode: 'caught' }, '❤️', 'Befriended'),
+      card({ mode: 'missing' }, '❔', 'Still missing'),
+      card({ mode: 'legendary' }, '🌟', 'Legendary'),
+      card({ mode: 'swift' }, '💨', 'Speedsters'),
+    ].join('')) +
+    section('By type', DEX_TYPE_ORDER
+      .filter(t => POKEMON_DATA.some(p => p.type === t))
+      .map(t => card({ mode: 'type', type: t }, TYPE_EMOJI[t] || '◆', t, typeColor(t))).join(''));
+  page.querySelectorAll('.dex-filter-card').forEach(el => el.addEventListener('click', () => {
+    setDexFilter({ mode: el.dataset.mode, type: el.dataset.type || null });
+    beep(523, 0.05, 0.07);
+    showDexView('grid');
+  }));
 }
 
 // ─── Settings ────────────────────────────────────────
@@ -6683,7 +6768,12 @@ function setupNav(id) {
     case 'slot':      setNav(all('#slot-list .slot-info, #slot-list .slot-erase'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
-    case 'pokedex':   setNav(dexView === 'home' ? all('#pokedex-home .dex-menu-card') : all('#pokedex-grid .dex-card.caught'), { cols: 3, onBack: dexBack }); break;
+    case 'pokedex':
+      if (dexView === 'home')        setNav(all('#pokedex-home .dex-menu-card'), { cols: 2, onBack: dexBack });
+      else if (dexView === 'filter') setNav(all('#pokedex-filter-page .dex-filter-card'), { cols: 3, onBack: dexBack });
+      else if (dexView === 'buddies') setNav(all('#pokedex-buddies [data-id]'), { cols: 4, onBack: dexBack });
+      else                           setNav([document.getElementById('dexf-open'), ...all('#pokedex-grid .dex-card.caught')], { cols: 3, onBack: dexBack });
+      break;
     case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-back')], { onBack: closeMap }); break;
     case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
     case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;

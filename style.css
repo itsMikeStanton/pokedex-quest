@@ -584,17 +584,36 @@ body {
 
 /* ─── Pokédex filters + location hints ──────────────── */
 #pokedex-filters {
-  display: flex; gap: 4px; padding: 3px 6px; flex-wrap: wrap; align-items: center;
+  display: flex; padding: 5px 6px; align-items: center; flex-shrink: 0;
 }
-.dexf-chip {
-  font-size: 6px; color: #cfe0f0;
-  background: rgba(255,255,255,.08); border: 1px solid #3a4a66; border-radius: 10px;
-  padding: 3px 7px; cursor: pointer;
+.dexf-open-btn {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  font-size: 7px; color: #d8e6f2;
+  background: #122a40; border: 2px solid #21557f; border-radius: 8px;
+  padding: 6px 9px; cursor: pointer;
 }
-.dexf-chip.active { background: #3a78c8; color: #fff; border-color: #6aa8e8; }
-#dexf-type { margin-left: auto; }
-.dexf-chip.quest-chip { background: rgba(248,208,48,.14); border-color: #c8a23a; color: #f8d860; }
-.dexf-chip.quest-chip.active { background: #c8932a; color: #1a1206; border-color: #f8d860; }
+.dexf-open-btn:active { transform: scale(.98); }
+.dexf-open-ic { font-size: 9px; }
+
+/* ── Full-page filter picker ── */
+#pokedex-filter-page {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px 12px;
+}
+.dex-filter-sec { font-size: 7px; color: #8fe0ff; margin: 10px 2px 5px; }
+.dex-filter-sec:first-child { margin-top: 2px; }
+.dex-filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dex-filter-card {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px 6px;
+  background: #102030; border: 2px solid #21557f; border-radius: 8px; color: #cfe0ee; cursor: pointer;
+}
+.dex-filter-card:active { transform: scale(.95); }
+.dex-filter-card.active { box-shadow: 0 0 0 2px #f8d860 inset, 0 0 8px rgba(248,216,96,.4); }
+.dfc-ic {
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; background: #1b3550;
+}
+.dfc-lbl { font-size: 6px; color: #cfe0ee; text-align: center; }
+.dfc-ct { font-size: 5px; color: #7fb0d8; }
 
 /* ─── Quest Log (overall completion page) ───────────────── */
 #pokedex-quest {
@@ -1152,6 +1171,20 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
 .buddy-emoji { font-size: 26px; line-height: 1; }
 .buddy-nm { font-size: 5px; color: #9ab4cc; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .buddy-tile.on .buddy-nm { color: #7fe0a0; }
+.buddy-ab { display: flex; gap: 1px; font-size: 7px; line-height: 1; min-height: 8px; }
+
+/* Specialist list — the standout puzzle/speed buddies, with their power spelled out. */
+.buddy-spec-list { display: flex; flex-direction: column; gap: 5px; }
+.buddy-spec {
+  display: flex; align-items: center; gap: 9px; padding: 6px 9px; text-align: left;
+  background: #1a1430; border: 2px solid #6a4ab0; border-radius: 8px; color: #e8def8; cursor: pointer;
+}
+.buddy-spec.on { border-color: #5fe0a0; box-shadow: 0 0 8px rgba(95,224,160,.45); }
+.buddy-spec:active { transform: scale(.98); }
+.buddy-spec .buddy-sprite { width: 36px; height: 36px; flex-shrink: 0; }
+.buddy-spec-txt { display: flex; flex-direction: column; gap: 2px; }
+.buddy-spec-txt b { font-size: 8px; color: #c8b0ff; }
+.buddy-spec-txt span { font-size: 6px; color: #b0a0d0; }
 
 #pokedex-grid {
   flex: 1;
