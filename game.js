@@ -654,6 +654,12 @@ function allOthersCaught() {
   return POKEMON_DATA.every(p => p.legend === 'mewtwo' || caughtIds.has(p.id));
 }
 
+// Whether every ordinary (non-legendary, non-boss) Pokémon is caught — the point
+// where "only the legends remain" and the mythical Mew finally shows itself.
+function allWildCaught() {
+  return POKEMON_DATA.every(p => p.legend || p.boss || caughtIds.has(p.id));
+}
+
 // A random open spot in a faraway zone (optionally avoiding `notZone`).
 function farawaySpot(notZone) {
   const zones = FARAWAY_ZONES.filter(z => z !== notZone);
@@ -673,6 +679,7 @@ function initRoamers() {
   POKEMON_DATA.forEach(p => {
     if (!p.legend || caughtIds.has(p.id)) return;
     if (p.legend === 'mewtwo' && !allOthersCaught()) return; // Mewtwo only at the end
+    if (p.legend === 'mew' && !allWildCaught()) return;      // Mew only once the dex is otherwise full
     const s = saved[p.legend];
     const pos = (s && FARAWAY_ZONES.includes(s.zone)) ? s : farawaySpot();
     roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
@@ -690,6 +697,7 @@ function refreshRoamers() {
   POKEMON_DATA.forEach(p => {
     if (!p.legend || caughtIds.has(p.id)) return;
     if (p.legend === 'mewtwo' && !allOthersCaught()) return;
+    if (p.legend === 'mew' && !allWildCaught()) return;
     if (!roamers.some(r => r.legend === p.legend)) {
       const pos = farawaySpot();
       roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
