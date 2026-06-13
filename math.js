@@ -8,7 +8,7 @@
 // including next to the other game on gh-pages.
 // ═══════════════════════════════════════════════════
 
-const VERSION         = 'v2.12';     // shown in the corner; bump on changes (also bump ?v= in math.html)
+const VERSION         = 'v2.13';     // shown in the corner; bump on changes (also bump ?v= in math.html)
 const SAVE_KEY        = 'pokemath_v1';
 const QUESTIONS       = 8;          // questions per round
 const PIKACHU_ID      = 25;         // Pikachu is the buddy, not a wild catch
@@ -46,8 +46,11 @@ let level     = 1;       // 1 easy, 2 tricky
 let qIndex    = 0;
 let roundStars = 0;
 let sessionCaught = [];   // distinct ids caught since the page loaded (for the parade)
-let current   = null;     // { a, b, op, answer, choices, poke }
+let current   = null;     // { a, b, op, answer, choices, poke, mode }
 let answered  = false;
+
+// ten-frame drag answer state
+let tfCount = 0, tfCapacity = 0, tfDrag = null, tfMoved = false, tfStartX = 0, tfStartY = 0;
 
 let save = { stars: 0, caught: [] };
 let caughtSet = new Set();
@@ -140,6 +143,7 @@ function bindEvents() {
   $('#result-home').addEventListener('click', () => { refreshTitle(); show('title'); });
   $('#dex-back').addEventListener('click', () => { refreshTitle(); show('title'); });
   $('#reset-btn').addEventListener('click', resetProgress);
+  $('#tf-check').addEventListener('click', tfCheck);
 
   // tap Pikachu (title buddy or coach) to make him dance
   document.querySelectorAll('#coach-pika, .buddy-pika').forEach(el => {
@@ -213,46 +217,66 @@ function nextQuestion() {
   $('#p-b').textContent  = current.b;
   $('#p-q').textContent  = '?';
 
-  // choices
-  $$('.choice-btn').forEach((btn, i) => {
-    btn.textContent = current.choices[i];
-    btn.disabled = false;
-    btn.classList.remove('correct', 'wrong');
-  });
+  // pick the answer UI: multiple choice, or drag-into-ten-frames
+  const isTenframe = current.mode === 'tenframe';
+  $('#choices').classList.toggle('hidden', isTenframe);
+  $('#tenframe').classList.toggle('hidden', !isTenframe);
+  $('#helper').classList.toggle('hidden', isTenframe);
 
-  // helper pokeballs
-  renderHelper(current);
-
-  // coach
-  setCoach(pick(PROF.start));
+  if (isTenframe) {
+    setupTenFrame(current.answer);
+    setCoach('Drag Pokéballs into the frames, then tap Check!');
+  } else {
+    $$('.choice-btn').forEach((btn, i) => {
+      btn.textContent = current.choices[i];
+      btn.disabled = false;
+      btn.classList.remove('correct', 'wrong');
+    });
+    renderHelper(current);
+    setCoach(pick(PROF.start));
+  }
 }
 
 // ═══════════════════════════════════════════════════
 // QUESTION GENERATION
 // ═══════════════════════════════════════════════════
 function makeQuestion() {
-  let realOp = op === 'mix' ? pick(['add', 'sub', 'mul']) : op;
+  // Mix: add/sub/mul (+ division once you're past Easy)
+  const mixOps = level >= 2 ? ['add', 'sub', 'mul', 'div'] : ['add', 'sub', 'mul'];
+  const realOp = op === 'mix' ? pick(mixOps) : op;
   let a, b, answer;
 
   if (realOp === 'add') {
-    if (level === 1) { a = rand(1, 9);  b = rand(1, 9);  }   // sums to 18
-    else             { a = rand(4, 15); b = rand(4, 15); }   // sums to 30
+    if      (level === 1) { a = rand(1, 9);   b = rand(1, 9);  }   // sums to 18
+    else if (level === 2) { a = rand(4, 15);  b = rand(4, 15); }   // sums to 30
+    else                  { a = rand(10, 30); b = rand(10, 30); } // sums to 60
     answer = a + b;
   } else if (realOp === 'sub') {
-    const max = level === 1 ? 12 : 20;
+    const max = level === 1 ? 12 : level === 2 ? 20 : 50;
     a = rand(3, max);
     b = rand(1, a);          // never negative
     answer = a - b;
-  } else { // mul — times tables
-    if (level === 1) { a = rand(1, 5); b = rand(1, 5); }     // up to 5×5
-    else             { a = rand(2, 9); b = rand(2, 9); }     // up to 9×9
+  } else if (realOp === 'mul') {
+    if      (level === 1) { a = rand(1, 5);  b = rand(1, 5);  }    // up to 5×5
+    else if (level === 2) { a = rand(2, 9);  b = rand(2, 9);  }    // up to 9×9
+    else                  { a = rand(2, 12); b = rand(2, 12); }    // up to 12×12
     answer = a * b;
+  } else { // div — sharing into equal groups (always whole-number answers)
+    let divisor, quotient;
+    if      (level === 1) { divisor = rand(2, 5);  quotient = rand(1, 5);  }
+    else if (level === 2) { divisor = rand(2, 9);  quotient = rand(2, 9);  }
+    else                  { divisor = rand(2, 12); quotient = rand(2, 12); }
+    a = divisor * quotient; b = divisor; answer = quotient;
   }
+
+  // some questions are answered by dragging Pokéballs into ten-frames
+  const tenframe = answer >= 1 && answer <= 20 && Math.random() < 0.4;
 
   return {
     a, b, op: realOp, answer,
     choices: makeChoices(answer),
     poke: pickWild(),
+    mode: tenframe ? 'tenframe' : 'choices',
   };
 }
 
@@ -306,7 +330,7 @@ function renderHelper(q) {
     } else {
       box.appendChild(hint(`Start at ${q.a}, take ${q.b} away`));
     }
-  } else { // mul: an array of a rows × b balls (stacks down, never overlaps)
+  } else if (q.op === 'mul') { // an array of a rows × b balls (stacks down, never overlaps)
     if (q.a <= 5 && q.answer <= 30) {
       const array = document.createElement('div');
       array.className = 'pb-array';
@@ -320,6 +344,8 @@ function renderHelper(q) {
     } else {
       box.appendChild(hint(`${q.a} rows of ${q.b}`));
     }
+  } else { // div — sharing into equal groups
+    box.appendChild(hint(`Share ${q.a} into groups of ${q.b}`));
   }
 }
 
@@ -346,6 +372,104 @@ function plus() {
   p.className = 'pb-plus';
   p.textContent = '+';
   return p;
+}
+
+// ═══════════════════════════════════════════════════
+// TEN-FRAME DRAG ANSWER
+// ═══════════════════════════════════════════════════
+function setupTenFrame(answer) {
+  tfCapacity = answer <= 10 ? 10 : 20;   // one or two ten-frames
+  tfCount = 0;
+  $('#tf-frames').classList.remove('tf-correct');
+  renderTenFrame();
+  buildPile();
+}
+
+function renderTenFrame() {
+  const wrap = $('#tf-frames');
+  wrap.innerHTML = '';
+  const frames = Math.ceil(tfCapacity / 10);
+  let idx = 0;
+  for (let f = 0; f < frames; f++) {
+    const grid = document.createElement('div');
+    grid.className = 'tf-grid';
+    for (let c = 0; c < 10; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'tf-cell';
+      if (idx < tfCount) {
+        const b = document.createElement('div');
+        b.className = 'pokeball tf-ball';
+        b.addEventListener('click', () => { if (!answered) { tfCount--; renderTenFrame(); sfx('back'); } });
+        cell.appendChild(b);
+      }
+      grid.appendChild(cell);
+      idx++;
+    }
+    wrap.appendChild(grid);
+  }
+}
+
+function buildPile() {
+  const pile = $('#tf-pile');
+  pile.innerHTML = '';
+  // a little decorative heap to drag from
+  [[8,16],[26,8],[20,26],[2,28],[34,22]].forEach(([x, y]) => {
+    const b = document.createElement('div');
+    b.className = 'pokeball';
+    b.style.left = x + 'px';
+    b.style.top = y + 'px';
+    pile.appendChild(b);
+  });
+  pile.onpointerdown = startTfDrag;
+}
+
+function startTfDrag(e) {
+  if (answered) return;
+  e.preventDefault();
+  wakeAudio();
+  tfMoved = false; tfStartX = e.clientX; tfStartY = e.clientY;
+  tfDrag = document.createElement('div');
+  tfDrag.className = 'pokeball tf-drag';
+  document.body.appendChild(tfDrag);
+  moveTfDrag(e.clientX, e.clientY);
+  window.addEventListener('pointermove', onTfMove);
+  window.addEventListener('pointerup', onTfUp);
+  window.addEventListener('pointercancel', onTfUp);
+}
+function moveTfDrag(x, y) { tfDrag.style.left = x + 'px'; tfDrag.style.top = y + 'px'; }
+function onTfMove(e) {
+  if (!tfDrag) return;
+  if (Math.abs(e.clientX - tfStartX) > 6 || Math.abs(e.clientY - tfStartY) > 6) tfMoved = true;
+  moveTfDrag(e.clientX, e.clientY);
+}
+function onTfUp(e) {
+  window.removeEventListener('pointermove', onTfMove);
+  window.removeEventListener('pointerup', onTfUp);
+  window.removeEventListener('pointercancel', onTfUp);
+  const fr = $('#tf-frames').getBoundingClientRect();
+  const overFrames = e.clientX >= fr.left - 24 && e.clientX <= fr.right + 24 &&
+                     e.clientY >= fr.top  - 24 && e.clientY <= fr.bottom + 24;
+  // drop onto the frames, or a simple tap on the pile, adds one ball
+  if ((overFrames || !tfMoved) && tfCount < tfCapacity) {
+    tfCount++;
+    renderTenFrame();
+    sfx('tap');
+  }
+  if (tfDrag) { tfDrag.remove(); tfDrag = null; }
+}
+
+function tfCheck() {
+  if (answered) return;
+  wakeAudio();
+  if (tfCount === current.answer) {
+    answered = true;
+    $('#tf-frames').classList.add('tf-correct');
+    onCorrect();
+  } else {
+    setCoach(tfCount < current.answer ? 'A few more — keep going!' : 'Too many — tap some to remove.');
+    playWrong();
+    $$('.tf-grid').forEach(x => { x.classList.add('tf-shake'); setTimeout(() => x.classList.remove('tf-shake'), 400); });
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -572,7 +696,7 @@ function shuffle(arr) {
   }
   return arr;
 }
-function opSymbol(o) { return o === 'add' ? '+' : o === 'sub' ? '−' : '×'; }
+function opSymbol(o) { return o === 'add' ? '+' : o === 'sub' ? '−' : o === 'mul' ? '×' : '÷'; }
 function spriteSrc(id) { return `sprites/${String(id).padStart(3, '0')}.png`; }
 
 function typeColor(type) {
