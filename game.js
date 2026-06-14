@@ -843,7 +843,22 @@ function buddyClearsSeam(g) {
   if (g.buddyId != null) return activePet === g.buddyId;
   return false;                                          // friend-count gates can't be "cleared", only met
 }
+// Colour that themes a seam-gate's energy wall: type colour, gold for friend
+// counts, soft violet for a specific-buddy seal.
+function seamTint(g) {
+  if (g.type != null) return typeColor(g.type);
+  if (g.buddyId != null) return '#9a6ae0';
+  return '#e0b030';
+}
+// Flavoured line shown when a type/buddy seam dissolves.
+function seamClearMsg(g) {
+  if (g.type != null) return `✨ Your ${g.type}-type buddy dissolves the barrier — the way opens!`;
+  const p = POKEMON_DATA.find(x => x.id === g.buddyId);
+  return `✨ ${p ? p.name : 'Your buddy'} steps forward and the seal melts away — the way opens!`;
+}
 let barrierFX = {};                // barrier key -> { start, sign } while its break animation plays
+let seamFX    = {};                // seam key  -> { start, tint } while its open burst plays
+const SEAM_FX_MS = 900;            // how long the seam-gate open burst runs
 const BARRIER_FX_MS = 1000;        // how long the break / particle-storm effect runs
 const LULLABY_FX_MS = 1800;        // the Gigantamax Gengar's fade-to-sleep at the seam
 let collected = new Set();         // ids of badges/collectibles found
@@ -2101,8 +2116,10 @@ function move(dx, dy, ts) {
         bumpVec = { dx, dy }; bumpAnimTs = ts;
         if (buddyClearsSeam(sg)) {                  // crossed with the right buddy → opens for good
           clearedSeams.add(sgKey); saveGame();
+          seamFX[sgKey] = { start: ts, tint: seamTint(sg) };
+          setTimeout(() => { delete seamFX[sgKey]; }, SEAM_FX_MS);
           beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
-          showMessage('✨ The way opens!');
+          showMessage(seamClearMsg(sg));
         } else {
           beep(160, 0.07, 0.1, 'square');
           showMessage(seamGateHint(sg));
@@ -4143,19 +4160,27 @@ function drawSeamGates(ts) {
     if (exit.from !== currentZone) continue;
     const key = exit.from + '>' + exit.to, g = SEAM_GATES[key];
     if (!g || seamGateOpen(key, g)) continue;
+    const tint = seamTint(g);
+    const horiz = exit.dir === 'north' || exit.dir === 'south';
+    // A glowing energy wall filling every tile along the seam.
+    exit.pos.forEach((p, i) => {
+      const { bx, by } = barrierBlockPos(exit, p, zc, zr);
+      drawSeamCell(bx, by, tint, ts, i, horiz);
+    });
+    // Emblem on the centre tile so the requirement is legible.
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
-    const bob = Math.sin(ts * 0.003) * 2;
-    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2 + bob;
+    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(18,14,26,.62)';
-    ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(14,10,20,.7)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = tint; ctx.stroke();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (g.type != null) {
       const ic = typeIconImg(g.type);
       if (ic) { const h = 26, w = Math.round(h * ic.naturalWidth / ic.naturalHeight); ctx.drawImage(ic, cx - w / 2, cy - h / 2, w, h); }
     } else if (g.buddyId != null) {
-      const p = POKEMON_DATA.find(x => x.id === g.buddyId), img = p && canvasSprite(p);
+      const pk = POKEMON_DATA.find(x => x.id === g.buddyId), img = pk && canvasSprite(pk);
       if (img && img.complete && img.naturalWidth) { const h = 28, w = Math.round(h * img.naturalWidth / img.naturalHeight); ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h); }
       ctx.font = '11px serif'; ctx.fillText('🔒', cx + 10, cy - 9);
     } else {
@@ -4166,6 +4191,50 @@ function drawSeamGates(ts) {
     ctx.textBaseline = 'alphabetic';
     ctx.restore();
   }
+  // Open bursts for seams that were just cleared.
+  for (const key in seamFX) {
+    const exit = EXITS.find(e => e.from === currentZone && e.from + '>' + e.to === key);
+    if (!exit) continue;
+    drawSeamBurst(exit, seamFX[key], ts, zc, zr);
+  }
+}
+// One tile of the energy wall: a tinted pane with a sweeping shimmer and glow border.
+function drawSeamCell(bx, by, tint, ts, idx, horiz) {
+  ctx.save();
+  ctx.globalAlpha = 0.20 + 0.06 * Math.sin(ts * 0.004 + idx * 0.9);
+  ctx.fillStyle = tint;
+  ctx.fillRect(bx + 1, by + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+  // Sweeping highlight band.
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = '#ffffff';
+  const t = (ts * 0.06 + idx * 11) % (TILE_SIZE + 16) - 8;
+  if (horiz) ctx.fillRect(bx + t, by + 2, 5, TILE_SIZE - 4);
+  else       ctx.fillRect(bx + 2, by + t, TILE_SIZE - 4, 5);
+  // Glowing border.
+  ctx.globalAlpha = 0.55 + 0.2 * Math.sin(ts * 0.005 + idx);
+  ctx.lineWidth = 2; ctx.strokeStyle = tint;
+  ctx.shadowBlur = 8; ctx.shadowColor = tint;
+  ctx.strokeRect(bx + 1.5, by + 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
+  ctx.restore();
+}
+// Expanding ring + sparks when a seam dissolves.
+function drawSeamBurst(exit, fx, ts, zc, zr) {
+  const k = Math.min(1, (ts - fx.start) / SEAM_FX_MS);
+  if (k >= 1) return;
+  const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+  const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+  const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2;
+  ctx.save();
+  ctx.globalAlpha = 1 - k;
+  ctx.lineWidth = 3; ctx.strokeStyle = fx.tint; ctx.shadowBlur = 10; ctx.shadowColor = fx.tint;
+  ctx.beginPath(); ctx.arc(cx, cy, 6 + k * (TILE_SIZE * (exit.pos.length * 0.4 + 0.8)), 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = fx.tint;
+  for (let s = 0; s < 8; s++) {
+    const a = s / 8 * Math.PI * 2, r = 4 + k * 26;
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2.2 * (1 - k) + 0.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 function drawBarriers(ts) {
   const zoneExits = EXITS.filter(e => e.from === currentZone);
@@ -6076,6 +6145,8 @@ function reachableZones() {
     const z = queue.shift();
     for (const e of EXITS) {
       if (e.from !== z || !isBarrierUnlocked(e.barrier)) continue;
+      const sk = e.from + '>' + e.to, sg = SEAM_GATES[sk];
+      if (sg && !seamGateOpen(sk, sg)) continue;          // seam-gate also blocks the route
       if (!seen.has(e.to)) { seen.add(e.to); queue.push(e.to); }
     }
   }
@@ -6414,7 +6485,10 @@ function renderMap() {
     const gate = EXITS.find(x =>
       ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
     const barrier = gate ? gate.barrier : null;
-    const passable = isBarrierUnlocked(barrier);
+    const sgA = SEAM_GATES[e.from + '>' + e.to], sgB = SEAM_GATES[e.to + '>' + e.from];
+    const seamOpen = (!sgA || seamGateOpen(e.from + '>' + e.to, sgA)) &&
+                     (!sgB || seamGateOpen(e.to + '>' + e.from, sgB));
+    const passable = isBarrierUnlocked(barrier) && seamOpen;
     const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
 
     // Build the path: straight by default, or via waypoints for routed edges.
@@ -6426,11 +6500,18 @@ function renderMap() {
     const pts = [[x1, y1], ...(wp || []), [x2, y2]];
     svg += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" class="${passable ? 'link-open' : 'link-locked'}" />`;
 
-    if (!passable && barrier) {
+    if (!passable && (barrier || !seamOpen)) {
       // Label at the path midpoint (the apex of the arc for routed edges).
       const lx = wp ? wp.reduce((s, p) => s + p[0], 0) / wp.length : (x1 + x2) / 2;
       const ly = wp ? wp.reduce((s, p) => s + p[1], 0) / wp.length : (y1 + y2) / 2;
-      svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${BARRIERS[barrier].needsType}.png?v=${ART_V}"/>`;
+      const sg = sgA || sgB;
+      if (barrier) {
+        svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${BARRIERS[barrier].needsType}.png?v=${ART_V}"/>`;
+      } else if (sg && sg.type != null) {
+        svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${sg.type}.png?v=${ART_V}"/>`;
+      } else {
+        svg += `<text x="${lx}" y="${ly + 6}" text-anchor="middle" font-size="16">🔒</text>`;
+      }
     }
   });
   document.getElementById('map-lines').innerHTML = svg;
