@@ -812,11 +812,13 @@ let audioUnlocked = false;   // iOS needs a silent buffer played inside a gestur
 let muted       = false;   // global (not per-slot) audio mute
 let currentZone = 0;
 let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
-let clearedSeams = new Set();      // "from>to" seam-gates opened by walking in with the right buddy
+let clearedSeams = new Set();      // canonical seam keys the player has permanently opened
 
-// Extra progression gates on otherwise-open seams (keyed by the inward direction
-// only, so you can always walk back out). friends:N opens once you've befriended N
-// Lukéymon; type/buddyId open permanently the moment you cross with the right buddy.
+// Progression gates on otherwise-open seams. Like the physical barriers, they
+// block the seam in BOTH directions until unlocked once, then stay open forever.
+// The table is keyed by the *inward* direction (where the requirement is framed),
+// but the gate applies to the whole seam. friends:N unlocks once you've befriended
+// N Lukéymon; type/buddyId unlock the moment you cross with the right buddy.
 const SEAM_GATES = {
   '1>15': { friends: 12 }, '5>15': { friends: 12 },      // → Safari Savanna
   '1>19': { friends: 12 }, '7>19': { friends: 12 },      // → Haunted Hollow
@@ -827,21 +829,32 @@ const SEAM_GATES = {
   '5>14': { buddyId: 35 }, '13>14': { buddyId: 35 },     // → Lunar Pass (Clefairy)
   '4>26': { buddyId: 143 }, '7>26': { buddyId: 143 },    // → Great Tunnel (Snorlax)
 };
+// The gate guarding the seam between zones a and b, in either direction. Returns
+// { key, g } using the inward key as the canonical id, or null if the seam is open.
+function seamGateInfo(a, b) {
+  const ab = a + '>' + b, ba = b + '>' + a;
+  if (SEAM_GATES[ab]) return { key: ab, g: SEAM_GATES[ab] };
+  if (SEAM_GATES[ba]) return { key: ba, g: SEAM_GATES[ba] };
+  return null;
+}
 function seamGateOpen(key, g) {
   if (!g) return true;
+  if (clearedSeams.has(key)) return true;                // unlocked once → open for good
   if (g.friends != null) return caughtIds.size >= g.friends;
-  return clearedSeams.has(key);                          // type / buddyId gates
+  return false;                                          // type / buddyId need an active cross
 }
 function seamGateHint(g) {
   if (g.friends != null) return `🚧 A kindly guardian blocks the way: "Come back once you've befriended ${g.friends} Lukéymon!" (You have ${caughtIds.size}.)`;
-  if (g.type != null)    return `🚧 The path is blocked — bring a ${g.type} Lukéymon as your buddy to clear it!`;
+  if (g.type != null)    return `🚧 The path is sealed — bring a ${g.type} Lukéymon as your buddy to open it!`;
   const p = POKEMON_DATA.find(x => x.id === g.buddyId);
-  return `🚧 Only a trainer walking beside a ${p ? p.name : '?'} may pass here. Set it as your buddy!`;
+  return `🚧 Only a trainer walking beside a ${p ? p.name : '?'} may open this seal. Set it as your buddy!`;
 }
-function buddyClearsSeam(g) {
+// Can the player unlock this gate right now (right buddy out front / enough friends)?
+function buddyMeetsSeam(g) {
   if (g.type != null) return buddyHasType(g.type);
   if (g.buddyId != null) return activePet === g.buddyId;
-  return false;                                          // friend-count gates can't be "cleared", only met
+  if (g.friends != null) return caughtIds.size >= g.friends;
+  return false;
 }
 // Colour that themes a seam-gate's energy wall: type colour, gold for friend
 // counts, soft violet for a specific-buddy seal.
@@ -850,9 +863,10 @@ function seamTint(g) {
   if (g.buddyId != null) return '#9a6ae0';
   return '#e0b030';
 }
-// Flavoured line shown when a type/buddy seam dissolves.
+// Flavoured line shown when a seam unlocks.
 function seamClearMsg(g) {
   if (g.type != null) return `✨ Your ${g.type}-type buddy dissolves the barrier — the way opens!`;
+  if (g.friends != null) return `✨ The guardian counts your ${caughtIds.size} friends and steps aside — the way opens!`;
   const p = POKEMON_DATA.find(x => x.id === g.buddyId);
   return `✨ ${p ? p.name : 'Your buddy'} steps forward and the seal melts away — the way opens!`;
 }
@@ -2110,19 +2124,19 @@ function move(dx, dy, ts) {
   if (nx < 0 || nx >= mc || ny < 0 || ny >= mr) {
     const exit = findActiveExit(playerX, playerY, dx, dy);
     if (exit) {
-      // Extra progression gate on this (otherwise open) seam?
-      const sgKey = exit.from + '>' + exit.to, sg = SEAM_GATES[sgKey];
-      if (sg && !seamGateOpen(sgKey, sg)) {
+      // Progression gate on this seam (blocks both directions until unlocked once).
+      const sgi = seamGateInfo(exit.from, exit.to);
+      if (sgi && !seamGateOpen(sgi.key, sgi.g)) {
         bumpVec = { dx, dy }; bumpAnimTs = ts;
-        if (buddyClearsSeam(sg)) {                  // crossed with the right buddy → opens for good
-          clearedSeams.add(sgKey); saveGame();
-          seamFX[sgKey] = { start: ts, tint: seamTint(sg) };
-          setTimeout(() => { delete seamFX[sgKey]; }, SEAM_FX_MS);
+        if (buddyMeetsSeam(sgi.g)) {                 // requirement met → unlock for good
+          clearedSeams.add(sgi.key); saveGame();
+          seamFX[sgi.key] = { start: ts, tint: seamTint(sgi.g) };
+          setTimeout(() => { delete seamFX[sgi.key]; }, SEAM_FX_MS);
           beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
-          showMessage(seamClearMsg(sg));
+          showMessage(seamClearMsg(sgi.g));
         } else {
           beep(160, 0.07, 0.1, 'square');
-          showMessage(seamGateHint(sg));
+          showMessage(seamGateHint(sgi.g));
         }
         return;
       }
@@ -2393,6 +2407,19 @@ function move(dx, dy, ts) {
   // Step onto a cave mouth (or other point-portal) → warp into the linked zone.
   const portal = portalAt(currentZone, playerX, playerY);
   if (portal) {
+    // Cave-mouth seam-gates: block until unlocked once, then warp on through.
+    const sgi = seamGateInfo(portal.from, portal.to);
+    if (sgi && !seamGateOpen(sgi.key, sgi.g)) {
+      if (buddyMeetsSeam(sgi.g)) {
+        clearedSeams.add(sgi.key); saveGame();
+        beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+        showMessage(seamClearMsg(sgi.g));
+      } else {
+        beep(160, 0.07, 0.1, 'square');
+        showMessage(seamGateHint(sgi.g));
+        return;                                   // sealed — no warp
+      }
+    }
     beep(300, 0.08, 0.1);
     setTimeout(() => warpTo(portal.to, portal.tx, portal.ty, 'down'), 110);
     return;
@@ -4158,8 +4185,9 @@ function drawSeamGates(ts) {
   const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
   for (const exit of EXITS) {
     if (exit.from !== currentZone) continue;
-    const key = exit.from + '>' + exit.to, g = SEAM_GATES[key];
-    if (!g || seamGateOpen(key, g)) continue;
+    const sgi = seamGateInfo(exit.from, exit.to);
+    if (!sgi || seamGateOpen(sgi.key, sgi.g)) continue;
+    const g = sgi.g, key = sgi.key;
     const tint = seamTint(g);
     const horiz = exit.dir === 'north' || exit.dir === 'south';
     // A glowing energy wall filling every tile along the seam.
@@ -4170,33 +4198,49 @@ function drawSeamGates(ts) {
     // Emblem on the centre tile so the requirement is legible.
     const midP = exit.pos[Math.floor(exit.pos.length / 2)];
     const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
-    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2;
-    ctx.save();
-    ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(14,10,20,.7)'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = tint; ctx.stroke();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (g.type != null) {
-      const ic = typeIconImg(g.type);
-      if (ic) { const h = 26, w = Math.round(h * ic.naturalWidth / ic.naturalHeight); ctx.drawImage(ic, cx - w / 2, cy - h / 2, w, h); }
-    } else if (g.buddyId != null) {
-      const pk = POKEMON_DATA.find(x => x.id === g.buddyId), img = pk && canvasSprite(pk);
-      if (img && img.complete && img.naturalWidth) { const h = 28, w = Math.round(h * img.naturalWidth / img.naturalHeight); ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h); }
-      ctx.font = '11px serif'; ctx.fillText('🔒', cx + 10, cy - 9);
-    } else {
-      ctx.font = '15px serif'; ctx.fillText('🔒', cx, cy - 4);
-      ctx.fillStyle = caughtIds.size >= g.friends ? '#7fe0a0' : '#ffe070';
-      ctx.font = 'bold 10px sans-serif'; ctx.fillText(caughtIds.size + '/' + g.friends, cx, cy + 9);
-    }
-    ctx.textBaseline = 'alphabetic';
-    ctx.restore();
+    drawSeamEmblem(g, tint, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2);
   }
-  // Open bursts for seams that were just cleared.
+  // Cave-mouth portals are gated too — mark the mouth so it reads as sealed.
+  for (const portal of PORTALS) {
+    if (portal.from !== currentZone) continue;
+    const sgi = seamGateInfo(portal.from, portal.to);
+    if (!sgi || seamGateOpen(sgi.key, sgi.g)) continue;
+    const bx = portal.fx * TILE_SIZE - camX, by = portal.fy * TILE_SIZE - camY;
+    drawSeamCell(bx, by, seamTint(sgi.g), ts, 0, true);
+    drawSeamEmblem(sgi.g, seamTint(sgi.g), bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2);
+  }
+  // Open bursts for seams that were just cleared (match either crossing direction).
   for (const key in seamFX) {
-    const exit = EXITS.find(e => e.from === currentZone && e.from + '>' + e.to === key);
+    const exit = EXITS.find(e => {
+      if (e.from !== currentZone) return false;
+      const i = seamGateInfo(e.from, e.to);
+      return i && i.key === key;
+    });
     if (!exit) continue;
     drawSeamBurst(exit, seamFX[key], ts, zc, zr);
   }
+}
+// The legible requirement badge in the middle of a gate (type icon / buddy / count).
+function drawSeamEmblem(g, tint, cx, cy) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(14,10,20,.7)'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = tint; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (g.type != null) {
+    const ic = typeIconImg(g.type);
+    if (ic) { const h = 26, w = Math.round(h * ic.naturalWidth / ic.naturalHeight); ctx.drawImage(ic, cx - w / 2, cy - h / 2, w, h); }
+  } else if (g.buddyId != null) {
+    const pk = POKEMON_DATA.find(x => x.id === g.buddyId), img = pk && canvasSprite(pk);
+    if (img && img.complete && img.naturalWidth) { const h = 28, w = Math.round(h * img.naturalWidth / img.naturalHeight); ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h); }
+    ctx.font = '11px serif'; ctx.fillText('🔒', cx + 10, cy - 9);
+  } else {
+    ctx.font = '15px serif'; ctx.fillText('🔒', cx, cy - 4);
+    ctx.fillStyle = caughtIds.size >= g.friends ? '#7fe0a0' : '#ffe070';
+    ctx.font = 'bold 10px sans-serif'; ctx.fillText(caughtIds.size + '/' + g.friends, cx, cy + 9);
+  }
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
 }
 // One tile of the energy wall: a tinted pane with a sweeping shimmer and glow border.
 function drawSeamCell(bx, by, tint, ts, idx, horiz) {
@@ -6145,8 +6189,8 @@ function reachableZones() {
     const z = queue.shift();
     for (const e of EXITS) {
       if (e.from !== z || !isBarrierUnlocked(e.barrier)) continue;
-      const sk = e.from + '>' + e.to, sg = SEAM_GATES[sk];
-      if (sg && !seamGateOpen(sk, sg)) continue;          // seam-gate also blocks the route
+      const sgi = seamGateInfo(e.from, e.to);             // seam-gate blocks the route both ways
+      if (sgi && !seamGateOpen(sgi.key, sgi.g)) continue;
       if (!seen.has(e.to)) { seen.add(e.to); queue.push(e.to); }
     }
   }
@@ -6485,9 +6529,8 @@ function renderMap() {
     const gate = EXITS.find(x =>
       ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
     const barrier = gate ? gate.barrier : null;
-    const sgA = SEAM_GATES[e.from + '>' + e.to], sgB = SEAM_GATES[e.to + '>' + e.from];
-    const seamOpen = (!sgA || seamGateOpen(e.from + '>' + e.to, sgA)) &&
-                     (!sgB || seamGateOpen(e.to + '>' + e.from, sgB));
+    const sgi = seamGateInfo(e.from, e.to);
+    const seamOpen = !sgi || seamGateOpen(sgi.key, sgi.g);
     const passable = isBarrierUnlocked(barrier) && seamOpen;
     const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
 
@@ -6504,7 +6547,7 @@ function renderMap() {
       // Label at the path midpoint (the apex of the arc for routed edges).
       const lx = wp ? wp.reduce((s, p) => s + p[0], 0) / wp.length : (x1 + x2) / 2;
       const ly = wp ? wp.reduce((s, p) => s + p[1], 0) / wp.length : (y1 + y2) / 2;
-      const sg = sgA || sgB;
+      const sg = sgi && sgi.g;
       if (barrier) {
         svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${BARRIERS[barrier].needsType}.png?v=${ART_V}"/>`;
       } else if (sg && sg.type != null) {
