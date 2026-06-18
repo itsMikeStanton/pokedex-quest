@@ -198,8 +198,8 @@
   </div>
 </section>
 
-<script src="world.js"></script>
-<script src="decor.js"></script>
+<script src="world.js?v=3.22.20"></script>
+<script src="decor.js?v=3.22.20"></script>
 <script>
 const TILES = [
   { id:0, name:'Path',  color:'#d0b068' }, { id:1, name:'Grass', color:'#38b038' },
@@ -214,8 +214,10 @@ const TILES = [
 ];
 const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
 const TREE = 2, CAVE = 10, CAVE_DOOR = 11, BOULDER = 9;
-const BARRIERS = ['', 'log', 'rock', 'fence', 'lava', 'vine', 'frost', 'sand'];
-const BARRIER_ELEM = { log:'Fire', rock:'Water', fence:'Electric', lava:'Water', vine:'Grass', frost:'Fire', sand:'Ground' };
+const BARRIERS = ['', 'log', 'rock', 'fence', 'lava', 'vine', 'frost', 'sand', 'psychic', 'lullaby'];
+const BARRIER_ELEM = { log:'Fire', rock:'Water', fence:'Electric', lava:'Water', vine:'Grass', frost:'Fire', sand:'Ground', psychic:'Mewtwo only', lullaby:'Jigglypuff only' };
+// Seam-gate requirement types (for the gate picker on exits & portals).
+const SEAM_TYPES = ['Fire','Water','Grass','Electric','Ground','Rock','Ice','Flying','Poison','Psychic','Bug','Normal','Fighting','Ghost','Dragon','Fairy'];
 const BARRIER_SIGN = { log:'🔥', rock:'💧', fence:'⚡', lava:'💧', vine:'🌿', frost:'🔥', sand:'🌍' };
 const DIRS = ['north', 'south', 'east', 'west'];
 const LS_KEY = 'lukeymon_world_v1';
@@ -227,10 +229,11 @@ const PROP_KEYS = ['streetlight', 'firepit', 'boulder', 'cave_entrance', 'pier',
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function loadWorld() {
-  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); ensureProps(); return; } } catch (_) {}
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; if (!world.seamGates) world.seamGates = clone(WORLD.seamGates || {}); ensureNpcs(); ensureProps(); return; } } catch (_) {}
   world = clone(WORLD);
   if (!world.portals) world.portals = [];
   if (!world.decor) world.decor = {};
+  if (!world.seamGates) world.seamGates = {};
   ensureNpcs(); ensureProps();
 }
 // Seed NPC positions from the game's world.js if an older autosave lacks them.
@@ -635,6 +638,7 @@ function renderExits() {
       lblRow('edge → to', wrapEls(dirSel, span('→'), toSel)),
       lblRow('openings (cells)', posIn),
       lblRow('barrier', barSel),
+      gateEditor(e.from, e.to),
       lblRow('arrival x,y in target', wrapEls(exIn, span(','), eyIn)),
     );
     const btns = document.createElement('div'); btns.className = 'row';
@@ -680,6 +684,7 @@ function renderPortals() {
     row.append(
       lblRow('door tile (fx,fy)', wrapEls(fxIn, span(','), fyIn)),
       lblRow('warp to zone', toSel),
+      gateEditor(p.from, p.to),
       lblRow('arrival (tx,ty)', wrapEls(txIn, span(','), tyIn)),
     );
     const btns = document.createElement('div'); btns.className = 'row';
@@ -713,6 +718,36 @@ function span(t) { const s=document.createElement('span'); s.textContent=t; s.st
 function wrapEls(...els) { const d=document.createElement('div'); d.className='row'; d.append(...els); return d; }
 function lblRow(label, el) { const f=document.createElement('div'); f.className='field'; const l=document.createElement('label'); l.textContent=label; f.append(l, el); return f; }
 
+// ── Seam-gate editor (shared by exits & cave portals) ───────────
+// A gate blocks the seam BOTH ways until unlocked once. Stored in
+// world.seamGates keyed "from>to"; the game reads either direction.
+function curSeamGate(from, to) {
+  const sg = world.seamGates || {};
+  const k = sg[from+'>'+to] ? from+'>'+to : sg[to+'>'+from] ? to+'>'+from : null;
+  return { key: k || (from+'>'+to), g: k ? sg[k] : null };
+}
+function writeSeamGate(key, g) {
+  if (!world.seamGates) world.seamGates = {};
+  if (!g) delete world.seamGates[key]; else world.seamGates[key] = g;
+  save();
+}
+function gateEditor(from, to) {
+  const { key, g } = curSeamGate(from, to);
+  const kind = g ? (g.friends!=null?'friends':g.type!=null?'type':'buddy') : 'none';
+  const kindSel = sel2([['none','— no gate —'],['friends','friend count'],['type','buddy type'],['buddy','specific buddy']], kind, v => {
+    if (v==='none') writeSeamGate(key, null);
+    else if (v==='friends') writeSeamGate(key, { friends: (g&&g.friends)||12 });
+    else if (v==='type') writeSeamGate(key, { type: (g&&g.type)||'Water' });
+    else if (v==='buddy') writeSeamGate(key, { buddyId: (g&&g.buddyId)||1 });
+    renderExits(); renderPortals();
+  });
+  const rowEl = wrapEls(kindSel);
+  if (kind==='friends') rowEl.append(inp(g.friends, 'sm', v => writeSeamGate(key, { friends: Math.max(0,+v|0) })), span('friends'));
+  else if (kind==='type') rowEl.append(sel2(SEAM_TYPES.map(t=>[t,t]), g.type, v => writeSeamGate(key, { type: v })));
+  else if (kind==='buddy') rowEl.append(inp(g.buddyId, 'sm', v => writeSeamGate(key, { buddyId: +v|0 })), span('species #'));
+  return lblRow('🔒 gate (both ways)', rowEl);
+}
+
 // ── export / import / reset ─────────────────────────────────────
 function exportText() {
   let s = 'const WORLD = {\n  zones: [\n';
@@ -721,7 +756,14 @@ function exportText() {
   world.exits.forEach(e => s += '    ' + JSON.stringify(e) + ',\n');
   s += '  ],\n  portals: [\n';
   (world.portals || []).forEach(p => s += '    ' + JSON.stringify(p) + ',\n');
-  s += '  ],\n  maps: {\n';
+  s += '  ],\n';
+  const sgk = Object.keys(world.seamGates || {});
+  if (sgk.length) {
+    s += '  seamGates: {\n';
+    sgk.forEach((k, i) => { s += `    ${JSON.stringify(k)}: ${JSON.stringify(world.seamGates[k])}` + (i < sgk.length-1 ? ',' : '') + '\n'; });
+    s += '  },\n';
+  }
+  s += '  maps: {\n';
   world.zones.forEach((z, i, arr) => {
     s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
   });
@@ -759,7 +801,7 @@ document.getElementById('import-json').onclick = () => {
   let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
   if (i<0||j<i) return alert('No object found.');
   try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
-    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; ensureNpcs(); zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; if (!world.seamGates) world.seamGates = {}; ensureNpcs(); zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
   } catch (err) { alert('Parse error: ' + err.message); }
 };
 function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }

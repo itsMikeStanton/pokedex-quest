@@ -816,19 +816,10 @@ let clearedSeams = new Set();      // canonical seam keys the player has permane
 
 // Progression gates on otherwise-open seams. Like the physical barriers, they
 // block the seam in BOTH directions until unlocked once, then stay open forever.
-// The table is keyed by the *inward* direction (where the requirement is framed),
-// but the gate applies to the whole seam. friends:N unlocks once you've befriended
-// N Lukéymon; type/buddyId unlock the moment you cross with the right buddy.
-const SEAM_GATES = {
-  '1>15': { friends: 12 }, '5>15': { friends: 12 },      // → Safari Savanna
-  '1>19': { friends: 12 }, '7>19': { friends: 12 },      // → Haunted Hollow
-  '18>20': { friends: 24 },                              // → Coral Coast (pre-finale)
-  '5>8':  { type: 'Water' },                             // → Hidden Cave
-  '6>27': { type: 'Fire' },                              // → Crystal Grotto
-  '3>28': { type: 'Electric' },                          // → Echo Cavern
-  '5>14': { buddyId: 35 }, '13>14': { buddyId: 35 },     // → Lunar Pass (Clefairy)
-  '4>26': { buddyId: 143 }, '7>26': { buddyId: 143 },    // → Great Tunnel (Snorlax)
-};
+// Authored in world.js (WORLD.seamGates) via editor.html, keyed by the *inward*
+// direction. friends:N unlocks once you've befriended N Lukéymon; type/buddyId
+// unlock the moment you cross with the right buddy.
+const SEAM_GATES = (typeof WORLD !== 'undefined' && WORLD.seamGates) ? WORLD.seamGates : {};
 // The gate guarding the seam between zones a and b, in either direction. Returns
 // { key, g } using the inward key as the canonical id, or null if the seam is open.
 function seamGateInfo(a, b) {
