@@ -44,6 +44,16 @@
   .field { display: flex; flex-direction: column; gap: 2px; }
   .field label { font-size: 9px; }
   kbd { background: #2a2a40; border: 1px solid #404060; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+  /* Keep every form control inside the fixed-width sidebars (no horizontal overflow) */
+  .col.left, .col.right, .panel { max-width: 100%; min-width: 0; }
+  input, select { max-width: 100%; min-width: 0; }
+  .field { min-width: 0; }
+  .field > select, .field > input.pos { width: 100%; }
+  .field .row { width: 100%; min-width: 0; }
+  .field .row select { flex: 1 1 0; }              /* dir/zone & gate pickers share the row & shrink */
+  .field .row select:last-of-type { flex: 2 1 0; } /* the zone/type select gets the larger share */
+  .row { min-width: 0; }
+  .row > select { flex: 0 1 auto; }                /* zone/barrier selects may shrink, never overflow */
 </style>
 </head>
 <body>
