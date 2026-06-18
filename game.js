@@ -958,7 +958,22 @@ window.addEventListener('DOMContentLoaded', () => {
   updateMuteBtn();
   runBoot();                   // Game Boy power-on, then reveal the title
   requestAnimationFrame(loop);
+  preloadArt();                // warm the cheap, always-seen art in the background
 });
+
+// Warm the small, always-seen art so it's ready before first use — chiefly the
+// 151 Lukéymon sprites (~0.6 MB; otherwise they pop in over their emoji). Runs
+// at idle so it never competes with first paint. The heavy, context-specific
+// art (NPC walk cycles, interiors, titans — most of the ~13 MB) stays lazy.
+function preloadArt() {
+  const warm = () => {
+    (typeof POKEMON_DATA !== 'undefined' ? POKEMON_DATA : []).forEach(p => {
+      if (p && p.sprite) { const i = new Image(); i.src = p.sprite; }
+    });
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 2500 });
+  else setTimeout(warm, 800);
+}
 
 // ── Game Boy power-on sequence ──────────────────────────
 // The LUKETENDO logo scrolls down, dings, then wipes to the title.
@@ -1012,7 +1027,7 @@ function buildTileCache() {
 }
 
 // ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
-const ART_V = '32';   // bump to bust the image cache when art files change
+const ART_V = '32';   // art cache-bust — bump ONLY when art changes (also the ?v= on the art <img> tags in index.html). Code releases must NOT touch this.
 const TILE_ART = {
   0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
   3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
