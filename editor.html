@@ -54,6 +54,8 @@
   .field .row select:last-of-type { flex: 2 1 0; } /* the zone/type select gets the larger share */
   .row { min-width: 0; }
   .row > select { flex: 0 1 auto; }                /* zone/barrier selects may shrink, never overflow */
+  /* Décor / prop item grids: cells shrink to the column so the last column never clips */
+  #decor-palette .swatch, #prop-palette .swatch { min-width: 0; padding: 3px; }
 </style>
 </head>
 <body>
@@ -96,7 +98,7 @@
       </div>
       <div class="row" style="margin-top:6px"><span class="hint" id="dc-sel">Pick a prop below, then Place on the map.</span></div>
       <div id="decor-cats"></div>
-      <div class="palette" id="decor-palette" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px"></div>
+      <div class="palette" id="decor-palette" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:4px"></div>
     </div>
     <div class="panel">
       <h2>Characters (NPCs)</h2>
@@ -114,7 +116,7 @@
         <button class="btn" id="t-perase">🧹 Erase</button>
         <span class="hint" id="pr-sel" style="margin-left:6px">Pick a prop, then click the map. (Always solid.)</span>
       </div>
-      <div class="palette" id="prop-palette" style="margin-top:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px"></div>
+      <div class="palette" id="prop-palette" style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:4px"></div>
     </div>
     <div class="panel">
       <h2>World file</h2>
@@ -461,7 +463,7 @@ function fillDecorSwatches(g) {
     b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:46px;background:#1a1a26';
     b.title = key;
     const im = document.createElement('img'); im.src='art/interior/'+key+'.png';
-    im.style.cssText='max-width:42px;max-height:42px;image-rendering:pixelated';
+    im.style.cssText='max-width:100%;max-height:42px;image-rendering:pixelated';
     b.appendChild(im);
     b.onclick = () => { decorSel = key; tool='decor'; document.getElementById('dc-sel').textContent='Selected: '+key; syncTools(); fillDecorSwatches(g); };
     pal.appendChild(b);
@@ -509,7 +511,7 @@ function renderPropPalette() {
     b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:54px;background:#1a1a26';
     b.title = key;
     const im = document.createElement('img'); im.src = 'art/prop/'+key+'.png';
-    im.style.cssText = 'max-width:40px;max-height:50px;image-rendering:pixelated';
+    im.style.cssText = 'max-width:100%;max-height:50px;image-rendering:pixelated';
     b.appendChild(im);
     b.onclick = () => { propSel = key; tool='prop'; document.getElementById('pr-sel').textContent='Selected: '+key+' — click the map'; syncTools(); renderPropPalette(); };
     pal.appendChild(b);
