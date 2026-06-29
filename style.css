@@ -1268,6 +1268,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   gap: 8px;
   text-align: center;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 #pokedex-detail.hidden { display: none; }
 /* Bigger back button, pinned to the top-left corner of the detail view. */
@@ -1345,6 +1346,18 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   font-size: 6px;
   color: #90d8a0;
   line-height: 1.9;
+}
+#detail-habitat {
+  font-size: 6px;
+  color: #80c0e0;
+  max-width: 260px;
+  width: 100%;
+  padding: 5px 8px;
+  background: #0e1e2e;
+  border: 1px solid #1e4060;
+  border-left: 3px solid #2080c0;
+  border-radius: 4px;
+  text-align: left;
 }
 /* Buddy toggle — a heart in the top-right corner, next to the Pokémon.
    Greyed + clickable when not your buddy; lit up red when it is. */

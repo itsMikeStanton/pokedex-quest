@@ -6076,6 +6076,8 @@ function showDetail(poke) {
   setActionIcon(document.getElementById('detail-befriend-icon'), poke.actionEmoji, '💚');
   document.getElementById('detail-befriend-text').textContent = poke.befriendTip || '';
 
+  document.getElementById('detail-habitat').textContent = dexLocationHint(poke);
+
   detailPoke = poke;
   const buddyBtn = document.getElementById('detail-buddy');
   const isBuddy = activePet === poke.id;
