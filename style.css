@@ -1755,13 +1755,19 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   font-family: inherit;
 }
 .battle-opt:hover { border-color: #8060c0; background: #1e1e3a; }
-.battle-opt.needs-evo { border-color: #c8a038; }
+.battle-opt.needs-evo { border-color: #e8933a; }   /* orange — the nav cursor owns yellow */
 .battle-opt-evo {
   position: absolute;
   top: 2px;
-  right: 3px;
-  font-size: 9px;
+  right: 2px;
+  font-size: 12px;          /* crossed swords read as a stray ✕ any smaller */
+  /* Press Start 2P has no ⚔; without an explicit emoji stack Chrome picks a
+     monochrome text glyph that just looks like an ✕. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
   line-height: 1;
+  padding: 2px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .55);   /* dark chip so it reads as a badge, not a close button */
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
 }
 .battle-opt.correct { border-color: #38d038; background: #103018; }

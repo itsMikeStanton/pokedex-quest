@@ -5488,7 +5488,7 @@ function nextBattleRound() {
     if (needsBattleEvo(poke.id)) {
       const evoTag = document.createElement('span');
       evoTag.className = 'battle-opt-evo';
-      evoTag.textContent = '⚔️';
+      evoTag.textContent = '🥊';   // boxing glove, not ⚔ — crossed swords read as a dismiss ✕ at badge size
       evoTag.title = 'Needs a battle to evolve';
       card.classList.add('needs-evo');
       card.appendChild(evoTag);
