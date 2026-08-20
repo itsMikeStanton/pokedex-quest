@@ -6,30 +6,725 @@
 const TILE_SIZE      = 32;
 const MAP_COLS       = 20;
 const MAP_ROWS       = 14;
-const ENCOUNTER_RATE = 0.20;   // 20% per grass step
-const TIMER_MS       = 6000;   // 6 seconds to choose
+const WILD_TIMEOUT   = 11000;  // ms a wild Pokémon stays on its tile before fleeing
+const TIMER_MS       = 9000;   // seconds to choose during a taming encounter
 const MOVE_INTERVAL  = 190;    // ms between repeated steps
-const SAVE_KEY       = 'lukeymon_v1';
+const MOVE_ANIM_MS   = 140;    // ms to slide between tiles
+// Speedster buddies (built for running) let you traverse the world faster:
+// a quicker step cadence and a matching faster slide.
+const SWIFT_MOVE_INTERVAL = 108;
+const SWIFT_MOVE_ANIM_MS  = 100;
+const SWIFT_BUDDIES  = new Set([78, 85]);   // Rapidash (150 mph!) & Dodrio
+const BUMP_ANIM_MS   = 220;    // ms for wall-bounce animation
+const SAVE_KEY       = 'lukeymon_v3';
 
-const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3 };
+const T = { PATH: 0, GRASS: 1, TREE: 2, WATER: 3, SAND: 4, CITY: 5, SHOP: 6, LAVA: 7, ICE: 8, BOULDER: 9, CAVE: 10, CAVE_ENTRANCE: 11, HOUSE: 12, FLOOR: 13, WALL: 14, DOOR: 15, HOSPITAL: 16, GYM: 17 };
 
-// 20 × 14 tile map  (0=path, 1=grass, 2=tree, 3=water)
-const MAP = [
-  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,1,1,1,0,2],
-  [2,0,1,1,1,0,0,2,2,0,0,2,2,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],  // player spawns col 10
-  [2,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
-  [2,0,1,1,0,0,0,0,2,2,2,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,2],
-  [2,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0,2],
-  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+// ═══════════════════════════════════════════════════
+// ZONE MAPS
+// ═══════════════════════════════════════════════════
+// Zones, connections and tile layouts are authored in editor.html and stored
+// in world.js (WORLD). ZONE_INFO/EXITS/MAPS are derived from it below.
+
+// ═══════════════════════════════════════════════════
+// ZONE / EXIT / BARRIER DATA
+// ═══════════════════════════════════════════════════
+// Zones and connections are authored in editor.html and stored in world.js.
+const ZONE_INFO = WORLD.zones;
+const EXITS = WORLD.exits;
+// Point-portals (cave mouths etc.): step onto (from, fx, fy) to warp to (to, tx, ty).
+const PORTALS = WORLD.portals || [];
+
+// Every building interior — Home, Poké Mart, Hospital, Gym, Dad's House, the
+// outlying marts/lodges — is authored entirely in world.js (zones + portals) and
+// editable in editor.html. No buildings are special-cased in code.
+
+const BARRIERS = {
+  log:   { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to burn these logs!',       cleared: '🔥 Your Fire buddy burns away the logs!',      sign: '🔥' },
+  rock:  { needsType: 'Water',    hint: 'Bring a 💧 Water Pokémon as your buddy to wash these rocks!',     cleared: '💧 Your Water buddy washes the rocks aside!',  sign: '💧' },
+  fence: { needsType: 'Electric', hint: 'Bring a ⚡ Electric Pokémon as your buddy to short the fence!',   cleared: '⚡ Your Electric buddy shorts out the fence!', sign: '⚡' },
+  lava:  { needsType: 'Water',    hint: 'Bring a 💧 Water Pokémon as your buddy to cool the lava flow!',   cleared: '💧 Your Water buddy cools the lava flow!',     sign: '💧' },
+  vine:  { needsType: 'Grass',    hint: 'Bring a 🌿 Grass Pokémon as your buddy to cut through the vines!', cleared: '🌿 Your Grass buddy cuts through the vines!',  sign: '🌿' },
+  frost: { needsType: 'Fire',     hint: 'Bring a 🔥 Fire Pokémon as your buddy to melt the ice wall!',     cleared: '🔥 Your Fire buddy melts the ice wall!',       sign: '🔥' },
+  sand:  { needsType: 'Ground',   hint: 'Bring a 🌍 Ground Pokémon as your buddy to clear the sand wall!', cleared: '🌍 Your Ground buddy clears the sand wall!',   sign: '🌍' },
+  psychic: { needsType: 'Psychic', needsBuddyId: 150,
+    hint: '🔮 A barrier of pure psychic force seals the path north. Only an ULTRA-POWERFUL Psychic-type — the very strongest of all — may pass.',
+    cleared: '🔮 Mewtwo flares with unimaginable psychic power... the barrier dissolves!', sign: '🔮' },
+  lullaby: { needsType: 'Normal', needsBuddyId: 39,
+    hint: '👹 A monstrous Gigantamax Gengar looms over the path — wide awake, grinning, and spoiling for mischief! It\'s far too strong to battle... but maybe a sweet lullaby could lull it to sleep!',
+    cleared: '🎵 Jigglypuff\'s lullaby drifts over the giant Gengar... its wicked grin goes slack, its glaring eyes droop shut, and it sinks into a deep, rumbling sleep.', sign: '😴' },
+};
+
+// ── FIELD NOTES ──────────────────────────────────────
+// Tips the player picks up as they play, collected into a notepad they can
+// review any time. Barrier tips are generated from BARRIERS below.
+const BARRIER_LABEL = {
+  log:'Fallen logs', rock:'River rocks', fence:'Electric fence',
+  lava:'Lava flow', vine:'Thick vines', frost:'Ice wall', sand:'Sand wall',
+  psychic:'Psychic seal', lullaby:'Gigantamax Gengar',
+};
+const STATIC_TIPS = [
+  { id:'befriend', cat:'Training', icon:'🍎', title:'Winning hearts',
+    text:'Wild Lukeymon want kindness, not force. Feed 🍎, Pet 🤚 or Play ⚽ to read their mood and fill the heart meter — then throw a Ball.' },
+  { id:'buddy', cat:'Training', icon:'🐾', title:'Pick a buddy',
+    text:'Set a buddy from the Pokédex — open a Lukéymon and tap the ❤️. It follows you, and its TYPE is the key to barriers, surfing and cave-light.' },
+  { id:'battles', cat:'Battles', icon:'⚔️', title:'Send the counter',
+    text:'Legendary guardians demand a TYPE each round. Send out a buddy whose type is SUPER-EFFECTIVE against it to win the exchange.' },
+  { id:'ice', cat:'Ice', icon:'🧊', title:'Slippery ice',
+    text:'Step on ice without an Ice-type buddy and you slide straight across until something stops you. An Ice buddy keeps your footing so you can walk.' },
+  { id:'water', cat:'Water', icon:'🌊', title:'Surf the water',
+    text:'Deep water blocks the way — unless a Water-type buddy is following. Then you hop on and surf right across.' },
+  { id:'cave', cat:'Exploring', icon:'🕯️', title:'Dark caves',
+    text:'Caves are pitch black. Bring a glowing buddy (a Fire-type works well) to light up the path around you.' },
+  { id:'swift', cat:'Exploring', icon:'💨', title:'Speed runners',
+    text:'A few Lukeymon are built for speed — Rapidash and Dodrio. Set one as your buddy and you DASH across the world, covering ground much faster.' },
 ];
+const TIP_CATEGORIES = ['Training', 'Battles', 'Barriers', 'Ice', 'Water', 'Exploring'];
+function barrierTip(key) {
+  const b = BARRIERS[key];
+  return { id:'barrier_'+key, cat:'Barriers', icon:b.sign,
+           title:BARRIER_LABEL[key] || (b.needsType+' barrier'), text:b.hint };
+}
+function allTips() {
+  return [...STATIC_TIPS, ...Object.keys(BARRIERS).map(barrierTip)];
+}
+
+// Type effectiveness — for a demanded type, which attacking types are super-effective
+// against it (used by the legendary/Team-Rocket "send a counter" battles).
+const BEATEN_BY = {
+  Normal:   ['Fighting'],
+  Fire:     ['Water', 'Ground', 'Rock'],
+  Water:    ['Electric', 'Grass'],
+  Electric: ['Ground'],
+  Grass:    ['Fire', 'Ice', 'Poison', 'Flying', 'Bug'],
+  Ice:      ['Fire', 'Fighting', 'Rock'],
+  Fighting: ['Flying', 'Psychic', 'Fairy'],
+  Poison:   ['Ground', 'Psychic'],
+  Ground:   ['Water', 'Grass', 'Ice'],
+  Flying:   ['Electric', 'Ice', 'Rock'],
+  Psychic:  ['Bug', 'Ghost'],
+  Bug:      ['Fire', 'Flying', 'Rock'],
+  Rock:     ['Water', 'Grass', 'Fighting', 'Ground'],
+  Ghost:    ['Ghost'],
+  Dragon:   ['Ice', 'Dragon', 'Fairy'],
+  Fairy:    ['Poison'],
+};
+
+// World-map layout: schematic grid position + icon per zone, from world.js.
+// Any zone without a position is auto-placed so new zones still appear.
+const ZONE_MAP = {};
+(() => {
+  let auto = 1;
+  WORLD.zones.forEach(z => {
+    if (z.cave || z.interior) return;   // caves & building interiors aren't world-map zones
+    if (z.mapCol != null && z.mapRow != null) {
+      ZONE_MAP[z.id] = { col: z.mapCol, row: z.mapRow, icon: z.icon || '🗺️' };
+    } else {
+      ZONE_MAP[z.id] = { col: auto++, row: 6, icon: z.icon || '🗺️' };
+    }
+  });
+})();
+
+// Optional elbow routing for mini-map connectors, keyed by "minId-maxId".
+// Empty now that the world is planar — straight lines never cross a node.
+const EDGE_ROUTES = {};
+
+const GRASS_PICKUP_CHANCE = 0.20; // chance per grass step to find a ball or coin
+
+// ═══════════════════════════════════════════════════
+// ZONE MAPS
+// ═══════════════════════════════════════════════════
+// Tile ids per cell come from world.js (WORLD.maps), authored in editor.html.
+const OBSTACLE_TILES = new Set([T.TREE, T.WATER, T.LAVA, T.BOULDER, T.WALL]);   // ICE is walkable but slippery
+// Calm zones — no night ghosts, no trainers challenging you out of nowhere:
+//   0  your home Meadow (still has gentle wild befriending so you can catch)
+//   20 the western beach (Coral Coast), mostly a trek north to the hidden island
+const PEACEFUL_ZONES = new Set([0, 20]);
+// Fully peaceful — no wild Lukéymon either (Coral Coast is purely a passage).
+const NO_WILD_ZONES = new Set([20]);
+function isObstacleTile(t) { return OBSTACLE_TILES.has(t); }
+function isWalkableTile(t) { return !OBSTACLE_TILES.has(t); }
+const _BUILDING_TILES = new Set([T.HOUSE, T.SHOP, T.HOSPITAL, T.GYM]);
+// A building reserves a solid footprint: the door tile (entrance) plus the tiles
+// flanking it and the rows directly above are all blocked. Standard buildings get
+// 3 wide × 2 tall; oversized ones (the giant blue house on Champion's Cove) get
+// 5 wide × 3 tall. Returns true if (x,y) is a blocked footprint tile for ANY
+// building in the zone (the door tile itself is the entrance, handled elsewhere).
+const _BIG_FOOTPRINT_ZONES = new Set([21]);   // Champion's Cove — the 6-tile-wide blue house
+function buildingFootprintSolid(zone, x, y) {
+  const m = (typeof MAPS !== 'undefined' ? MAPS : WORLD.maps)[zone]; if (!m) return false;
+  const ent = (xx, yy) => { const row = m[yy]; return !!row && _BUILDING_TILES.has(row[xx]); };
+  const big = _BIG_FOOTPRINT_ZONES.has(zone);
+  const hw = big ? 2 : 1, up = 1;   // half-width either side; one row blocked behind (above) the door
+  for (let dy = 0; dy <= up; dy++)
+    for (let dx = -hw; dx <= hw; dx++) {
+      if (dx === 0 && dy === 0) continue;       // (x,y) being a door doesn't block itself
+      if (ent(x - dx, y + dy)) return true;     // a door sits so that (x,y) is in its footprint
+    }
+  return false;
+}
+
+// Fallback for a zone missing/mismatched in WORLD.maps: a blank walkable
+// field ringed by trees, with the exit openings carved out.
+function blankZone(zoneId) {
+  const { cols, rows } = ZONE_INFO[zoneId];
+  const g = Array.from({ length: rows }, () => new Array(cols).fill(T.PATH));
+  for (let c = 0; c < cols; c++) { g[0][c] = T.TREE; g[rows - 1][c] = T.TREE; }
+  for (let r = 0; r < rows; r++) { g[r][0] = T.TREE; g[r][cols - 1] = T.TREE; }
+  EXITS.filter(e => e.from === zoneId).forEach(e => e.pos.forEach(p => {
+    if      (e.dir === 'south') g[rows - 1][p] = T.PATH;
+    else if (e.dir === 'north') g[0][p]        = T.PATH;
+    else if (e.dir === 'west')  g[p][0]        = T.PATH;
+    else                        g[p][cols - 1] = T.PATH;
+  }));
+  return g;
+}
+
+// Find the nearest walkable cell to (x,y) — used to rescue a saved player
+// position that a regenerated layout may have turned into an obstacle.
+function nearestWalkable(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  const m = MAPS[zone];
+  const inB = (px, py) => px >= 0 && px < cols && py >= 0 && py < rows;
+  if (inB(x, y) && isWalkableTile(m[y][x])) return [x, y];
+  for (let rad = 1; rad < Math.max(cols, rows); rad++)
+    for (let dy = -rad; dy <= rad; dy++)
+      for (let dx = -rad; dx <= rad; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (inB(nx, ny) && isWalkableTile(m[ny][nx])) return [nx, ny];
+      }
+  return [x, y];
+}
+
+// Built from the authored layouts (world.js → WORLD.maps); a zone's map is used
+// only when its dimensions match, otherwise it falls back to a blank zone.
+const MAPS = ZONE_INFO.map((z) => {
+  const cm = (WORLD.maps && WORLD.maps[z.id]) || null;
+  if (Array.isArray(cm) && cm.length === z.rows && Array.isArray(cm[0]) && cm[0].length === z.cols)
+    return cm.map(row => row.slice());
+  return blankZone(z.id);
+});
+
+// ═══════════════════════════════════════════════════
+// COLLECTIBLES (badges) & NPCs
+// ═══════════════════════════════════════════════════
+// Fixed treasures hidden in the faraway lands — one badge per outer zone,
+// just waiting to be found. Positions below are a preferred spot; they snap
+// to the nearest walkable tile of the (procedural) zone at load.
+const COLLECTIBLES = [
+  { id: 'badge_volcano', zone: 4, x: 10, y: 14, emoji: '🎖️', type: 'Fire',     name: 'Ember Badge' },
+  { id: 'badge_forest',  zone: 5, x: 33, y:  7, emoji: '🏵️', type: 'Grass',    name: 'Thicket Badge' },
+  { id: 'badge_ice',     zone: 6, x: 10, y:  9, emoji: '🏅', type: 'Ice',      name: 'Glacier Badge' },
+  { id: 'badge_desert',  zone: 7, x: 30, y:  7, emoji: '🥇', type: 'Ground',   name: 'Dune Badge' },
+  // Optional badges hidden in the new lands (collectible — not needed to win).
+  { id: 'badge_safari',  zone: 15, x: 17, y: 11, emoji: '🦓', type: 'Normal',   name: 'Savanna Badge' },
+  { id: 'badge_frost',   zone: 16, x: 10, y:  7, emoji: '❄️', type: 'Water',    name: 'Frost Badge' },
+  { id: 'badge_spirit',  zone: 19, x: 10, y:  7, emoji: '👻', type: 'Ghost',    name: 'Spirit Badge' },
+  // Cavern treasures — one hidden deep in each cave (bring a glowing buddy!).
+  { id: 'badge_cavern',  zone: 8,  x: 13, y:  9, emoji: '🕳️', type: 'Rock',     name: 'Cavern Badge' },
+  { id: 'badge_tunnel',  zone: 26, x: 25, y:  4, emoji: '🚇', type: 'Electric', name: 'Tunnel Badge' },
+  { id: 'badge_crystal', zone: 27, x:  9, y:  6, emoji: '💎', type: 'Psychic',  name: 'Crystal Badge' },
+  { id: 'badge_echo',    zone: 28, x:  9, y:  6, emoji: '🔊', type: 'Flying',   name: 'Echo Badge' },
+  { id: 'badge_lullaby', zone: 29, x:  3, y:  4, emoji: '😴', type: 'Fairy',    name: 'Lullaby Badge' },
+  // Awarded automatically — not placed in the world.
+  { id: 'badge_gym',  auto: true, emoji: '🥊', type: 'Fighting', name: 'Rumble Badge', hint: 'Beat the City Gym Leader' },
+  { id: 'badge_trio', auto: true, emoji: '🦅', type: 'Dragon',   name: 'Trio Badge', hint: 'Catch all 3 legendary birds' },
+];
+// A collectible badge's artwork is the framed type badge it maps to.
+function collectibleBadgeSrc(c) { return 'art/typeicon/' + c.type + '.png?v=' + ART_V; }
+function collectibleBadgeImg(c) {
+  let i = _collBadge[c.id];
+  if (!i) { i = new Image(); i.src = collectibleBadgeSrc(c); _collBadge[c.id] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+const _collBadge = {};
+
+// Friendly characters you can walk up to and talk with. They stand on a tile
+// (snapped to an open walkable spot) and block it — bump into them to chat.
+const NPCS = [
+  // ── The final NPC: Dad, waiting inside the blue house in Champion's Cove. ──
+  // You can only reach him after befriending all 151 (Mewtwo opens the seal).
+  { zone: 22, x: 4, y: 2, emoji: '🧔', name: 'Dad', art: 'dad', gift: 1, giftKind: 'trophy', lines: () => [
+    `...${saveName}? Is that you? You made it! Congratulations!`,
+    `You made friends with every single Lukeymon — all 151. Even Mewtwo chose to walk beside you.`,
+    `Lukeymon island is your playground, I hope you had fun!`,
+    `I am SO proud of you. You're the kindest, bravest trainer this world has ever known.`,
+    `NOW COME GET A HUG YOU CHICKEN-BUTT. I love you!`,
+  ] },
+  // ── The whole family is waiting at the finale, inside the blue house ──
+  { zone: 22, x: 2, y: 3, emoji: '👩', name: 'Mom', art: 'mom', lines: () => [`Welcome home, bud! I love you, ${saveName}! 💗`] },
+  { zone: 22, x: 6, y: 3, emoji: '🧒', name: 'Kyle', art: 'kyle', lines: () => [`Time for those loop-de-loops! Let's get pizza! 🍕✈️`] },
+  { zone: 22, x: 4, y: 4, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 1, giftKind: 'steak', metKey: 'arbiter_finale', lines: () => [
+    'Mrrrow? Mew mew. Meeeeow.',
+    'MEOW. Meow meow meow... mrrp?',
+    'Mew. Mew. MEEEOW. Meow meow MEOW meow. Mrrrrrrp.',
+    'mrow. Mew? MEOW! ...meeeeeeeeeow.',
+    '❤️',
+  ] },
+  { zone: 0, x: 5, y: 4, emoji: '🧓', name: 'Prof. Birch', gift: 40, art: 'professor', wander: 3, lines: () => (
+    // The second time you visit, it's purely the birthday moment; before & after, his normal advice.
+    (metNPCs.has('Prof. Birch') && !gotBirthdayCake)
+      ? [
+          `Oh — hey ${saveName}!`,
+          'I heard it was your birthday!',
+          `Happy birthday ${saveName}!! 🎂`,
+        ]
+      : [
+          `Good to see you out and about, ${saveName}!`,
+          'Befriend a wild Lukeymon with the action it wants — Feed 🍎, Pet 🤚, or Play ⚽.',
+          `Some paths are blocked, ${saveName}. Catch the right TYPE, then WALK INTO the barrier to clear it!`,
+        ]
+  ) },
+  { zone: 2, x: 6, y: 4, emoji: '👮', name: 'Officer', gift: 25, art: 'officer', wander: 3, nightOwl: true, lines: () => [
+    `Keeping the city safe, ${saveName}.`,
+    'They say rare BADGES are hidden out in the faraway lands... Volcano, Desert, the icy caves.',
+  ] },
+  { zone: 1, x: 10, y: 18, emoji: '🏄', name: 'Surfer', gift: 25, art: 'surfer', wander: 3, nightSpot: { zone: 20, x: 14, y: 3, dir: 'left' }, lines: () => (
+    isNightNow() ? [                                  // hanging by the beach fire after dark
+      `Evenin', ${saveName}. Pull up a log — the fire's warm.`,
+      'Night surfing? Nah. After dark I just watch the embers and listen to the waves. 🔥',
+      'They say the rarest Water Lukeymon only surface under the moon... ever seen one? 🌙',
+    ] : [
+      `Waves are perfect today, ${saveName}!`,
+      'Water Lukeymon really love a gentle pet. 🤚',
+    ]
+  ) },
+  { zone: 5, x: 20, y: 7, emoji: '🧙', name: 'Hermit', gift: 50, art: 'hermit', wander: 'free', nightOwl: true, lines: () => [
+    `...you wandered this deep into the forest, ${saveName}? Impressive.`,
+    `Collect every badge AND every Lukeymon, ${saveName}, and you will be a true master.`,
+  ] },
+  { zone: 1, x: 6, y: 6, emoji: '🧢', name: 'Ash', gift: 30, art: 'ash', wander: 3, lines: () => {
+    const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
+    if (caughtIds.size === POKEMON_DATA.length)
+      return [`You caught them ALL, ${saveName}?! You're a true Lukeymon Master! 🌟`];
+    if (wonGame)
+      return ['You\'re the CHAMPION now! 🏆',
+              'Still out there: the legendary birds, Mew & Mewtwo, and a full Pokédex.',
+              'The adventure\'s not over — go get \'em!'];
+    if (landDone >= 1)
+      return [`${landDone}/4 badges — you're on a roll!`,
+              'Team Rocket\'s still guarding the legendary birds in the far zones.'];
+    return [`Hey ${saveName}! I'm Ash — gonna befriend 'em all!`,
+            'TEAM ROCKET is out in the wild zones hassling the legendary birds!',
+            'Beat the Rocket guarding one, then out-smart the bird with a SUPER-EFFECTIVE type.'];
+  } },
+  { zone: 2, x: 11, y: 7, emoji: '👧', name: 'Misty', gift: 30, art: 'misty', wander: 3, lines: () => {
+    const birds = [144, 145, 146].filter(id => caughtIds.has(id)).length;
+    if (birds === 3)
+      return [`You tamed all three legendary birds, ${saveName}?! Amazing!`,
+              'They say a tiny pink Lukeymon named Mew appears once the dex is nearly full... 🔮'];
+    return [`I'm Misty, the Water-type ace — nice to meet you, ${saveName}!`,
+            'A Water buddy lets you surf across deep water. 🌊',
+            'Moltres throwing Fire? Douse it with Water, Rock or Ground!'];
+  } },
+  { zone: 5, x: 12, y: 7, emoji: '🧑‍🍳', name: 'Brock', gift: 30, art: 'brock', wander: 3, lines: () => {
+    if (wonGame)
+      return [`Champion already, ${saveName}? Let me cook your team a victory feast! 🍳`,
+              'Remember — only GROUND truly shrugs off Zapdos\'s Electric.'];
+    return [`Brock here — I keep the team well fed, ${saveName}.`,
+            "Zapdos hurls Electricity... only GROUND just shrugs it off.",
+            "Articuno's Ice melts before Fire, Fighting or Rock."];
+  } },
+
+  // ── Inside your home (zone 9) ──
+  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', wander: 3, greetHop: true, lines: () => {
+    if (wonGame) return [`${saveName}! A true master! So proud of you. 🏆`, `Come and visit any time, ${saveName}!`];
+    return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
+            'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
+            'Come home to visit whenever you like.'];
+  } },
+  // ── Kyle, the big brother (Home) — encouragement + a big reward ──
+  { zone: 18, x: 15, y: 8, emoji: '🧒', name: 'Kyle', gift: 0, art: 'kyle', lines: () => {
+    const blurts = ['Guh guh guh guh guh!', 'meow meow meow meow....', 'EMOTIONAL DAMAGE!', 'HUH?', 'Jaysus CHRIST', 'BRTRTPPHPHHHHHH', 'aww yea awww yea'];
+    const blurt = blurts[Math.floor(Math.random() * blurts.length)];
+    if (!metNPCs.has('Kyle')) {
+      masterBalls += 1; balls += 5; coins += 150; updateHud(); saveGame();
+      pendingFanfare = { badge: '🟣', label: 'Master Ball + 5 Balls + 150 coins!' };
+      return [`${saveName}!! Whoa look at the skibbidy rizzler! You chad!`,
+              `You wanna go fly planes later? ✈️ I'll teach you the loop-the-loop.`,
+              `Here, take this for the road — a MASTER BALL and a stack of PokéBalls! 🟣`,
+              blurt];
+    }
+    return [blurt];
+  } },
+  // ── Arbiter, the black cat (Safari Savanna) — says a LOT, none of it readable ──
+  // Real bacon: the full gift fanfare on first meet, but gives nothing useful.
+  { zone: 15, x: 12, y: 8, emoji: '🐈‍⬛', name: 'Arbiter', art: 'arbiter', gift: 1, giftKind: 'bacon', lines: () => {
+    const meows = [
+      'Meow.',
+      'Mrrrow? Mew mew. Meeeeow.',
+      'MEOW. Meow meow meow... mrrp?',
+      'Mew. Mew. MEEEOW. Meow meow MEOW meow. Mrrrrrrp.',
+      'meow meow. Mew? MEOW! ...mrow. meeeeeeeeeow.',
+      'Mrrp. Mew mew MEOW. Meow. Meow. Meow meow meow meow. Mreeeow??',
+      'MEOW MEOW MEOW. mew. ...Meow. 😼',
+    ];
+    if (!metNPCs.has('Arbiter')) {
+      meows.push('🥓 ...Mrrp. (Arbiter drops a warm piece of bacon at your feet — just for you!)');
+    } else {
+      meows.push('🥓 (Arbiter blinks at you very slowly. You feel deeply judged. And deeply loved.)');
+    }
+    return meows;
+  } },
+  // (The home is now furnished with real décor props — see WORLD.decor zone 9.)
+
+  // ── Inside the Poké Mart (zone 10) ──
+  { zone: 10, x: 5, y: 3, emoji: '🧑‍💼', name: 'Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Poké Mart!'] },
+
+  // ── Inside the Pokémon Hospital (zone 11) ──
+  // Resting gives a daily bundle of free PokéBalls (your team has no HP to heal).
+  { zone: 11, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Nurse Joy', art: 'nurse', gift: 0, lines: () => {
+    const today = todayKey();
+    if (lastHeal !== today) {
+      lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      pendingFanfare = { badge: '⚪', label: `+${HEAL_BALLS} PokéBalls!` };
+      return ['Welcome to the Pokémon Hospital! 💗',
+              'Your Lukéymon look wonderfully happy and rested.',
+              `Here — take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
+    }
+    return ['Welcome back! Your Lukéymon are happy and well. 💗',
+            'Come see me again tomorrow for more free PokéBalls!'];
+  } },
+  { zone: 11, x: 1, y: 1, emoji: '🪑', name: 'Waiting Bench', gift: 0, lines: ['A comfy bench for resting trainers.'] },
+
+  // ── Oasis Mart (zone 23) — a second shop out in the Desert ──
+  { zone: 23, x: 5, y: 3, emoji: '🧑‍💼', name: 'Oasis Clerk', gift: 0, shop: true, art: 'clerk', lines: ['Welcome to the Oasis Mart! Stock up before the dunes. 🏜️'] },
+  // ── Ranger's Lodge (zone 24) in Safari Savanna ──
+  { zone: 24, x: 5, y: 3, emoji: '🧑‍🌾', name: 'Ranger', art: 'ranger', gift: 30, lines: () => [
+    `Welcome to the lodge, ${saveName}! I watch over the savanna critters.`,
+    'Plenty of rock & ground Lukéymon hide in the caves — bring a glowing buddy to explore them!' ] },
+  // ── Summit Aid Station (zone 25) in Frostpeak Ridge — free daily PokéBalls ──
+  { zone: 25, x: 5, y: 3, emoji: '🧑‍⚕️', name: 'Summit Medic', art: 'medic', gift: 0, lines: () => {
+    const today = todayKey();
+    if (lastHeal !== today) {
+      lastHeal = today; balls += HEAL_BALLS; updateHud(); saveGame();
+      pendingFanfare = { badge: '⚪', label: `+${HEAL_BALLS} PokéBalls!` };
+      return ['Welcome to the Summit Aid Station! ❄️',
+              'You made it all the way up here — wonderful.',
+              `Warm up and take some PokéBalls, on the house! (+${HEAL_BALLS} ⚪)`];
+    }
+    return ['Stay warm out there! 💗', 'Come back tomorrow for more free PokéBalls.']; } },
+
+  // ── Seaside hamlet (Beach, zone 1) ──
+  { zone: 1, x: 5, y: 11, emoji: '🎣', name: 'Fisher', art: 'fisher', gift: 20, lines: () => [
+    `Mornin', ${saveName}! The fish are biting today.`,
+    'Water Lukéymon love a gentle pet. And a Water buddy lets you surf the deep blue. 🌊' ] },
+  { zone: 1, x: 11, y: 10, emoji: '🧓', name: 'Old Sailor', art: 'seadog', gift: 0, wander: 3, lines: ['I\'ve sailed every coast of this island, lad.', 'They say a hidden cove lies far to the north-west... only the strongest trainer can reach it. 🔮'] },
+  // ── Sunpetal village (zone 13) ──
+  { zone: 13, x: 11, y: 5, emoji: '👩‍🌾', name: 'Gardener', art: 'gardener', gift: 20, lines: () => [
+    `These sunpetals only bloom for kind hearts like yours, ${saveName}. 🌻`,
+    'Grass Lukéymon adore it here.' ] },
+  { zone: 13, x: 16, y: 5, emoji: '🧒', name: 'Village Kid', art: 'villagekid', gift: 0, wander: 3, lines: ['When I grow up I\'m gonna befriend ALL the Lukéymon!', 'Have you found the speedy ones? Rapidash runs SO fast! 💨'] },
+
+  // ── Inside the Gym (zone 12) ──
+  { zone: 12, x: 6, y: 2, emoji: '🥋', name: 'Rocky', art: 'rocky', gift: 0, gymLeader: true,
+    leaderName: 'Leader Rocky', battleEmoji: '🥋', lineup: [74, 75, 95],   // Geodude → Graveler → Onix
+    lines: () => collected.has('badge_gym')
+      ? [`Good to see you again, ${saveName}!`, 'That Rumble Badge looks great on you. Keep training!']
+      : ['So you want to challenge my Gym, eh?', 'Bring it on!'] },
+  { zone: 12, x: 2, y: 6, emoji: '🧑‍🏫', name: 'Dojo Master', art: 'dojomaster', gift: 0, dojo: true,
+    lines: ['Train as much as you like! Send out a Lukéymon each round — win or lose, the practice helps it grow.'] },
+];
+
+// ── NPC ids + editor-driven placement ────────────────
+// Each NPC gets a stable id (its name, with a #2/#3 suffix for repeats) so the
+// world editor can pin where it stands. Positions in WORLD.npcs (authored in
+// editor.html) override the x/y/zone defaults above, matched by id — dialogue &
+// gifts stay here in code. NPCS keeps a `.id` for the editor to round-trip.
+(function applyNpcPlacements() {
+  const seen = {};
+  for (const n of NPCS) {
+    const base = n.name || 'npc';
+    const k = (seen[base] = (seen[base] || 0) + 1);
+    n.id = base + (k > 1 ? '#' + k : '');
+  }
+  if (typeof WORLD !== 'undefined' && Array.isArray(WORLD.npcs)) {
+    const byId = {}; for (const n of NPCS) byId[n.id] = n;
+    for (const o of WORLD.npcs) {
+      const n = byId[o.id]; if (!n) continue;
+      if (o.zone != null) n.zone = o.zone;
+      if (o.x != null) n.x = o.x;
+      if (o.y != null) n.y = o.y;
+    }
+  }
+})();
+
+// Team Rocket grunts guarding each legendary bird's lair. A grunt is present only
+// until its bird is caught. Bump into one → Rocket mini-boss battle → bird battle.
+const ROCKETS = [
+  { zone: 6, x: 10, y: 6, name: 'Jessie', emoji: '👩‍🎤', art: 'rocket_f', bird: 144 }, // Ice Cave → Articuno
+  { zone: 3, x: 10, y: 7, name: 'James',  emoji: '👨‍🎤', art: 'rocket_m', bird: 145 }, // Highlands → Zapdos
+  { zone: 4, x: 10, y: 9, name: 'Meowth', art: 'meowth', emoji: '😼',   bird: 146 }, // Volcano → Moltres
+];
+// A legendary lair tile (still active until its bird is caught). Before the
+// guard is beaten it shows Team Rocket; after, the bird itself awaits a rematch.
+function lairAt(zone, x, y) {
+  return ROCKETS.find(r => r.zone === zone && r.x === x && r.y === y && !caughtIds.has(r.bird)) || null;
+}
+
+// Snap each entity to a reachable tile. Collectibles just need a walkable tile;
+// NPCs prefer an "open" tile (3+ walkable neighbours) so they don't wall a path.
+function isOpenTile(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  const m = MAPS[zone];
+  if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1 || isObstacleTile(m[y][x])) return false;
+  let n = 0;
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+    if (isWalkableTile(m[y + dy][x + dx])) n++;
+  return n >= 3;
+}
+function nearestOpenTile(zone, x, y) {
+  const { cols, rows } = ZONE_INFO[zone];
+  if (isOpenTile(zone, x, y)) return [x, y];
+  for (let rad = 1; rad < Math.max(cols, rows); rad++)
+    for (let dy = -rad; dy <= rad; dy++)
+      for (let dx = -rad; dx <= rad; dx++)
+        if (isOpenTile(zone, x + dx, y + dy)) return [x + dx, y + dy];
+  return nearestWalkable(zone, x, y);
+}
+NPCS.forEach(n => { [n.x, n.y] = nearestOpenTile(n.zone, n.x, n.y); });
+COLLECTIBLES.forEach(c => { if (!c.auto) [c.x, c.y] = nearestWalkable(c.zone, c.x, c.y); });
+
+// ═══════════════════════════════════════════════════
+// EVOLUTION STONES
+// ═══════════════════════════════════════════════════
+// Stones are hidden out in the world like badges. Show a caught Pokémon a
+// matching Stone from its Pokédex page to evolve it — the evolved form joins
+// your dex (and, since types change, can unlock new buddy abilities!).
+const STONES = {
+  thunder: { name: 'Thunder Stone', emoji: '⚡' },
+  fire:    { name: 'Fire Stone',    emoji: '🔥' },
+  water:   { name: 'Water Stone',   emoji: '💧' },
+  leaf:    { name: 'Leaf Stone',    emoji: '🍃' },
+  moon:    { name: 'Moon Stone',    emoji: '🌙' },
+};
+// Stone artwork (keyed gemstones). Src for <img> tags; img() for canvas draws.
+const _stoneImg = {};
+function stoneSrc(key) { return 'art/stone/' + key + '.png?v=' + ART_V; }
+function stoneImg(key) {
+  let i = _stoneImg[key];
+  if (!i) { i = new Image(); i.src = stoneSrc(key); _stoneImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+// Encounter action icons (the wild Pokémon's wish / the Feed-Pet-Play buttons).
+const ACTION_ICON = { '🍎': 'eat', '🤚': 'groom', '⚽': 'play' };
+function actionIconSrc(emoji) { const k = ACTION_ICON[emoji]; return k ? 'art/action/' + k + '.png?v=' + ART_V : null; }
+function setActionIcon(el, emoji, fallback) {
+  if (!el) return;
+  const src = actionIconSrc(emoji);
+  if (src) el.innerHTML = `<img class="thought-icon" src="${src}" alt="">`;
+  else el.textContent = emoji || fallback || '';
+}
+const STONE_EVOS = [
+  { from: 25,  stone: 'thunder', to: 26  },  // Pikachu    → Raichu
+  { from: 133, stone: 'thunder', to: 135 },  // Eevee      → Jolteon
+  { from: 37,  stone: 'fire',    to: 38  },  // Vulpix     → Ninetales
+  { from: 58,  stone: 'fire',    to: 59  },  // Growlithe  → Arcanine
+  { from: 133, stone: 'fire',    to: 136 },  // Eevee      → Flareon
+  { from: 133, stone: 'water',   to: 134 },  // Eevee      → Vaporeon
+  { from: 90,  stone: 'water',   to: 91  },  // Shellder   → Cloyster
+  { from: 120, stone: 'water',   to: 121 },  // Staryu     → Starmie
+  { from: 61,  stone: 'water',   to: 62  },  // Poliwhirl  → Poliwrath
+  { from: 70,  stone: 'leaf',    to: 71  },  // Weepinbell → Victreebel
+  { from: 44,  stone: 'leaf',    to: 45  },  // Gloom      → Vileplume
+  { from: 102, stone: 'leaf',    to: 103 },  // Exeggcute  → Exeggutor
+  { from: 35,  stone: 'moon',    to: 36  },  // Clefairy   → Clefable
+  { from: 39,  stone: 'moon',    to: 40  },  // Jigglypuff → Wigglytuff
+  { from: 30,  stone: 'moon',    to: 31  },  // Nidorina   → Nidoqueen
+  { from: 33,  stone: 'moon',    to: 34  },  // Nidorino   → Nidoking
+];
+// Stones are REUSABLE keepsakes — one of each is hidden in a thematic zone (snaps
+// to the nearest walkable tile) and unlocks every evolution of that type.
+const STONE_FINDS = [
+  { id: 'stone_fire',    zone: 4, x: 10, y: 13, stone: 'fire'    },  // Volcano
+  { id: 'stone_water',   zone: 1, x: 10, y: 30, stone: 'water'   },  // Beach
+  { id: 'stone_thunder', zone: 17, x: 10, y: 7,  stone: 'thunder' },  // Voltage Works
+  { id: 'stone_leaf',    zone: 5, x: 28, y: 6,  stone: 'leaf'    },  // Dark Forest
+  { id: 'stone_moon',    zone: 14, x: 15, y: 7,  stone: 'moon'    },  // Lunar Pass (Mt. Moon!)
+];
+STONE_FINDS.forEach(s => { [s.x, s.y] = nearestWalkable(s.zone, s.x, s.y); });
+function stoneFindAt(zone, x, y) {
+  return STONE_FINDS.find(s => s.zone === zone && s.x === x && s.y === y) || null;
+}
+function evolutionsFor(pokeId) { return STONE_EVOS.filter(r => r.from === pokeId); }
+
+// ── Non-stone evolutions ─────────────────────────────
+// method 'buddy'  → walk `cost` steps with it as your active buddy.
+// method 'battle' → send it out in `cost` battles (win OR lose — just being used).
+// method 'dance'  → a multiplayer "dance party" (handled separately; no step/use cost).
+const EVOS = [
+  // 3-stage lines: a quick bond for the first form, then proven in battle for the final.
+  { from: 1,  to: 2,  method: 'buddy',  cost: 15 }, { from: 2,  to: 3,  method: 'battle', cost: 1 }, // Bulbasaur line
+  { from: 4,  to: 5,  method: 'buddy',  cost: 15 }, { from: 5,  to: 6,  method: 'battle', cost: 1 }, // Charmander line
+  { from: 7,  to: 8,  method: 'buddy',  cost: 15 }, { from: 8,  to: 9,  method: 'battle', cost: 1 }, // Squirtle line
+  { from: 10, to: 11, method: 'buddy',  cost: 15 }, { from: 11, to: 12, method: 'buddy',  cost: 25 }, // Caterpie line
+  { from: 13, to: 14, method: 'buddy',  cost: 15 }, { from: 14, to: 15, method: 'buddy',  cost: 25 }, // Weedle line
+  { from: 16, to: 17, method: 'buddy',  cost: 15 }, { from: 17, to: 18, method: 'battle', cost: 1 }, // Pidgey line
+  { from: 147, to: 148, method: 'battle', cost: 1 }, { from: 148, to: 149, method: 'battle', cost: 1 }, // Dratini line
+  // level steps that then need a stone (the stone branch lives in STONE_EVOS)
+  { from: 29, to: 30, method: 'buddy', cost: 15 },  // Nidoran♀ → Nidorina
+  { from: 32, to: 33, method: 'buddy', cost: 15 },  // Nidoran♂ → Nidorino
+  { from: 43, to: 44, method: 'buddy', cost: 15 },  // Oddish    → Gloom
+  { from: 69, to: 70, method: 'buddy', cost: 15 },  // Bellsprout→ Weepinbell
+  { from: 60, to: 61, method: 'buddy', cost: 15 },  // Poliwag   → Poliwhirl
+  // single-step buddy evolutions (companions)
+  { from: 19, to: 20, method: 'buddy', cost: 15 }, { from: 21, to: 22, method: 'buddy', cost: 15 },
+  { from: 41, to: 42, method: 'buddy', cost: 15 }, { from: 46, to: 47, method: 'buddy', cost: 15 },
+  { from: 48, to: 49, method: 'buddy', cost: 15 }, { from: 50, to: 51, method: 'buddy', cost: 15 },
+  { from: 52, to: 53, method: 'buddy', cost: 15 }, { from: 54, to: 55, method: 'buddy', cost: 15 },
+  { from: 72, to: 73, method: 'buddy', cost: 15 }, { from: 79, to: 80, method: 'buddy', cost: 15 },
+  { from: 81, to: 82, method: 'buddy', cost: 15 }, { from: 84, to: 85, method: 'buddy', cost: 15 },
+  { from: 86, to: 87, method: 'buddy', cost: 15 }, { from: 88, to: 89, method: 'buddy', cost: 15 },
+  { from: 96, to: 97, method: 'buddy', cost: 15 }, { from: 100, to: 101, method: 'buddy', cost: 15 },
+  { from: 109, to: 110, method: 'buddy', cost: 15 }, { from: 116, to: 117, method: 'buddy', cost: 15 },
+  { from: 118, to: 119, method: 'buddy', cost: 15 },
+  // single-step battle evolutions (fighters, fierce ones, fossils)
+  { from: 129, to: 130, method: 'battle', cost: 1 }, { from: 138, to: 139, method: 'battle', cost: 1 },
+  { from: 140, to: 141, method: 'battle', cost: 1 }, { from: 111, to: 112, method: 'battle', cost: 1 },
+  { from: 104, to: 105, method: 'battle', cost: 1 }, { from: 56,  to: 57,  method: 'battle', cost: 1 },
+  { from: 23,  to: 24,  method: 'battle', cost: 1 }, { from: 27,  to: 28,  method: 'battle', cost: 1 },
+  { from: 77,  to: 78,  method: 'battle', cost: 1 }, { from: 98,  to: 99,  method: 'battle', cost: 1 },
+  // first step of the trade-mons = battle (their final form comes from the dance party)
+  { from: 66, to: 67, method: 'battle', cost: 1 }, { from: 74, to: 75, method: 'battle', cost: 1 },
+  { from: 63, to: 64, method: 'battle', cost: 1 }, { from: 92, to: 93, method: 'battle', cost: 1, zone: 19 },
+  // dance-party (former trade) evolutions — multiplayer, no battle, nothing lost
+  { from: 64, to: 65, method: 'dance' }, { from: 67, to: 68, method: 'dance' },
+  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance', zone: 19 },
+];
+function evosFor(pokeId) { return EVOS.filter(r => r.from === pokeId); }
+function evoProgress(r) { return r.method === 'buddy' ? (bondSteps[r.from] || 0) : r.method === 'battle' ? (battleUses[r.from] || 0) : 0; }
+function evoReady(r) { return r.method !== 'dance' && evoProgress(r) >= r.cost; }
+// Some evolutions can only happen in a specific zone (e.g. the Ghost line in Haunted Hollow).
+function evoHere(r) { return r.zone == null || currentZone === r.zone; }
+// Ready to evolve right now: progress met, right zone, evolved form still missing.
+// Stones count too — holding the stone is all a stone evolution needs.
+function evoReadyNow(pokeId) {
+  if (!caughtIds.has(pokeId)) return false;
+  return evosFor(pokeId).some(r => r.method !== 'dance' && !caughtIds.has(r.to) && evoReady(r) && evoHere(r))
+      || STONE_EVOS.some(r => r.from === pokeId && !caughtIds.has(r.to) && (stones[r.stone] || 0) > 0);
+}
+// Still owes a fight before it can evolve. Drives the ⚔️ marker in the battle picker
+// and guarantees one such Lukeymon is always on the board. Not zone-gated: battle
+// credit is earned anywhere, even if the evolution itself only fires in one zone.
+function needsBattleEvo(pokeId) {
+  return evosFor(pokeId).some(r => r.method === 'battle' && caughtIds.has(r.from) && !caughtIds.has(r.to) && !evoReady(r));
+}
+
+// One-time "ready to evolve!" nudge so you don't have to dig in the Pokédex to notice.
+const evoNotified = new Set();
+function checkEvoNotify() {
+  for (const r of EVOS) {
+    if (r.method === 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoReady(r) || !evoHere(r)) continue;
+    const key = r.from + '>' + r.to;
+    if (evoNotified.has(key)) continue;
+    evoNotified.add(key);
+    const fp = POKEMON_DATA.find(p => p.id === r.from);
+    showMessage(`✨ ${fp ? fp.name : 'A Lukéymon'} is ready to evolve! Open its Pokédex.`);
+    beep(660, 0.1, 0.1); setTimeout(() => beep(880, 0.12, 0.12), 110);
+    break;   // one nudge at a time
+  }
+}
+function tickBond(id) { bondSteps[id] = (bondSteps[id] || 0) + 1; checkEvoNotify(); }
+
+// Most folks head home to bed at night; "night owls" (the wild Hermit, the
+// patrolling Officer) stay out, and anyone with a nightSpot relocates there for
+// the evening (the Surfer goes to hang by the beach fire). Interiors never count
+// as night, so families at home are unaffected.
+function npcAtNightSpot(n) { return !!(n.nightSpot && isNightNow()); }
+function npcView(n) {                                 // effective {zone,x,y} right now
+  return npcAtNightSpot(n) ? n.nightSpot : { zone: n.zone, x: n.x, y: n.y };
+}
+// How visible an NPC is right now (1 = full daylight, 0 = tucked in for the night).
+// As dusk deepens they fade out (and walk off home — see tickNpcBedtime); at dawn
+// they fade back in. Night owls & relocated NPCs (Surfer) never bed down.
+const NPC_BED_LO = 0.12, NPC_BED_HI = 0.60;          // fade across this slice of the night ramp
+function npcNightFactor() { return nightMode ? 1 : (nightCycle ? autoNight(performance.now()) : 0); }
+function npcNightRising() {                           // true while heading INTO night (dusk), false at dawn
+  if (nightMode) return true;
+  if (!nightCycle) return false;
+  const p = (performance.now() % DAYNIGHT_CYCLE_MS) / DAYNIGHT_CYCLE_MS;
+  return p >= 0.45 && p < 0.95;                       // dusk→night; the dawn window (p≥0.95) is falling
+}
+function npcBedAlpha(n) {
+  if (n.nightOwl || n.nightSpot) return 1;
+  if (ZONE_INFO[n.zone] && ZONE_INFO[n.zone].night) return 0;   // always-night zone → nobody about
+  if (ZONE_INFO[n.zone] && (ZONE_INFO[n.zone].interior || ZONE_INFO[n.zone].cave)) return 1;  // indoors/caves: unaffected
+  const nf = npcNightFactor();
+  return Math.max(0, Math.min(1, (NPC_BED_HI - nf) / (NPC_BED_HI - NPC_BED_LO)));
+}
+function npcAt(zone, x, y) {
+  return NPCS.find(n => { if (npcBedAlpha(n) < 0.5) return false; const v = npcView(n); return v.zone === zone && v.x === x && v.y === y; }) || null;
+}
+function collectibleAt(zone, x, y) {
+  return COLLECTIBLES.find(c => c.zone === zone && c.x === x && c.y === y) || null;
+}
+
+// ─── Legendary roamers (Mew / Mewtwo) ────────────────
+const FARAWAY_ZONES = [4, 5, 6, 7]; // Volcano, Dark Forest, Ice Cave, Desert
+
+// Whether every Pokémon except Mewtwo has been caught (gates Mewtwo's arrival).
+function allOthersCaught() {
+  return POKEMON_DATA.every(p => p.legend === 'mewtwo' || caughtIds.has(p.id));
+}
+
+// Whether every ordinary (non-legendary, non-boss) Pokémon is caught — the point
+// where "only the legends remain" and the mythical Mew finally shows itself.
+function allWildCaught() {
+  return POKEMON_DATA.every(p => p.legend || p.boss || caughtIds.has(p.id));
+}
+
+// A random open spot in a faraway zone (optionally avoiding `notZone`).
+function farawaySpot(notZone) {
+  const zones = FARAWAY_ZONES.filter(z => z !== notZone);
+  const zone = zones[Math.floor(Math.random() * zones.length)];
+  const { cols, rows } = ZONE_INFO[zone];
+  const [x, y] = nearestOpenTile(zone, 2 + Math.floor(Math.random() * (cols - 4)),
+                                       2 + Math.floor(Math.random() * (rows - 4)));
+  return { zone, x, y };
+}
+
+// Build the active roamer list from the current catch state (+ saved positions).
+function initRoamers() {
+  roamers = [];
+  const saved = {};
+  if (loadedRoamers) loadedRoamers.forEach(r => { saved[r.legend] = r; });
+
+  POKEMON_DATA.forEach(p => {
+    if (!p.legend || caughtIds.has(p.id)) return;
+    if (p.legend === 'mewtwo' && !allOthersCaught()) return; // Mewtwo only at the end
+    if (p.legend === 'mew' && !allWildCaught()) return;      // Mew only once the dex is otherwise full
+    const s = saved[p.legend];
+    const pos = (s && FARAWAY_ZONES.includes(s.zone)) ? s : farawaySpot();
+    roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
+  });
+}
+
+function roamerAt(zone, x, y) {
+  return roamers.find(r => r.zone === zone && r.x === x && r.y === y) || null;
+}
+
+// Add any newly-eligible roamer (e.g. Mewtwo once everything else is caught)
+// and drop any that have been captured — without moving the others.
+function refreshRoamers() {
+  roamers = roamers.filter(r => !caughtIds.has(r.pokeId));
+  POKEMON_DATA.forEach(p => {
+    if (!p.legend || caughtIds.has(p.id)) return;
+    if (p.legend === 'mewtwo' && !allOthersCaught()) return;
+    if (p.legend === 'mew' && !allWildCaught()) return;
+    if (!roamers.some(r => r.legend === p.legend)) {
+      const pos = farawaySpot();
+      roamers.push({ legend: p.legend, pokeId: p.id, zone: pos.zone, x: pos.x, y: pos.y });
+    }
+  });
+}
+
+// On a failed encounter the legendary slips away to another faraway land.
+function relocateRoamer(r) {
+  const pos = farawaySpot(r.zone);
+  r.zone = pos.zone; r.x = pos.x; r.y = pos.y;
+  saveGame();
+}
+
 
 // Sprite color data for the player (top-down view, 8×10 logical pixels)
 const PLAYER_PALETTE = {
@@ -102,12 +797,153 @@ let playerDir   = 'down';
 let playerStep  = 0;   // toggles 0/1 for walk animation
 let lastMoveTs  = 0;
 let keys        = {};
-let caughtIds   = new Set();
+let kamiBuffer  = [];
+let caughtIds      = new Set();
+let seenIds        = new Set();    // species encountered (shown as a silhouette in the dex)
+let balls          = 5;
+let masterBalls    = 0;        // for capturing Mew / Mewtwo only
+let coins          = 0;
+let roamers        = [];       // active legendary roamers: { legend, pokeId, zone, x, y }
+let loadedRoamers  = null;     // roamer positions restored from save
+let currentLegend  = null;     // roamer being engaged in the current encounter/battle
+let pendingMsg     = null;     // a message to surface when the player returns to the world
+let encHappy       = false;
+let encTries       = 0;       // wrong guesses this encounter (one gentle retry allowed)
+let wildPoke       = null;   // { poke, x, y, zone, expireAt } — active wild on map
+let spawnTimerId   = null;   // next spawn setTimeout id
+let expireTimerId  = null;   // current wild's disappear setTimeout id
+let wildTrainer    = null;   // { x, y, zone, name, emoji } — a wandering trainer to battle
+let trainerTimerId = null;   // wandering trainer's wander-off setTimeout id
+let nightGhost     = null;   // { x, y, zone, id, emoji } — a ghost drifting around at night
+let _ghostCheckTs = 0, _ghostMoveTs = 0, _ghostDespawnTs = 0;
 let currentPoke = null;
 let timerId     = null;
 let timerStart  = 0;
 let canvas, ctx;
 let audioCtx    = null;
+let audioUnlocked = false;   // iOS needs a silent buffer played inside a gesture
+let muted       = false;   // global (not per-slot) audio mute
+let currentZone = 0;
+let unlockedBarriers = new Set();  // barrier keys the player has physically cleared
+let clearedSeams = new Set();      // canonical seam keys the player has permanently opened
+
+// Progression gates on otherwise-open seams. Like the physical barriers, they
+// block the seam in BOTH directions until unlocked once, then stay open forever.
+// Authored in world.js (WORLD.seamGates) via editor.html, keyed by the *inward*
+// direction. friends:N unlocks once you've befriended N Lukéymon; type/buddyId
+// unlock the moment you cross with the right buddy.
+const SEAM_GATES = (typeof WORLD !== 'undefined' && WORLD.seamGates) ? WORLD.seamGates : {};
+// The gate guarding the seam between zones a and b, in either direction. Returns
+// { key, g } using the inward key as the canonical id, or null if the seam is open.
+function seamGateInfo(a, b) {
+  const ab = a + '>' + b, ba = b + '>' + a;
+  if (SEAM_GATES[ab]) return { key: ab, g: SEAM_GATES[ab] };
+  if (SEAM_GATES[ba]) return { key: ba, g: SEAM_GATES[ba] };
+  return null;
+}
+function seamGateOpen(key, g) {
+  if (!g) return true;
+  if (clearedSeams.has(key)) return true;                // unlocked once → open for good
+  if (g.friends != null) return caughtIds.size >= g.friends;
+  return false;                                          // type / buddyId need an active cross
+}
+function seamGateHint(g) {
+  if (g.friends != null) return `🚧 A kindly guardian blocks the way: "Come back once you've befriended ${g.friends} Lukéymon!" (You have ${caughtIds.size}.)`;
+  if (g.type != null)    return `🚧 The path is sealed — bring a ${g.type} Lukéymon as your buddy to open it!`;
+  const p = POKEMON_DATA.find(x => x.id === g.buddyId);
+  return `🚧 Only a trainer walking beside a ${p ? p.name : '?'} may open this seal. Set it as your buddy!`;
+}
+// Can the player unlock this gate right now (right buddy out front / enough friends)?
+function buddyMeetsSeam(g) {
+  if (g.type != null) return buddyHasType(g.type);
+  if (g.buddyId != null) return activePet === g.buddyId;
+  if (g.friends != null) return caughtIds.size >= g.friends;
+  return false;
+}
+// Colour that themes a seam-gate's energy wall: type colour, gold for friend
+// counts, soft violet for a specific-buddy seal.
+function seamTint(g) {
+  if (g.type != null) return typeColor(g.type);
+  if (g.buddyId != null) return '#9a6ae0';
+  return '#e0b030';
+}
+// Flavoured line shown when a seam unlocks.
+function seamClearMsg(g) {
+  if (g.type != null) return `✨ Your ${g.type}-type buddy dissolves the barrier — the way opens!`;
+  if (g.friends != null) return `✨ The guardian counts your ${caughtIds.size} friends and steps aside — the way opens!`;
+  const p = POKEMON_DATA.find(x => x.id === g.buddyId);
+  return `✨ ${p ? p.name : 'Your buddy'} steps forward and the seal melts away — the way opens!`;
+}
+let barrierFX = {};                // barrier key -> { start, sign } while its break animation plays
+let seamFX    = {};                // seam key  -> { start, tint } while its open burst plays
+const SEAM_FX_MS = 900;            // how long the seam-gate open burst runs
+const BARRIER_FX_MS = 1000;        // how long the break / particle-storm effect runs
+const LULLABY_FX_MS = 1800;        // the Gigantamax Gengar's fade-to-sleep at the seam
+let collected = new Set();         // ids of badges/collectibles found
+let stones = {};                   // evolution-stone inventory { fire: n, water: n, … }
+let foundStones = new Set();       // ids of stone finds already picked up
+let bondSteps = {};                // pokeId → steps walked as your buddy (buddy evolutions)
+let battleUses = {};               // pokeId → times sent out in a battle (battle evolutions)
+let lastHeal  = '';                // date key of the last free Hospital rest (daily PokéBalls)
+const HEAL_BALLS = 5;              // free PokéBalls handed out per day at the Hospital
+function todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+let metNPCs   = new Set();         // names of NPCs already greeted (one-time gift)
+let gotBirthdayCake = false;       // Prof. Birch gave the birthday cake → it appears in your home
+const HOME_CAKE = { zone: 9, x: 5, y: 5 };   // where the cake sits once you have it (room for the big cake)
+let pendingGift = 0;               // coins held back for the end-of-conversation reveal
+let pendingFanfare = null;         // {badge,label} an NPC's lines() queues to fanfare at dialog end
+let knownTips = new Set();         // ids of field-notes tips the player has discovered
+let notesUnread = false;           // a new tip is waiting in the notepad
+let rocketDefeated = new Set();    // bird ids whose Team Rocket guard is already beaten
+let wonGame = false;               // Champion victory (4 land badges) already celebrated
+let pendingChampion = false;       // queue the Champion screen after the BADGE GET screen
+let pendingPerfect  = false;       // queue the 100% "Perfect Island" screen
+let perfectDone     = false;       // the 100% finale has already played
+const LAND_BADGES = ['badge_volcano', 'badge_forest', 'badge_ice', 'badge_desert'];
+function landBadgesDone() { return LAND_BADGES.every(id => collected.has(id)); }
+let currentNPC = null;             // NPC whose dialog is open
+let npcLineIdx = 0;
+
+// ── Animation state ─────────────────────────────────
+let fromPx      = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
+let moveAnimTs  = -9999;
+let moveAnimDur = MOVE_ANIM_MS;   // per-move slide duration (longer for ice slides)
+let moveLinear  = false;          // slides render at constant speed (ice); normal steps ease out
+let pendingReturn = null;         // queued 2nd half of an ice wall bounce (slide back to start)
+let slideLockUntil = 0;           // input locked until this ts (during a wall bounce)
+let bumpVec     = null;
+let bumpAnimTs  = -9999;
+let camX = 0, camY = 0;
+let zoneSlide   = null;           // active world-scroll between zones { dir, t0, dur, snap }
+const ZONE_SLIDE_MS = 380;        // how long the zone-to-zone scroll takes
+
+// ── Buddy / follower pet ─────────────────────────────
+let activePet   = null;   // pokeId of the Pokémon trailing the player (null = none)
+let buddyUses   = {};     // pokeId -> times set as buddy (powers "recent buddies")
+// Set the active buddy (and tally usage so the Pokédex can surface favourites).
+function setBuddy(id) {
+  activePet = id;
+  if (id != null) {
+    buddyUses[id] = (buddyUses[id] || 0) + 1;
+    learnTip('buddy');
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE; petMoveAnimTs = -9999;
+  }
+  saveGame(); updateHud();
+}
+let petX        = 10;
+let petY        = 7;
+let petFromPx   = { x: 10 * TILE_SIZE, y: 7 * TILE_SIZE };
+let petMoveAnimTs = -9999;
+let petMoveAnimDur = MOVE_ANIM_MS;  // buddy's own slide duration (may lag behind the player)
+let petFacing   = 1;      // 1 = facing right (default), -1 = flipped to face left
+let detailPoke  = null;   // the Pokémon currently open in the Pokédex detail view
+let dexScroll   = 0;      // remembered grid scroll position across detail open/close
+let surfNoted   = false;  // shown the "you can surf" hint this session yet?
+let slipNoted   = false;  // shown the "ice is slippery" hint this session yet?
+const JIGGLYPUFF_ID = 39; // a Jigglypuff buddy sings floating music notes
+let noteParticles = [];   // active floating ♪ from a singing buddy
+let lastNoteTs  = 0;
 
 // Pre-cached tile canvases for performance
 const tileCache = {};
@@ -119,20 +955,314 @@ window.addEventListener('DOMContentLoaded', () => {
   canvas = document.getElementById('game-canvas');
   ctx    = canvas.getContext('2d');
 
+  // Prevent the whole page from scrolling on touch — but allow scrolling
+  // inside the Pokédex (its grid and detail panel scroll internally).
+  document.addEventListener('touchmove', e => {
+    if (e.target.closest && e.target.closest('#pokedex-grid, #pokedex-detail')) return;
+    e.preventDefault();
+  }, { passive: false });
+
   buildTileCache();
-  loadSave();
+  migrateLegacy();
   bindEvents();
+  setupDebugMenu();
+  setupNav('title');           // the title screen is active by default
+  try { muted = localStorage.getItem('lukeymon_muted') === '1'; } catch (_) {}
+  updateMuteBtn();
+  runBoot();                   // Game Boy power-on, then reveal the title
   requestAnimationFrame(loop);
+  preloadArt();                // warm the cheap, always-seen art in the background
 });
+
+// Warm the small, always-seen art so it's ready before first use — chiefly the
+// 151 Lukéymon sprites (~0.6 MB; otherwise they pop in over their emoji). Runs
+// at idle so it never competes with first paint. The heavy, context-specific
+// art (NPC walk cycles, interiors, titans — most of the ~13 MB) stays lazy.
+function preloadArt() {
+  const warm = () => {
+    (typeof POKEMON_DATA !== 'undefined' ? POKEMON_DATA : []).forEach(p => {
+      if (p && p.sprite) { const i = new Image(); i.src = p.sprite; }
+    });
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 2500 });
+  else setTimeout(warm, 800);
+}
+
+// ── Game Boy power-on sequence ──────────────────────────
+// The LUKETENDO logo scrolls down, dings, then wipes to the title.
+let _bootDone = false;
+function bootChime() {
+  beep(392, 0.12, 0.16, 'square');                          // G — low
+  setTimeout(() => beep(659, 0.13, 0.18, 'square'), 120);   // E
+  setTimeout(() => beep(784, 0.26, 0.40, 'square'), 250);   // G — the "ding"
+}
+function finishBoot() {
+  if (_bootDone) return;
+  _bootDone = true;
+  const boot = document.getElementById('boot-screen');
+  if (!boot) return;
+  boot.classList.add('boot-out');
+  setTimeout(() => { boot.classList.remove('active'); boot.classList.add('hidden'); }, 430);
+}
+function runBoot() {
+  const boot = document.getElementById('boot-screen');
+  if (!boot) return;
+  setTimeout(bootChime, 1150);     // ding as the logo lands (best-effort before first tap)
+  setTimeout(finishBoot, 2450);    // auto-advance to the title
+  // Tap to skip — and use the gesture to wake audio so the chime can ring.
+  boot.addEventListener('click', () => { wakeAudio(); bootChime(); finishBoot(); });
+}
 
 // ═══════════════════════════════════════════════════
 // TILE CACHE
 // ═══════════════════════════════════════════════════
+// Each tile type caches an ARRAY of pre-rendered variants. Variants differ
+// by jittered detail and scattered natural decorations (flowers, pebbles,
+// shells, ripples...) so the world doesn't read as a rigid repeating grid.
 function buildTileCache() {
-  buildPath();
-  buildGrass();
-  buildTree();
-  buildWater();
+  buildVariants(T.PATH,  4, paintPath);
+  buildVariants(T.GRASS, 6, paintGrass);
+  buildVariants(T.TREE,  4, paintTree);
+  buildVariants(T.WATER, 4, paintWater);
+  buildVariants(T.SAND,  5, paintSand);
+  buildVariants(T.CITY,  3, paintCity);
+  buildVariants(T.SHOP,  1, paintGrass);   // ground only — the building is drawn oversized
+  buildVariants(T.LAVA,  4, paintLava);
+  buildVariants(T.ICE,   4, paintIce);
+  buildVariants(T.BOULDER, 3, paintBoulder);
+  buildVariants(T.CAVE,  4, paintCave);
+  buildVariants(T.CAVE_ENTRANCE, 1, paintCaveEntrance);
+  buildVariants(T.HOUSE, 1, paintGrass);   // ground only — the building is drawn oversized
+  buildVariants(T.FLOOR, 3, paintFloor);
+  buildVariants(T.WALL,  3, paintWall);
+  buildVariants(T.DOOR,  1, paintDoor);
+  buildBuildingSprites();
+}
+
+// ── Sliced biome art (per-zone tiles, trees, shop building) ──────────
+const ART_V = '32';   // art cache-bust — bump ONLY when art changes (also the ?v= on the art <img> tags in index.html). Code releases must NOT touch this.
+const TILE_ART = {
+  0: { 0: 3, 1: 3, 3: 3 }, 1: { 1: 3, 3: 3, 4: 3 }, 2: { 1: 3, 5: 3 },
+  3: { 0: 3, 1: 3, 3: 3 }, 4: { 0: 3, 1: 3, 7: 3 }, 5: { 0: 3, 1: 3, 11: 1 },
+  6: { 0: 3, 1: 3, 8: 3 }, 7: { 1: 3, 4: 3 },       8: { 9: 3, 10: 3, 11: 1 },
+  // New lands — reuse received tile art via NEW_TILE_SRC (trees use treeArtImg).
+  13: { 0: 3, 1: 3, 3: 3 },
+  14: { 0: 3, 1: 3, 3: 3, 9: 3 },
+  15: { 0: 3, 1: 3, 3: 3, 4: 3 },
+  16: { 0: 3, 1: 3, 3: 3, 8: 3 },
+  17: { 0: 3, 1: 3, 5: 3, 9: 3 },
+  18: { 0: 3, 1: 3, 3: 3, 4: 3, 8: 3 },
+  19: { 0: 3, 1: 3, 3: 3 },
+  20: { 1: 3, 3: 3, 4: 3, 8: 3 },
+  21: { 1: 3, 3: 3, 4: 3 },
+  26: { 9: 3, 10: 3, 11: 1 }, 27: { 9: 3, 10: 3, 11: 1 }, 28: { 9: 3, 10: 3, 11: 1 },  // new caves ← Hidden Cave art
+  29: { 0: 3, 1: 3 },                                                                    // Lullaby Hollow ← Meadow grass
+};
+// The new lands reuse the original received tile art, mapped per tile to a
+// biome-matching source zone (no procedurally-generated tiles).
+const NEW_TILE_SRC = {
+  13: { 0: 0, 1: 0, 3: 0 },                 // Sunpetal ← Meadow
+  14: { 0: 3, 1: 3, 3: 3, 9: 8 },           // Lunar Pass ← Highlands + Hidden Cave rock
+  15: { 0: 3, 1: 7, 3: 1, 4: 7 },           // Safari ← Desert + Beach water
+  16: { 0: 6, 1: 6, 3: 1, 8: 6 },           // Frostpeak ← Ice Cave + Beach water
+  17: { 0: 5, 1: 2, 5: 2, 9: 8 },           // Voltage Works ← City + rock
+  18: { 0: 0, 1: 1, 3: 1, 4: 1, 8: 6 },     // Seafoam ← Beach + Ice Cave ice
+  19: { 0: 5, 1: 5, 3: 0 },                 // Haunted Hollow ← Dark Forest + Meadow water
+  20: { 1: 1, 3: 1, 4: 1, 8: 6 },           // Coral Coast ← Beach + Ice Cave shells
+  21: { 1: 0, 3: 1, 4: 1 },                 // Champion's Cove ← Meadow grass + Beach water/sand
+  26: { 9: 8, 10: 8, 11: 8 }, 27: { 9: 8, 10: 8, 11: 8 }, 28: { 9: 8, 10: 8, 11: 8 },  // caves ← Hidden Cave (8) art
+  29: { 0: 0, 1: 0 },                                                                    // Lullaby Hollow ← Meadow
+};
+const NEW_TREE_SRC = { 13: 0, 15: 7, 16: 6, 17: 5, 18: 1, 19: 5, 20: 1, 21: 0, 29: 0 };   // (Lunar Pass has no trees)
+const _tileArt = {};
+function tileArtImg(zone, tileId, variant) {
+  const cnt = TILE_ART[zone] && TILE_ART[zone][tileId];
+  if (!cnt) return null;
+  const src = (NEW_TILE_SRC[zone] && NEW_TILE_SRC[zone][tileId] != null) ? NEW_TILE_SRC[zone][tileId] : zone;
+  const v = ((variant % cnt) + cnt) % cnt;
+  const key = src + '_' + tileId + '_' + v;
+  let img = _tileArt[key];
+  if (!img) { img = new Image(); img.src = 'art/tiles/z' + key + '.png?v=' + ART_V; _tileArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _treeArt = {};
+function treeArtImg(zone) {
+  const src = NEW_TREE_SRC[zone] != null ? NEW_TREE_SRC[zone] : (zone <= 7 ? zone : null);
+  if (src == null) return null;                    // no tree sprite (hidden cave / Lunar Pass)
+  let img = _treeArt[src];
+  if (!img) { img = new Image(); img.src = 'art/tree/z' + src + '.png?v=' + ART_V; _treeArt[src] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _shopImg = (() => { const i = new Image(); i.src = 'art/build/shop.png?v=' + ART_V; return i; })();
+function shopArtImg() { return (_shopImg.complete && _shopImg.naturalWidth) ? _shopImg : null; }
+const _houseImg = (() => { const i = new Image(); i.src = 'art/build/house.png?v=' + ART_V; return i; })();
+function houseArtImg() { return (_houseImg.complete && _houseImg.naturalWidth) ? _houseImg : null; }
+const _hospImg = (() => { const i = new Image(); i.src = 'art/build/hospital.png?v=' + ART_V; return i; })();
+function hospitalArtImg() { return (_hospImg.complete && _hospImg.naturalWidth) ? _hospImg : null; }
+const _gymImg = (() => { const i = new Image(); i.src = 'art/build/gym.png?v=' + ART_V; return i; })();
+function gymArtImg() { return (_gymImg.complete && _gymImg.naturalWidth) ? _gymImg : null; }
+const _blueHouseImg = (() => { const i = new Image(); i.src = 'art/build/house_blue.png?v=' + ART_V; return i; })();
+function blueHouseArtImg() { return (_blueHouseImg.complete && _blueHouseImg.naturalWidth) ? _blueHouseImg : null; }
+
+// ── Interior décor props (furniture sliced from the building art sheet) ──
+// Placements live in WORLD.decor: { "<zoneId>": [ {x,y,s:spriteKey,solid?}, … ] }.
+const DECOR        = WORLD.decor || {};
+const DECOR_SCALE  = 0.5;     // sliced props are ~2× a tile; halve to sit nicely in a room
+const RUG_KEYS = new Set(['household_11', 'household_12']);   // flat floor rugs — drawn under the player, over the floor
+const _decorImg = {};
+function decorImg(key) {
+  let i = _decorImg[key];
+  if (!i) { i = new Image(); i.src = 'art/interior/' + key + '.png?v=' + ART_V; _decorImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+// Solid props block movement (counters, beds…). Cached per zone as an "x,y" set.
+const _decorSolid = {};
+function decorSolidAt(zone, x, y) {
+  let s = _decorSolid[zone];
+  if (!s) { s = _decorSolid[zone] = new Set(); (DECOR[zone] || []).forEach(d => { if (d.solid) s.add(d.x + ',' + d.y); }); }
+  return s.has(x + ',' + y);
+}
+
+// ── Outdoor light props (streetlights, beach fire pit) ──
+// Placeholder art for now. Each casts a warm glow that blooms at night and fades
+// by day. light:'steady' = constant pool (streetlight); 'fire' = flickering campfire.
+// Per-type visuals/light live here; placements (just {zone,x,y,s}) live in
+// WORLD.props so the world editor can drag them around.
+const PROP_TYPES = {
+  streetlight:    { light: 'steady', solid: true,  h: 56, gy: -38, rgb: '255,224,150', rad: 2.6 },
+  firepit:        { light: 'fire',   solid: true,  h: 34, gy: -10, rgb: '255,150,40',  rad: 2.9, frames: 5, fps: 9 },
+  boulder:        { solid: true,  h: 30 },
+  cave_entrance:  { solid: true,  h: 40 },
+  pier:           { solid: false, h: 38 },
+  beach_umbrella: { solid: true,  h: 50 },
+  beach_chair:    { solid: false, h: 30 },
+  powerplant:     { solid: true,  h: 54 },
+  generator:      { light: 'steady', solid: true, h: 48, gy: -22, rgb: '120,200,255', rad: 2.0 },
+  genpod:         { light: 'steady', solid: true, h: 44, gy: -20, rgb: '120,200,255', rad: 1.8 },
+  fence:          { solid: true,  h: 22 },
+  blue_house:     { solid: true,  h: 88 },
+  birthday_cake:  { light: 'fire', solid: true, h: 46, gy: -42, rgb: '255,210,130', rad: 1.4 },
+  bigcake:        { solid: true,  h: 60 },
+};
+const PROPS = WORLD.props || [];
+function propType(p) { return PROP_TYPES[p.s] || {}; }
+const _propImg = {};
+function propImg(key) {
+  let i = _propImg[key];
+  if (!i) { i = new Image(); i.src = 'art/prop/' + key + '.png?v=' + ART_V; _propImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+const _propSolid = {};
+function propSolidAt(zone, x, y) {
+  let s = _propSolid[zone];
+  if (!s) { s = _propSolid[zone] = new Set(); PROPS.forEach(p => { if (propType(p).solid && p.zone === zone) s.add(p.x + ',' + p.y); }); }
+  return s.has(x + ',' + y);
+}
+
+// Oversized building sprites (transparent bg), drawn on top of their ground tile and
+// extending upward so a 1-tile entrance reads as a full-size building.
+const buildingSprites = {};
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+function buildBuildingSprites() {
+  { const [c, x] = makeCanvas(54, 58); paintHouseBig(x); buildingSprites[T.HOUSE] = c; }
+  { const [c, x] = makeCanvas(54, 58); paintHouseBigBlue(x); buildingSprites.HOUSE_BLUE = c; }
+  { const [c, x] = makeCanvas(54, 58); paintShopBig(x);  buildingSprites[T.SHOP]  = c; }
+  { const [c, x] = makeCanvas(54, 60); paintHospitalBig(x); buildingSprites[T.HOSPITAL] = c; }
+  { const [c, x] = makeCanvas(54, 60); paintGymBig(x);      buildingSprites[T.GYM]      = c; }
+}
+function paintHospitalBig(x) {
+  x.fillStyle = '#f4f4f8'; x.fillRect(5, 22, 44, 34);               // clean white body
+  x.fillStyle = '#d8d8e2'; x.fillRect(5, 22, 44, 4);               // body shade
+  x.fillStyle = '#e8403a'; x.fillRect(2, 12, 50, 12);             // red roof band
+  x.fillStyle = '#c0322c'; x.fillRect(2, 22, 50, 3);
+  x.fillStyle = '#fff';                                            // white cross sign
+  x.fillRect(24, 13, 6, 10); x.fillRect(21, 16, 12, 4);
+  x.fillStyle = '#bfe4ff'; x.fillRect(10, 30, 11, 10); x.fillRect(33, 30, 11, 10);  // windows
+  x.fillStyle = '#7aa6c8'; x.fillRect(10, 30, 11, 2); x.fillRect(33, 30, 11, 2);
+  x.fillStyle = '#8a6a4a'; x.fillRect(22, 40, 10, 16);            // doors
+  x.fillStyle = '#6b4423'; x.fillRect(27, 40, 1, 16);
+  x.fillStyle = '#e8d24a'; x.fillRect(24, 48, 2, 2);
+}
+function paintGymBig(x) {
+  x.fillStyle = '#7a5230'; x.fillRect(5, 22, 44, 34);              // sturdy timber body
+  x.fillStyle = '#5e3f24'; x.fillRect(5, 22, 44, 4);
+  x.fillStyle = '#9a6a3a'; for (let i = 8; i < 49; i += 8) x.fillRect(i, 26, 1, 30); // plank seams
+  x.fillStyle = '#454552'; x.beginPath(); x.moveTo(1, 24); x.lineTo(27, 6); x.lineTo(53, 24); x.closePath(); x.fill(); // grey roof
+  x.fillStyle = '#33333e'; x.beginPath(); x.moveTo(1, 24); x.lineTo(53, 24); x.lineTo(53, 27); x.lineTo(1, 27); x.closePath(); x.fill();
+  x.fillStyle = '#f0d24a'; x.fillRect(20, 30, 14, 8);             // gym banner
+  x.fillStyle = '#c89a18'; x.font = '9px serif'; x.textAlign = 'center'; x.fillText('🥊', 27, 37); x.textAlign = 'left';
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);           // big doors
+  x.fillStyle = '#54381c'; x.fillRect(27, 40, 1, 16);
+  x.fillStyle = '#e8d24a'; x.fillRect(24, 48, 2, 2);
+}
+function paintHouseBig(x) {
+  x.fillStyle = '#d8b48a'; x.fillRect(6, 26, 42, 30);                 // body
+  x.fillStyle = '#bf9b73'; x.fillRect(6, 26, 42, 4);                 // body shade
+  x.fillStyle = '#c0432f';                                           // roof
+  x.beginPath(); x.moveTo(1, 28); x.lineTo(27, 4); x.lineTo(53, 28); x.closePath(); x.fill();
+  x.fillStyle = '#8f3322'; x.beginPath(); x.moveTo(1, 28); x.lineTo(53, 28); x.lineTo(53, 31); x.lineTo(1, 31); x.closePath(); x.fill();
+  x.fillStyle = '#9fd8ff'; x.fillRect(12, 34, 9, 9); x.fillRect(33, 34, 9, 9);   // windows
+  x.fillStyle = '#5a7a96'; x.fillRect(12, 34, 9, 2); x.fillRect(33, 34, 9, 2);
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);              // door (bottom-centre)
+  x.fillStyle = '#5a3a1e'; x.fillRect(22, 40, 10, 2);
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);                // knob
+}
+// The cosy blue cottage that waits at the very end of the journey.
+function paintHouseBigBlue(x) {
+  x.fillStyle = '#e8e0d2'; x.fillRect(6, 26, 42, 30);                 // pale body
+  x.fillStyle = '#cfc6b6'; x.fillRect(6, 26, 42, 4);                 // body shade
+  x.fillStyle = '#2f6fd0';                                           // blue roof
+  x.beginPath(); x.moveTo(1, 28); x.lineTo(27, 4); x.lineTo(53, 28); x.closePath(); x.fill();
+  x.fillStyle = '#1f57b0'; x.beginPath(); x.moveTo(1, 28); x.lineTo(53, 28); x.lineTo(53, 31); x.lineTo(1, 31); x.closePath(); x.fill();
+  x.fillStyle = '#bfe3f2'; x.fillRect(12, 34, 9, 9); x.fillRect(33, 34, 9, 9);   // windows
+  x.fillStyle = '#5a7a96'; x.fillRect(12, 34, 9, 2); x.fillRect(33, 34, 9, 2);
+  x.fillStyle = '#3f86df'; x.fillRect(22, 40, 10, 16);              // blue door
+  x.fillStyle = '#2f6fd0'; x.fillRect(22, 40, 10, 2);
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);                // knob
+  x.fillStyle = '#ffffff'; x.font = '9px serif'; x.textAlign = 'center'; x.fillText('💙', 27, 22); // heart in the gable
+  x.textAlign = 'left';
+}
+function paintShopBig(x) {
+  x.fillStyle = '#e8d8b0'; x.fillRect(5, 24, 44, 32);              // body
+  x.fillStyle = '#d02060'; x.fillRect(2, 16, 50, 12);             // awning
+  x.fillStyle = '#f06090'; for (let i = 2; i < 52; i += 8) x.fillRect(i, 16, 4, 12);
+  x.fillStyle = '#b8901c'; x.fillRect(5, 24, 44, 3);             // awning shadow on body
+  x.fillStyle = '#9fd8ff'; x.fillRect(9, 32, 12, 10); x.fillRect(33, 32, 12, 10); // windows
+  x.fillStyle = '#6b4423'; x.fillRect(22, 40, 10, 16);          // door
+  x.fillStyle = '#e8d24a'; x.fillRect(29, 48, 2, 2);
+  x.font = '11px serif'; x.textAlign = 'center'; x.fillText('🏪', 27, 14);  // sign above
+  x.textAlign = 'left';
+}
+
+function paintHouse(x) {
+  x.fillStyle = '#7cc24a'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);     // grass base
+  x.fillStyle = '#e0c090'; x.fillRect(4, 12, 24, 18);                  // body
+  x.fillStyle = '#c0432f';                                            // roof
+  x.beginPath(); x.moveTo(2, 13); x.lineTo(16, 3); x.lineTo(30, 13); x.closePath(); x.fill();
+  x.fillStyle = '#9fd8ff'; x.fillRect(7, 16, 4, 4); x.fillRect(21, 16, 4, 4); // windows
+  x.fillStyle = '#6b4423'; x.fillRect(13, 18, 6, 12);                 // door
+  x.fillStyle = '#e8d24a'; x.fillRect(17, 24, 2, 2);                  // knob
+}
+function paintFloor(x, rng) {
+  x.fillStyle = '#caa472'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#b8915f'; for (let y = 0; y < TILE_SIZE; y += 8) x.fillRect(0, y, TILE_SIZE, 1);
+  if (rng() < 0.5) { x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(2 + Math.floor(rng() * 26), 2 + Math.floor(rng() * 26), 4, 1); }
+}
+function paintWall(x) {
+  x.fillStyle = '#8a6a4a'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#6e5238'; for (let xx = 0; xx < TILE_SIZE; xx += 8) x.fillRect(xx, 0, 1, TILE_SIZE);
+  x.fillStyle = 'rgba(255,255,255,0.06)'; x.fillRect(0, 0, TILE_SIZE, 2);
+  x.fillStyle = 'rgba(0,0,0,0.20)';       x.fillRect(0, TILE_SIZE - 4, TILE_SIZE, 4);
+}
+function paintDoor(x) {
+  x.fillStyle = '#caa472'; x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);    // floor under
+  x.fillStyle = '#5a8acb'; x.fillRect(6, 18, 20, 12);                 // welcome mat
+  x.fillStyle = '#7aa6e0'; x.fillRect(8, 20, 16, 8);
+  x.font = '13px serif'; x.fillText('🚪', 9, 15);
 }
 
 function makeTile() {
@@ -141,62 +1271,288 @@ function makeTile() {
   return [c, c.getContext('2d')];
 }
 
-function buildPath() {
-  const [c, x] = makeTile();
+// Small deterministic PRNG so each variant is fixed across reloads.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildVariants(type, count, paint) {
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    const [c, x] = makeTile();
+    paint(x, mulberry32(0x9E3779B9 ^ (type * 131 + i)), i);
+    arr.push(c);
+  }
+  tileCache[type] = arr;
+}
+
+// Pick a stable variant index for a given map cell.
+function tileVariant(zone, r, c, n) {
+  let h = ((zone + 1) * 73856093) ^ ((r + 1) * 19349663) ^ ((c + 1) * 83492791);
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % n;
+}
+// Deterministic [0,1) per tile — used to give each tree/cactus a tiny unique
+// scale so a forest doesn't look like stamped clones. Different salt than the
+// variant picker so size and variant vary independently.
+function tileNoise(zone, r, c) {
+  let h = ((zone + 7) * 2654435761) ^ ((r + 3) * 40503) ^ ((c + 5) * 1000003);
+  h = (h ^ (h >>> 15)) >>> 0;
+  return (h % 100000) / 100000;
+}
+
+function paintPath(x, rng) {
   x.fillStyle = '#d0b068';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // jittered stone seams
   x.fillStyle = '#c0a050';
-  // subtle stone lines
-  x.fillRect(0, 15, TILE_SIZE, 1);
-  x.fillRect(16, 0, 1, 15);
+  const sy = 13 + Math.floor(rng() * 6);
+  x.fillRect(0, sy, TILE_SIZE, 1);
   x.fillRect(0, 31, TILE_SIZE, 1);
-  x.fillRect(8, 16, 1, 15);
-  tileCache[T.PATH] = c;
+  x.fillRect(12 + Math.floor(rng() * 10), 0, 1, sy);
+  x.fillRect(4 + Math.floor(rng() * 10), sy + 1, 1, TILE_SIZE - sy);
+  // scattered pebbles
+  const pebbles = Math.floor(rng() * 3);
+  for (let i = 0; i < pebbles; i++) {
+    x.fillStyle = rng() < 0.5 ? '#b89848' : '#dcc078';
+    x.beginPath();
+    x.arc(3 + rng() * 26, 3 + rng() * 26, 1 + rng() * 1.5, 0, Math.PI * 2);
+    x.fill();
+  }
 }
 
-function buildGrass() {
-  const [c, x] = makeTile();
+function paintGrass(x, rng) {
   x.fillStyle = '#38b038';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // soft patchy shading
+  x.fillStyle = 'rgba(40,144,42,0.45)';
+  for (let i = 0; i < 2; i++) {
+    x.beginPath();
+    x.ellipse(rng() * 32, rng() * 32, 5 + rng() * 6, 4 + rng() * 4, 0, 0, Math.PI * 2);
+    x.fill();
+  }
+  // blades
   x.fillStyle = '#28902a';
-  // grass blades
-  [[4,6],[10,2],[17,7],[24,3],[28,8]].forEach(([bx, by]) => {
-    x.fillRect(bx, by, 2, 7);
-    x.fillRect(bx+1, by-2, 2, 5);
-  });
-  tileCache[T.GRASS] = c;
+  const blades = 4 + Math.floor(rng() * 3);
+  for (let i = 0; i < blades; i++) {
+    const bx = 2 + Math.floor(rng() * 28);
+    const by = 4 + Math.floor(rng() * 22);
+    x.fillRect(bx, by, 2, 6);
+    x.fillRect(bx + 1, by - 2, 2, 4);
+  }
+  // occasional flower or pebble
+  const deco = rng();
+  if (deco < 0.33) {
+    const fx = 6 + Math.floor(rng() * 20);
+    const fy = 7 + Math.floor(rng() * 18);
+    x.fillStyle = ['#f8d030', '#f87090', '#ffffff', '#c878f0'][Math.floor(rng() * 4)];
+    x.fillRect(fx - 2, fy, 2, 2);
+    x.fillRect(fx + 2, fy, 2, 2);
+    x.fillRect(fx, fy - 2, 2, 2);
+    x.fillRect(fx, fy + 2, 2, 2);
+    x.fillStyle = '#ffe860';
+    x.fillRect(fx, fy, 2, 2);
+  } else if (deco < 0.5) {
+    x.fillStyle = '#9a9a86';
+    x.beginPath();
+    x.arc(6 + rng() * 20, 8 + rng() * 18, 2, 0, Math.PI * 2);
+    x.fill();
+  }
 }
 
-function buildTree() {
-  const [c, x] = makeTile();
+function paintTree(x, rng) {
   x.fillStyle = '#1a4018';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  // foliage circle
+  const ox = (rng() - 0.5) * 4;
+  const oy = (rng() - 0.5) * 3;
+  // foliage
   x.fillStyle = '#306830';
   x.beginPath();
-  x.arc(16, 14, 13, 0, Math.PI * 2);
+  x.arc(16 + ox, 14 + oy, 12 + rng() * 2, 0, Math.PI * 2);
   x.fill();
   x.fillStyle = '#204820';
   x.beginPath();
-  x.arc(11, 11, 7, 0, Math.PI * 2);
+  x.arc(11 + ox, 11 + oy, 6 + rng() * 2, 0, Math.PI * 2);
   x.fill();
+  // occasional fruit / sunlit leaf
+  if (rng() < 0.4) {
+    x.fillStyle = rng() < 0.5 ? '#e8d040' : '#3a8a3a';
+    x.beginPath();
+    x.arc(11 + rng() * 12, 9 + rng() * 9, 1.6, 0, Math.PI * 2);
+    x.fill();
+  }
   // trunk
   x.fillStyle = '#5a3010';
   x.fillRect(13, 25, 6, 7);
-  tileCache[T.TREE] = c;
 }
 
-function buildWater() {
-  const [c, x] = makeTile();
+function paintWater(x, rng) {
   x.fillStyle = '#2060d0';
   x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   x.fillStyle = '#3880e8';
-  [[3,8,10,3],[16,18,8,3],[6,24,12,3]].forEach(([wx,wy,ww,wh]) => {
+  const ripples = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < ripples; i++) {
+    const ww = 6 + rng() * 8;
+    const wh = 2 + rng() * 2;
     x.beginPath();
-    x.ellipse(wx + ww/2, wy + wh/2, ww/2, wh/2, 0, 0, Math.PI * 2);
+    x.ellipse(2 + rng() * 26, 4 + rng() * 24, ww / 2, wh / 2, 0, 0, Math.PI * 2);
     x.fill();
+  }
+  // sun glint
+  if (rng() < 0.4) {
+    x.fillStyle = '#bfe0ff';
+    x.fillRect(4 + Math.floor(rng() * 22), 4 + Math.floor(rng() * 22), 2, 2);
+  }
+}
+
+function paintSand(x, rng) {
+  x.fillStyle = '#e8c870';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // jittered wavy highlight lines
+  x.fillStyle = '#d4b05a';
+  [4, 9, 14, 20, 25].forEach(y => {
+    x.fillRect(0, y + (Math.floor(rng() * 5) - 2), TILE_SIZE, 1);
   });
-  tileCache[T.WATER] = c;
+  const deco = rng();
+  if (deco < 0.25) {
+    // little shell
+    x.fillStyle = '#f0a0b0';
+    x.beginPath();
+    x.arc(8 + rng() * 16, 9 + rng() * 14, 3, Math.PI, 0);
+    x.fill();
+  } else if (deco < 0.45) {
+    // pebble
+    x.fillStyle = '#c8a860';
+    x.beginPath();
+    x.arc(6 + rng() * 20, 6 + rng() * 20, 2, 0, Math.PI * 2);
+    x.fill();
+  }
+}
+
+function paintCity(x, rng) {
+  x.fillStyle = '#909090';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // grid slab lines
+  x.fillStyle = '#787878';
+  x.fillRect(0, 15, TILE_SIZE, 1);
+  x.fillRect(0, 31, TILE_SIZE, 1);
+  x.fillRect(15, 0, 1, 15);
+  x.fillRect(15, 16, 1, 15);
+  // occasional crack / drain
+  if (rng() < 0.4) {
+    x.fillStyle = '#6a6a6a';
+    x.fillRect(4 + Math.floor(rng() * 22), 4 + Math.floor(rng() * 22), 3, 3);
+  }
+}
+
+function paintShop(x) {
+  x.fillStyle = '#e8d0a8';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // Awning
+  x.fillStyle = '#d02060';
+  x.fillRect(0, 0, TILE_SIZE, 11);
+  x.fillStyle = '#f06090';
+  for (let i = 0; i < TILE_SIZE; i += 6) x.fillRect(i, 0, 3, 11);
+  // Counter
+  x.fillStyle = '#b07830';
+  x.fillRect(4, 19, 24, 7);
+  x.fillStyle = '#d0a050';
+  x.fillRect(4, 17, 24, 4);
+  // Sign
+  x.font = '13px serif';
+  x.fillText('🏪', 7, 14);
+}
+
+function paintLava(x, rng) {
+  x.fillStyle = '#c83000';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#ff6820';
+  const flows = 4 + Math.floor(rng() * 2);
+  for (let i = 0; i < flows; i++) {
+    x.fillRect(Math.floor(rng() * 24), Math.floor(rng() * 28),
+               6 + Math.floor(rng() * 8), 3 + Math.floor(rng() * 2));
+  }
+  x.fillStyle = '#ffd040';
+  for (let i = 0; i < 3; i++) {
+    x.fillRect(4 + Math.floor(rng() * 24), 4 + Math.floor(rng() * 24), 3, 2);
+  }
+}
+
+function paintIce(x, rng) {
+  x.fillStyle = '#b8d8f0';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#e8f4ff';
+  for (let i = 0; i < 5; i++) {
+    x.fillRect(Math.floor(rng() * 20), Math.floor(rng() * 30),
+               8 + Math.floor(rng() * 12), 2);
+  }
+  x.fillStyle = '#90c0e0';
+  for (let i = 0; i < 3; i++) {
+    x.fillRect(Math.floor(rng() * 26), Math.floor(rng() * 26), 6, 4 + Math.floor(rng() * 2));
+  }
+}
+
+// Boulder — solid impassable grey stones.
+function paintBoulder(x, rng) {
+  x.fillStyle = '#4c4c54';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  const rocks = [[9, 10, 16], [21, 20, 13], [22, 7, 11], [7, 23, 11]];
+  for (const [bx, by, d] of rocks) {
+    const cx = bx + (rng() - 0.5) * 3, cy = by + (rng() - 0.5) * 3;
+    x.fillStyle = '#74747e';
+    x.beginPath(); x.arc(cx, cy, d / 2, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#9a9aa6';   // highlight
+    x.beginPath(); x.arc(cx - d / 6, cy - d / 6, d / 4, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#34343c';   // shadow
+    x.beginPath(); x.arc(cx + d / 5, cy + d / 5, d / 6, 0, Math.PI * 2); x.fill();
+  }
+}
+
+// Cave floor — dark rocky ground with faint cracks and pebbles.
+function paintCave(x, rng) {
+  x.fillStyle = '#34313f';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  x.fillStyle = '#3d3a4a';
+  for (let i = 0; i < 4; i++) {
+    x.fillRect(Math.floor(rng() * 26), Math.floor(rng() * 26), 4 + Math.floor(rng() * 6), 3 + Math.floor(rng() * 3));
+  }
+  x.strokeStyle = '#26242e';   // hairline cracks
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(rng() * TILE_SIZE, 0);
+  x.lineTo(rng() * TILE_SIZE, TILE_SIZE);
+  x.stroke();
+  x.fillStyle = '#52505e';     // a couple of light pebbles
+  for (let i = 0; i < 3; i++) x.fillRect(2 + Math.floor(rng() * 28), 2 + Math.floor(rng() * 28), 2, 2);
+}
+
+// Cave entrance / mouth — a dark archway in the rock you can step into.
+function paintCaveEntrance(x) {
+  x.fillStyle = '#5a5560';
+  x.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // rocky frame
+  x.fillStyle = '#74707c';
+  x.fillRect(0, 0, TILE_SIZE, 6);
+  x.fillRect(0, 0, 5, TILE_SIZE);
+  x.fillRect(TILE_SIZE - 5, 0, 5, TILE_SIZE);
+  // dark mouth (rounded top)
+  x.fillStyle = '#0a0810';
+  x.beginPath();
+  x.moveTo(6, TILE_SIZE);
+  x.lineTo(6, 14);
+  x.arc(TILE_SIZE / 2, 14, TILE_SIZE / 2 - 6, Math.PI, 0);
+  x.lineTo(TILE_SIZE - 6, TILE_SIZE);
+  x.closePath();
+  x.fill();
+  // faint inner glow
+  x.fillStyle = 'rgba(120,110,160,0.18)';
+  x.beginPath(); x.arc(TILE_SIZE / 2, 20, 7, 0, Math.PI * 2); x.fill();
 }
 
 // ═══════════════════════════════════════════════════
@@ -204,25 +1560,150 @@ function buildWater() {
 // ═══════════════════════════════════════════════════
 function bindEvents() {
   // Keyboard
+  const kbKamiMap = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', z:'b', Z:'b', x:'a', X:'a', Enter:'start', Shift:'select' };
+  const kbNavMap  = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', x:'a', X:'a', Enter:'a', ' ':'a', z:'b', Z:'b', Backspace:'b', Escape:'b' };
   document.addEventListener('keydown', e => {
+    if (e.target && e.target.tagName === 'INPUT') return; // don't hijack text fields
     keys[e.key] = true;
     wakeAudio();
+    if (controlsOpen) { closeControls(); return; }        // any key closes the controls overlay
+    if (!e.repeat && (e.key === 'c' || e.key === 'C')) { toggleControls(); return; }   // 'C' opens it
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
       e.preventDefault();
+    }
+    if (kbKamiMap[e.key]) kamiInput(kbKamiMap[e.key]);
+    if (!e.repeat && kbNavMap[e.key]) uiPress(kbNavMap[e.key]);   // menu navigation
+    // (Buddy switching is Pokédex-only now — the old Shift shortcut was too easy
+    // to hit by accident and would silently swap your buddy.)
+    // 'M' toggles the world map from the world screen.
+    if (e.key === 'm' || e.key === 'M') {
+      if (gameState === 'world') openMap();
+      else if (gameState === 'map') closeMap();
+    }
+    // Weather/time preview toggles (outdoors): 'N' = night, 'R' = rain.
+    if (!e.repeat && gameState === 'world' && (e.key === 'n' || e.key === 'N')) {
+      setNight(); showMessage(nightMode ? '🌙 Night mode ON' : '☀️ Night mode off');
+    }
+    if (!e.repeat && gameState === 'world' && (e.key === 'r' || e.key === 'R')) {
+      setRain(); showMessage(rainMode ? '🌧️ Rain ON' : '🌤️ Rain off');
     }
   });
   document.addEventListener('keyup', e => { keys[e.key] = false; });
 
-  // Title buttons
-  document.getElementById('start-btn').addEventListener('click', () => { wakeAudio(); startNewGame(); });
-  document.getElementById('continue-btn').addEventListener('click', () => { wakeAudio(); enterWorld(); });
+  // Unlock/resume audio on the first real gesture anywhere (mobile needs this).
+  ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click'].forEach(ev =>
+    document.addEventListener(ev, wakeAudio, { capture: true, passive: true }));
+
+  // Title / save slots
+  document.getElementById('play-btn').addEventListener('click', () => { wakeAudio(); openSlots(); });
+  document.getElementById('slot-back').addEventListener('click', () => showScreen('title'));
+  document.getElementById('name-ok').addEventListener('click', () => { wakeAudio(); confirmName(); });
+  document.getElementById('name-cancel').addEventListener('click', () => openSlots());
+  document.getElementById('intro-begin').addEventListener('click', () => { wakeAudio(); beginAdventure(); });
+  document.getElementById('name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmName(); }
+  });
 
   // World HUD
   document.getElementById('pokedex-btn').addEventListener('click', openPokedex);
+  document.getElementById('map-btn').addEventListener('click', openMap);
+  document.getElementById('mute-btn').addEventListener('click', () => { wakeAudio(); toggleMute(); });
+  document.getElementById('hud-buddy').addEventListener('click', () => { wakeAudio(); openPokedex(); });   // tap the buddy chip → Pokédex (switch buddy there)
+  document.getElementById('controls-overlay').addEventListener('click', closeControls);   // tap anywhere to dismiss
+
+  // Full-screen / immersive: hide the Game Boy shell so the screen fills the
+  // display (great for landscape / casting to a TV). Also asks the browser for
+  // real fullscreen where allowed.
+  const fsBtn = document.getElementById('fullscreen-btn');
+  if (fsBtn) {
+    const syncFsBtn = on => { fsBtn.textContent = on ? '✕' : '⛶'; fsBtn.title = on ? 'Exit full screen' : 'Full screen'; };
+    // In immersive mode the whole screen is one fixed-size unit scaled to fit, so
+    // the canvas and every overlay button grow together with the screen.
+    const IMM_W = 440, IMM_H = 440 * 9 / 10;
+    const syncImmersiveScale = () => {
+      if (!document.body.classList.contains('immersive')) return;
+      const s = Math.min(window.innerWidth / IMM_W, window.innerHeight / IMM_H);
+      document.documentElement.style.setProperty('--imm-scale', s);
+    };
+    window.syncImmersiveScale = syncImmersiveScale;
+    fsBtn.addEventListener('click', () => {
+      const on = document.body.classList.toggle('immersive');
+      syncFsBtn(on);
+      try {
+        if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+        else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      } catch (_) {}
+      syncImmersiveScale();
+      setTimeout(syncImmersiveScale, 120);   // re-measure after the fullscreen transition settles
+    });
+    window.addEventListener('resize', syncImmersiveScale);
+    window.addEventListener('orientationchange', () => setTimeout(syncImmersiveScale, 150));
+    // Keep our layout in sync if the user leaves browser fullscreen via Esc/back.
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('immersive')) {
+        document.body.classList.remove('immersive'); syncFsBtn(false);
+      }
+      syncImmersiveScale();
+    });
+  }
+
+  // Hard refresh — clear any caches and re-fetch a fresh index.html so the
+  // latest deploy loads even if the browser is holding a stale copy.
+  const hrBtn = document.getElementById('hard-refresh');
+  if (hrBtn) hrBtn.addEventListener('click', async () => {
+    hrBtn.textContent = '…';
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch (_) {}
+    const u = new URL(location.href);
+    u.searchParams.set('r', Date.now());      // bust the cached HTML
+    location.replace(u.toString());
+  });
 
   // Pokédex
-  document.getElementById('pokedex-back').addEventListener('click', closePokedex);
+  document.getElementById('pokedex-back').addEventListener('click', dexBack);
   document.getElementById('detail-back').addEventListener('click', closeDetail);
+  document.getElementById('detail-buddy').addEventListener('click', toggleBuddy);
+  document.getElementById('dexf-open').addEventListener('click', () => showDexView('filter'));
+
+  // World map + guide
+  document.getElementById('map-back').addEventListener('click', closeMap);
+  document.getElementById('map-atlas-toggle').addEventListener('click', () => {
+    atlasMode = !atlasMode;
+    document.getElementById('map-atlas-toggle').textContent = atlasMode ? '⊞ Grid' : '🗺️ Shapes';
+    renderMap();
+  });
+  document.getElementById('map-atlas').addEventListener('click', e => {
+    const g = e.target.closest && e.target.closest('.atlas-zone');
+    if (g && g.getAttribute('data-travel') === '1') fastTravel(+g.getAttribute('data-zone'));
+  });
+  document.getElementById('help-back').addEventListener('click', closeHelp);
+
+  // Settings
+  document.getElementById('title-settings').addEventListener('click', openSettings);
+  document.getElementById('settings-back').addEventListener('click', closeSettings);
+  document.getElementById('set-sound').addEventListener('click', () => { wakeAudio(); toggleMute(); updateSoundRow(); });
+  document.getElementById('set-guide').addEventListener('click', () => openHelp('settings'));
+
+  // Badge case (opened from the Pokédex hub)
+  document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
+
+  // Field notes (opened from the Pokédex hub)
+  document.getElementById('notes-back').addEventListener('click', closeNotes);
+
+  // Mewtwo battle
+  // (battle-throw's handler is assigned per-battle in showBattleWin)
+
+  // NPC dialog
+  document.getElementById('npc-advance').addEventListener('click', () => { wakeAudio(); advanceNPC(); });
+  document.getElementById('gift-continue').addEventListener('click', () => { wakeAudio(); continueGift(); });
 
   // Encounter action buttons
   document.querySelectorAll('.action-btn').forEach(btn => {
@@ -234,83 +1715,2956 @@ function bindEvents() {
 
   // Result continue
   document.getElementById('result-continue').addEventListener('click', returnToWorld);
+  document.getElementById('champion-continue').addEventListener('click', returnToWorld);
 
   // Complete restart
   document.getElementById('complete-restart').addEventListener('click', startNewGame);
 
-  // D-pad touch
-  document.querySelectorAll('.dpad-btn').forEach(btn => {
-    const dir = btn.dataset.dir;
-    const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[keyMap[dir]] = true; wakeAudio(); });
-    btn.addEventListener('pointerup',   e => { e.preventDefault(); keys[keyMap[dir]] = false; });
-    btn.addEventListener('pointerleave',e => { keys[keyMap[dir]] = false; });
+  // Throw ball
+  document.getElementById('enc-throw-btn').addEventListener('click', () => {
+    wakeAudio();
+    throwBall();
   });
+
+  // Shop
+  document.getElementById('shop-close').addEventListener('click', closeShop);
+  document.querySelectorAll('.shop-buy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wakeAudio();
+      if (btn.dataset.master) buyMaster(parseInt(btn.dataset.cost));
+      else buyBalls(parseInt(btn.dataset.qty), parseInt(btn.dataset.cost));
+    });
+  });
+
+  // D-pad — use both touch and pointer events for maximum mobile compatibility
+  const keyMap = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+  document.querySelectorAll('.dpad-btn').forEach(btn => {
+    const k = keyMap[btn.dataset.dir];
+    const press   = e => { e.preventDefault(); keys[k] = true; kamiInput(btn.dataset.dir); uiPress(btn.dataset.dir); wakeAudio(); };
+    const release = e => { e.preventDefault(); keys[k] = false; };
+    btn.addEventListener('touchstart',  press,   { passive: false });
+    btn.addEventListener('touchend',    release, { passive: false });
+    btn.addEventListener('touchcancel', release, { passive: false });
+    btn.addEventListener('pointerdown', press);
+    btn.addEventListener('pointerup',   release);
+    btn.addEventListener('pointercancel', release);
+  });
+
+  ['btn-b', 'btn-a'].forEach(id => {
+    const name = id.split('-')[1];
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); kamiInput(name); uiPress(name); wakeAudio(); });
+    el.addEventListener('touchstart',  e => { e.preventDefault(); kamiInput(name); uiPress(name); wakeAudio(); }, { passive: false });
+  });
+
+  const startEl = document.getElementById('ss-start');
+  startEl.addEventListener('pointerdown', e => { kamiInput('start'); });
+  startEl.addEventListener('touchstart',  e => { kamiInput('start'); }, { passive: false });
+
+  const selectEl = document.getElementById('ss-select');
+  selectEl.addEventListener('pointerdown', e => { pressSelect(); });
+  selectEl.addEventListener('touchstart',  e => { pressSelect(); }, { passive: false });
+}
+
+// Select button: feeds the secret-code buffer. (Buddy switching lives in the
+// Pokédex now — no accidental quick-swap shortcut.)
+function pressSelect() {
+  kamiInput('select');                    // has its own touch/pointer de-dupe
+}
+
+// ═══════════════════════════════════════════════════
+// SECRET CODES  (shared input buffer, checked as suffixes)
+//   KAMI  : ↑ ↑ ↓ ↓ ← → ← → B A Start  → catch everything
+//   DEBUG : A B B A Select Start        → toggle the debug menu
+// ═══════════════════════════════════════════════════
+const KAMI_CODE  = ['up','up','down','down','left','right','left','right','b','a','start'];
+const DEBUG_CODE = ['a','b','b','a','select','start'];
+const CODE_MAX   = Math.max(KAMI_CODE.length, DEBUG_CODE.length);
+let _kamiLastKey = null, _kamiLastTime = 0;
+
+function kamiInput(key) {
+  const now = Date.now();
+  if (key === _kamiLastKey && now - _kamiLastTime < 20) return; // dedupe touch+pointer double-fire (~1ms apart)
+  _kamiLastKey = key;
+  _kamiLastTime = now;
+  kamiBuffer.push(key);
+  if (kamiBuffer.length > CODE_MAX) kamiBuffer.shift();
+  const endsWith = code => kamiBuffer.slice(-code.length).join(',') === code.join(',');
+  if (endsWith(KAMI_CODE))  { kamiBuffer = []; activateKami(); }
+  else if (endsWith(DEBUG_CODE)) { kamiBuffer = []; toggleDebug(); }
+}
+
+function activateKami() {
+  kamiBuffer = [];
+  POKEMON_DATA.forEach(p => caughtIds.add(p.id));
+  Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k));
+  Object.keys(SEAM_GATES).forEach(k => clearedSeams.add(k));
+  balls += 99;
+  saveGame();
+  updateHud();
+  showMessage('🌟 KAMI MODE ACTIVATED! All Lukeymon caught!');
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER POSITION  (interpolated between tiles)
+// ═══════════════════════════════════════════════════
+function getRenderPos(ts, bobless) {
+  const destX = playerX * TILE_SIZE;
+  const destY = playerY * TILE_SIZE;
+
+  // Wall-bump: nudge toward obstacle and spring back. Purely cosmetic, so the
+  // camera (bobless) ignores it and stays locked to the grid.
+  if (bumpVec) {
+    const t = Math.min((ts - bumpAnimTs) / BUMP_ANIM_MS, 1);
+    if (t < 1) {
+      if (bobless) return { x: destX, y: destY };
+      const dist = Math.sin(t * Math.PI) * 5; // 5 px max nudge
+      return { x: destX + bumpVec.dx * dist, y: destY + bumpVec.dy * dist };
+    }
+    bumpVec = null;
+  }
+
+  // Tile-to-tile slide. Ice slides glide at constant speed; normal steps ease out.
+  const mt = Math.min((ts - moveAnimTs) / moveAnimDur, 1);
+  if (mt < 1) {
+    const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
+    // The running "hop" is cosmetic — exclude it from the camera anchor.
+    const hopY = (bobless || moveLinear) ? 0 : Math.sin(mt * Math.PI) * -3;
+    return {
+      x: fromPx.x + (destX - fromPx.x) * ease,
+      y: fromPx.y + (destY - fromPx.y) * ease + hopY,
+    };
+  }
+
+  // Idle gentle bob — sprite only, never the camera.
+  const bob = bobless ? 0 : Math.sin(ts * 0.0025) * 2.5;
+  return { x: destX, y: destY + bob };
+}
+
+// ── Buddy follower ───────────────────────────────────
+// Each step the buddy slides onto the tile the player just vacated.
+function petFollow(tx, ty, ts, dur) {
+  if (activePet == null) return;
+  const cur = getPetRenderPos(ts);
+  petFromPx.x = cur.x;
+  petFromPx.y = cur.y;
+  if (tx > petX) petFacing = 1;        // moving right
+  else if (tx < petX) petFacing = -1;  // moving left → flip; vertical keeps last facing
+  petX = tx; petY = ty;
+  petMoveAnimTs  = ts;
+  petMoveAnimDur = (dur != null) ? dur : moveAnimDur;   // buddy can lag behind on long slides
+}
+
+// A small vertical nudge for the buddy based on the way the PLAYER is facing,
+// so the two idle-bobs never make the buddy pop in front of us:
+//   • left / right — buddy sits a touch higher → always drawn behind the player
+//   • up           — buddy sits a touch lower  → we see more of the player's back
+//   • down         — buddy lifts up a touch    → we see more of the buddy
+function petDirOffsetY() {
+  return playerDir === 'up' ? 3 : -3;
+}
+
+function getPetRenderPos(ts) {
+  const destX = petX * TILE_SIZE;
+  const destY = petY * TILE_SIZE;
+  const mt = Math.min((ts - petMoveAnimTs) / petMoveAnimDur, 1);
+  if (mt < 1) {
+    const ease = moveLinear ? mt : 1 - Math.pow(1 - mt, 3);
+    return { x: petFromPx.x + (destX - petFromPx.x) * ease,
+             y: petFromPx.y + (destY - petFromPx.y) * ease };
+  }
+  const bob = Math.sin(ts * 0.003 + 1) * 2;
+  return { x: destX, y: destY + bob };
 }
 
 // ═══════════════════════════════════════════════════
 // GAME LOOP
 // ═══════════════════════════════════════════════════
+// ── Gamepad / Steam Deck support ─────────────────────
+// Polled every frame and fed into the SAME input layer as keyboard & the
+// on-screen buttons: left stick / d-pad drive keys[] for movement; face
+// buttons fire kamiInput/uiPress (A/B/Start/Select), exactly like the Game Boy
+// buttons. Standard mapping: 0=A 1=B 3=Y 8=Select 9=Start 12-15=d-pad.
+let _gpHeld = {};
+const _GP_KEYMAP = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+function pollGamepad() {
+  if (!navigator.getGamepads) return;
+  let gp = null;
+  for (const p of navigator.getGamepads()) if (p && p.connected) { gp = p; break; }
+  if (!gp) return;
+  const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = 0.5;
+  const held = { up: b(12) || ay < -dz, down: b(13) || ay > dz, left: b(14) || ax < -dz, right: b(15) || ax > dz };
+  const face = { a: b(0), b: b(1), y: b(3), select: b(8), start: b(9), lb: b(4), rb: b(5), lt: b(6), rt: b(7) };
+
+  // Start always opens/closes the Controls overlay (and still feeds secret codes).
+  if (face.start && !_gpHeld.start) {
+    kamiInput('start'); toggleControls();
+    Object.assign(_gpHeld, held, face);
+    return;                                            // consume this press
+  }
+  // While the overlay is up it captures everything — any A/B press closes it,
+  // and the player never moves underneath.
+  if (controlsOpen) {
+    if ((face.a && !_gpHeld.a) || (face.b && !_gpHeld.b)) closeControls();
+    ['up', 'down', 'left', 'right'].forEach(d => { keys[_GP_KEYMAP[d]] = false; });
+    Object.assign(_gpHeld, held, face);
+    return;
+  }
+
+  for (const d in held) {
+    if (held[d]) keys[_GP_KEYMAP[d]] = true;
+    else if (_gpHeld[d]) keys[_GP_KEYMAP[d]] = false;   // only clear what the pad set (don't fight the keyboard)
+    if (held[d] && !_gpHeld[d]) { uiPress(d); kamiInput(d); }
+    _gpHeld[d] = held[d];
+  }
+  if (face.a && !_gpHeld.a) { uiPress('a'); kamiInput('a'); }
+  if (face.b && !_gpHeld.b) { uiPress('b'); kamiInput('b'); }
+  if (face.select && !_gpHeld.select) kamiInput('select');   // secret codes only
+  if (face.y && !_gpHeld.y) {
+    if (gameState === 'world')        openMap();
+    else if (gameState === 'map')     closeMap();
+    else if (gameState === 'pokedex' && !dexDetailOpen()) showDexView(dexView === 'quest' ? 'grid' : 'quest');
+  }
+  // Shoulder buttons: world = cycle buddy; Pokédex = filters.
+  if (face.lb && !_gpHeld.lb) gpShoulder('lb');
+  if (face.rb && !_gpHeld.rb) gpShoulder('rb');
+  if (face.lt && !_gpHeld.lt) gpShoulder('lt');
+  if (face.rt && !_gpHeld.rt) gpShoulder('rt');
+  Object.assign(_gpHeld, face);
+}
+// Is the Pokédex detail card open (gameState is still 'pokedex' while it is)?
+function dexDetailOpen() {
+  const d = document.getElementById('pokedex-detail');
+  return d && !d.classList.contains('hidden');
+}
+// Shoulder-button actions, by screen.
+function gpShoulder(btn) {
+  if (gameState === 'world') {
+    if (btn === 'lb') cycleBuddy(-1);
+    else if (btn === 'rb') cycleBuddy(1);
+  } else if (gameState === 'pokedex' && !dexDetailOpen()) {
+    if (btn === 'lb' || btn === 'rb' || btn === 'lt' || btn === 'rt')
+      cycleDexFilter(btn === 'rb' || btn === 'rt' ? 1 : -1);
+  }
+}
+// Cycle the active buddy through your caught Lukeymon (and "no buddy").
+function cycleBuddy(dir) {
+  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
+  if (!team.length) { showMessage('Catch a Lukeymon first to pick a buddy!'); return; }
+  const ids = [null, ...team.map(p => p.id)];
+  let i = ids.indexOf(activePet); if (i < 0) i = 0;
+  setBuddy(ids[(i + dir + ids.length) % ids.length]);
+  const bp = buddyPoke();
+  showMessage(bp ? `🤝 Buddy: ${bp.name}` : '🚶 Walking solo');
+  beep(523, 0.06, 0.08);
+}
+// All filters, in shoulder-button cycle order.
+function dexFilterList() {
+  return [{ mode: 'all' }, { mode: 'caught' }, { mode: 'missing' }, { mode: 'legendary' },
+    { mode: 'swift' }, ...DEX_TYPE_ORDER.map(t => ({ mode: 'type', type: t }))];
+}
+// Cycle the Pokédex filter with the shoulder buttons.
+function cycleDexFilter(dir) {
+  const list = dexFilterList();
+  let i = list.findIndex(f => f.mode === dexFilter.mode && (f.type || null) === (dexFilter.type || null));
+  if (i < 0) i = 0;
+  setDexFilter(list[(i + dir + list.length) % list.length]);
+  if (dexView !== 'grid') showDexView('grid');
+  beep(360, 0.03, 0.05);
+}
+function setDexFilter(f) {
+  dexFilter = { mode: f.mode, type: f.type || null };
+  refreshDexFilters();
+  if (dexView === 'grid') { renderPokedexGrid(); setupNav('pokedex'); }
+}
+window.addEventListener('gamepadconnected', () => {
+  showMessage('🎮 Controller connected!');
+  beep(523, 0.08, 0.1); setTimeout(() => beep(784, 0.1, 0.12), 110);
+});
+
 function loop(ts) {
   requestAnimationFrame(loop);
+  pollGamepad();
 
   if (gameState === 'world') {
-    if (ts - lastMoveTs >= MOVE_INTERVAL) {
-      let moved = false;
-      if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1); moved = true; }
-      else if (keys['ArrowDown']  || keys['s'] || keys['S']) { move( 0, 1); moved = true; }
-      else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { move(-1, 0); moved = true; }
-      else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0); moved = true; }
-      if (moved) lastMoveTs = ts;
+    if (pendingPerfect) { pendingPerfect = false; showPerfect(); return; }   // 100% finale
+    // Second half of an ice wall bounce, in two beats:
+    //   1) the player reaches the wall and slides straight back to the start,
+    //   2) the buddy — which slid to the same wall point a touch later — turns
+    //      and follows us back, again landing slightly after.
+    if (pendingReturn) {
+      const r = pendingReturn;
+      if (!r.playerTurned && ts >= r.due) {
+        r.playerTurned = true;
+        moveLinear = true;
+        moveAnimDur = r.dur;
+        fromPx.x = r.fromTX * TILE_SIZE; fromPx.y = r.fromTY * TILE_SIZE;
+        moveAnimTs = ts;
+        playerX = r.toX; playerY = r.toY; playerStep ^= 1;
+      }
+      if (ts >= r.petDue) {
+        pendingReturn = null;
+        // We're now facing the opposite way, so the buddy trails on the far side.
+        petFollow(r.toX + r.dx, r.toY + r.dy, ts, r.dur + r.lag);
+      }
     }
-    drawWorld();
+    const stepInterval = buddyIsSwift() ? SWIFT_MOVE_INTERVAL : MOVE_INTERVAL;
+    if (ts - lastMoveTs >= stepInterval) {
+      let moved = false;
+      if      (keys['ArrowUp']    || keys['w'] || keys['W']) { move( 0,-1, ts); moved = true; }
+      else if (keys['ArrowDown']  || keys['s'] || keys['S']) { move( 0, 1, ts); moved = true; }
+      else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { move(-1, 0, ts); moved = true; }
+      else if (keys['ArrowRight'] || keys['d'] || keys['D']) { move( 1, 0, ts); moved = true; }
+      if (moved) { lastMoveTs = ts; if (buddyIsSwift()) learnTip('swift'); }
+    }
+    tickGhosts(ts);
+    tickNpcBedtime(ts);
+    tickNpcs(ts);
+    tickTrainer(ts);
+    if (zoneSlide) drawZoneSlide(ts);
+    else           drawWorld(ts);
   }
+}
+
+// ═══════════════════════════════════════════════════
+// BARRIER HELPERS
+// ═══════════════════════════════════════════════════
+// A barrier is only open once the player has physically cleared it by walking
+// into it with the right type — not automatically when the type is caught.
+function isBarrierUnlocked(key) {
+  return !key || unlockedBarriers.has(key);
+}
+
+// Whether the active buddy can clear a given barrier. Most barriers want a buddy
+// TYPE; a special few (the psychic seal) demand one exact Pokémon as your buddy.
+function buddyClearsBarrier(key) {
+  const b = BARRIERS[key];
+  if (!b) return true;
+  if (b.needsBuddyId != null) return activePet === b.needsBuddyId;
+  return buddyHasType(b.needsType);
+}
+
+// The Pokémon currently set as the active buddy (or null).
+function buddyPoke() {
+  return activePet == null ? null : POKEMON_DATA.find(p => p.id === activePet) || null;
+}
+// Whether the active BUDDY is of the given type. Barriers/surfing need the right
+// type out front, not merely caught somewhere in the box.
+function buddyHasType(type) {
+  const p = buddyPoke();
+  return !!p && p.type === type;
+}
+
+// A Water-type buddy (Lapras, Squirtle, …) lets the player surf across water.
+function canSurf() { return buddyHasType('Water'); }
+
+// A few buddies famous for speed (Rapidash, Dodrio) let you dash — faster steps.
+function buddyIsSwift() { return activePet != null && SWIFT_BUDDIES.has(activePet); }
+
+// Does the current buddy glow brightly enough to light a cave? Fire types carry
+// a flame; a few others (marked light:true) also shine.
+function buddyLightsCave() {
+  if (activePet == null) return false;
+  const p = POKEMON_DATA.find(x => x.id === activePet);
+  return !!p && (p.type === 'Fire' || p.light === true);
+}
+
+// The field abilities a given Lukéymon grants as a buddy — what makes it "useful".
+// kind 'star' = rare/standout (puzzle keys & speedsters); 'core' = type powers.
+const TYPE_BARRIER_LBL = {
+  Fire: 'Burns logs & melts ice', Water: 'Washes rocks & cools lava',
+  Electric: 'Shorts out fences', Grass: 'Cuts through vines', Ground: 'Clears sand walls',
+};
+const KEY_BUDDY_LBL = {
+  150: 'Breaks the psychic barrier', 39: 'Sings giant Gengar to sleep',
+  35: 'Opens the Lunar Pass', 143: 'Opens the Great Tunnel',
+};
+function buddyAbilities(p) {
+  const out = [];
+  if (SWIFT_BUDDIES.has(p.id)) out.push({ ic: '💨', lbl: 'Dash — travel faster', kind: 'star' });
+  if (KEY_BUDDY_LBL[p.id]) out.push({ ic: '🧩', lbl: KEY_BUDDY_LBL[p.id], kind: 'star' });
+  if (p.type === 'Water') out.push({ ic: '🌊', lbl: 'Surf across deep water', kind: 'core' });
+  if (p.type === 'Fire' || p.light) out.push({ ic: '🔦', lbl: 'Lights up dark caves', kind: 'core' });
+  if (TYPE_BARRIER_LBL[p.type]) out.push({ ic: '🚧', lbl: TYPE_BARRIER_LBL[p.type], kind: 'core' });
+  return out;
+}
+
+// A point-portal (cave mouth) sitting on (x, y) of the given zone, if any.
+function portalAt(zone, x, y) {
+  return PORTALS.find(p => p.from === zone && p.fx === x && p.fy === y) || null;
+}
+
+// Returns barrier key if (nx, ny) is a locked border exit tile for the current zone.
+function getExitBarrierAt(nx, ny) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    if (!exit.barrier) continue;
+    if (isBarrierUnlocked(exit.barrier)) continue;
+    let match = false;
+    const { cols: ec, rows: er } = ZONE_INFO[currentZone];
+    if (exit.dir === 'south' && ny === er - 1 && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'north' && ny === 0      && exit.pos.includes(nx)) match = true;
+    if (exit.dir === 'west'  && nx === 0      && exit.pos.includes(ny)) match = true;
+    if (exit.dir === 'east'  && nx === ec - 1 && exit.pos.includes(ny)) match = true;
+    if (match) return exit.barrier;
+  }
+  return null;
+}
+
+// Find exit for player at the border moving off-map
+function findActiveExit(x, y, dx, dy) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    const { cols: fc, rows: fr } = ZONE_INFO[currentZone];
+    if (exit.dir === 'south' && dy > 0 && y === fr - 1 && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'north' && dy < 0 && y === 0      && exit.pos.includes(x)) return exit;
+    if (exit.dir === 'west'  && dx < 0 && x === 0      && exit.pos.includes(y)) return exit;
+    if (exit.dir === 'east'  && dx > 0 && x === fc - 1 && exit.pos.includes(y)) return exit;
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════
 // MOVEMENT
 // ═══════════════════════════════════════════════════
-function move(dx, dy) {
-  const nx = playerX + dx;
-  const ny = playerY + dy;
-  if (nx < 0 || nx >= MAP_COLS || ny < 0 || ny >= MAP_ROWS) return;
+function move(dx, dy, ts) {
+  // Locked out while a wall bounce (forward + return) is playing.
+  if (ts < slideLockUntil) return;
 
-  const tile = MAP[ny][nx];
-  if (tile === T.TREE || tile === T.WATER) return;
-
+  // 1. Set direction
   playerDir = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
+
+  let nx = playerX + dx;
+  let ny = playerY + dy;
+
+  // 2. Off-map: check for zone exit
+  const { cols: mc, rows: mr } = ZONE_INFO[currentZone];
+  if (nx < 0 || nx >= mc || ny < 0 || ny >= mr) {
+    const exit = findActiveExit(playerX, playerY, dx, dy);
+    if (exit) {
+      // Progression gate on this seam (blocks both directions until unlocked once).
+      const sgi = seamGateInfo(exit.from, exit.to);
+      if (sgi && !seamGateOpen(sgi.key, sgi.g)) {
+        bumpVec = { dx, dy }; bumpAnimTs = ts;
+        if (buddyMeetsSeam(sgi.g)) {                 // requirement met → unlock for good
+          clearedSeams.add(sgi.key); saveGame();
+          seamFX[sgi.key] = { start: ts, tint: seamTint(sgi.g) };
+          setTimeout(() => { delete seamFX[sgi.key]; }, SEAM_FX_MS);
+          beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+          showMessage(seamClearMsg(sgi.g));
+        } else {
+          beep(160, 0.07, 0.1, 'square');
+          showMessage(seamGateHint(sgi.g));
+        }
+        return;
+      }
+      if (isBarrierUnlocked(exit.barrier)) {
+        doTransition(exit, ts);
+      } else {
+        // Locked barrier — bump and hint
+        bumpVec    = { dx, dy };
+        bumpAnimTs = ts;
+        beep(160, 0.07, 0.1, 'square');
+        showMessage(BARRIERS[exit.barrier].hint);
+        learnTip('barrier_' + exit.barrier);
+      }
+    } else {
+      // Plain wall
+      bumpVec    = { dx, dy };
+      bumpAnimTs = ts;
+      beep(160, 0.07, 0.1, 'square');
+    }
+    return;
+  }
+
+  // 3. Check barrier tile at destination (still in-map but on a border exit
+  //    tile with a not-yet-cleared barrier). Walking into it with the right
+  //    type clears it on the spot; otherwise it blocks with a hint.
+  const barrierKey = getExitBarrierAt(nx, ny);
+  if (barrierKey) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    if (barrierFX[barrierKey]) return;                 // already breaking — hold tight
+    if (buddyClearsBarrier(barrierKey)) {
+      if (barrierKey === 'lullaby') {                  // the Gigantamax Gengar has its own clear — fades to sleep
+        unlockedBarriers.add(barrierKey);
+        lullabyClearFX = { start: ts };
+        setTimeout(() => { lullabyClearFX = null; }, LULLABY_FX_MS);
+        saveGame();
+      } else {
+        // Kick off the break effect; the barrier stays solid until it finishes, then opens.
+        barrierFX[barrierKey] = { start: ts, sign: BARRIERS[barrierKey].sign, needsType: BARRIERS[barrierKey].needsType };
+        setTimeout(() => { unlockedBarriers.add(barrierKey); delete barrierFX[barrierKey]; saveGame(); }, BARRIER_FX_MS);
+        setTimeout(() => beep(392, 0.16, 0.2, 'square'), BARRIER_FX_MS - 200);   // crumble thud
+      }
+      beep(523, 0.1, 0.1);
+      setTimeout(() => beep(784, 0.14, 0.18), 110);
+      showMessage(BARRIERS[barrierKey].cleared);
+      learnTip('barrier_' + barrierKey);
+    } else {
+      beep(160, 0.07, 0.1, 'square');
+      showMessage(BARRIERS[barrierKey].hint);
+      learnTip('barrier_' + barrierKey);
+    }
+    return;
+  }
+
+  // 3·G. The Gigantamax Gengar's own body is the blocker (no box). Awake, it
+  //      guards the seam — sing it down with Jigglypuff; asleep, it just snoozes.
+  const gengar = gengarBlockAt(nx, ny);
+  if (gengar === 'awake') {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    if (buddyClearsBarrier('lullaby')) {
+      unlockedBarriers.add('lullaby');
+      lullabyClearFX = { start: ts };
+      setTimeout(() => { lullabyClearFX = null; }, LULLABY_FX_MS);
+      saveGame();
+      beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+      showMessage(BARRIERS.lullaby.cleared); learnTip('barrier_lullaby');
+    } else {
+      beep(160, 0.07, 0.1, 'square');
+      showMessage(BARRIERS.lullaby.hint); learnTip('barrier_lullaby');
+    }
+    return;
+  }
+  if (gengar === 'sleep') {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    beep(294, 0.09, 0.1);
+    showMessage("💤 ...he's not so scary now. What a big, sleepy guy.");
+    return;
+  }
+
+  // 3a. A legendary roamer (Mew / Mewtwo) standing on the destination tile.
+  const roamer = roamerAt(currentZone, nx, ny);
+  if (roamer) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    engageRoamer(roamer);
+    return;
+  }
+
+  // 3b. A legendary lair: fight Team Rocket first, then (or directly, on a
+  //     rematch) the legendary bird itself.
+  const lair = lairAt(currentZone, nx, ny);
+  if (lair) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    if (rocketDefeated.has(lair.bird)) startBirdBattle(lair.bird);
+    else startRocketBattle(lair);
+    return;
+  }
+
+  // 3c. Talk to an NPC standing on the destination tile (they block it).
+  const npc = npcAt(currentZone, nx, ny);
+  if (npc) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    if (buddyIsJigglypuff()) talkNPC(npc);  // 🎵 Jigglypuff hums everyone to sleep
+    else if (npc.gymLeader && !collected.has('badge_gym')) { metNPCs.add(npc.metKey || npc.name); startGymBattle(npc); }  // challenge → battle
+    else if (npc.dojo) { metNPCs.add(npc.metKey || npc.name); startDojoBattle(); }   // repeatable practice battles
+    else if (npc.shop) { metNPCs.add(npc.metKey || npc.name); openShop(); }  // the Poké Mart clerk runs the shop
+    else talkNPC(npc);
+    return;
+  }
+
+  // 3c1. The birthday cake in your home — bump it to start the (always-win) cake battle.
+  if (gotBirthdayCake && currentZone === HOME_CAKE.zone && nx === HOME_CAKE.x && ny === HOME_CAKE.y) {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    startCakeBattle();
+    return;
+  }
+
+  // 3c1b. Can't leave home until you've said good morning to Mom.
+  if (currentZone === 9 && !metNPCs.has('Mom') && portalAt(currentZone, nx, ny)) {
+    bumpVec = { dx, dy }; bumpAnimTs = ts;
+    showMessage('💗 Say good morning to Mom before you head out!');
+    beep(440, 0.06, 0.08);
+    return;
+  }
+
+  // 3c2. A wandering trainer on the destination tile → a quick battle.
+  if (trainerAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    startTrainerBattle();
+    return;
+  }
+
+  // 3c3. A drifting night ghost → a quick "BOO!" dialogue, then it vanishes
+  //      and gives a random gift with fanfare.
+  if (ghostAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    engageGhost();
+    return;
+  }
+
+  // 3d. Another player (LAN multiplayer) on the destination tile → friendly duel.
+  if (window.MP && MP.maybeBump(nx, ny, ts)) {
+    bumpVec = { dx, dy };
+    bumpAnimTs = ts;
+    return;
+  }
+
+  // 4. Check tile impassable. Water is normally impassable, but once you've
+  //    caught Lapras you can surf straight across it.
+  const tile = MAPS[currentZone][ny][nx];
+  const surfing = tile === T.WATER && canSurf();
+
+  // Buildings & cave mouths are solid except from directly below — you must walk
+  // UP into the door (dy === -1). Approaching from a side or the top bounces off.
+  // (Only on the overworld; interior/cave exit doors are unrestricted.)
+  const isEntrance = tile === T.HOUSE || tile === T.SHOP || tile === T.HOSPITAL ||
+                     tile === T.GYM || tile === T.CAVE_ENTRANCE;
+  if (isEntrance && !ZONE_INFO[currentZone].interior && !ZONE_INFO[currentZone].cave) {
+    // Enterable buildings & cave mouths have a portal — pass only when walking UP
+    // into the door (dy === -1). Decorative buildings (no portal) are solid all round.
+    const enterable = !!portalAt(currentZone, nx, ny);
+    if (!enterable || dy !== -1) {
+      bumpVec    = { dx, dy };
+      bumpAnimTs = ts;
+      beep(160, 0.07, 0.1, 'square');
+      return;
+    }
+  }
+
+  // Solid décor (counters, beds…) blocks movement just like an obstacle tile.
+  if (decorSolidAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
+  // A building's reserved 3×2 footprint (tiles beside and above the door) is solid.
+  if (buildingFootprintSolid(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
+  // Outdoor light props (streetlight pole, fire pit) block movement too.
+  if (propSolidAt(currentZone, nx, ny)) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
+  if (isObstacleTile(tile) && !surfing) {
+    bumpVec    = { dx, dy };
+    bumpAnimTs = ts;
+    beep(160, 0.07, 0.1, 'square');
+    return;
+  }
+
+  // 4b. Ice is slippery! With no Ice-type buddy you slide straight across it
+  //     until you reach solid ground (or a wall). An Ice buddy keeps your footing.
+  if (tile === T.ICE && !buddyHasType('Ice')) {
+    while (MAPS[currentZone][ny][nx] === T.ICE) {
+      const ux = nx + dx, uy = ny + dy;
+      if (ux < 0 || ux >= mc || uy < 0 || uy >= mr) break;
+      const ut = MAPS[currentZone][uy][ux];
+      if (isObstacleTile(ut) || ut === T.HOUSE || ut === T.SHOP || ut === T.HOSPITAL || ut === T.GYM || ut === T.CAVE_ENTRANCE) break;
+      if (buildingFootprintSolid(currentZone, ux, uy)) break;
+      if (decorSolidAt(currentZone, ux, uy)) break;
+      if (npcAt(currentZone, ux, uy) || lairAt(currentZone, ux, uy) || roamerAt(currentZone, ux, uy)) break;
+      nx = ux; ny = uy;
+    }
+    beep(900, 0.05, 0.2, 'sine');                       // slide whoosh
+    if (!slipNoted) { slipNoted = true; showMessage('🧊 So slippery! An ICE-type buddy keeps your footing.'); learnTip('ice'); }
+    // Stopped while still on ice → you hit a wall. Treat it as TWO slides: glide to
+    // the wall now (a normal slide), then slide all the way back to the start tile.
+    if (MAPS[currentZone][ny][nx] === T.ICE) {
+      const startX = playerX, startY = playerY;
+      const dur = Math.max(1, Math.abs(nx - startX) + Math.abs(ny - startY)) * MOVE_ANIM_MS;
+      moveLinear = true;
+      moveAnimDur = dur;
+      const cur0 = getRenderPos(ts);
+      fromPx.x = cur0.x; fromPx.y = cur0.y;
+      moveAnimTs = ts;
+      playerX = nx; playerY = ny; playerStep ^= 1;
+      const lag = Math.round(MOVE_ANIM_MS * 0.8);        // buddy lands just after us
+      petFollow(nx, ny, ts, dur + lag);                  // buddy slides to the SAME wall point
+      setTimeout(() => beep(150, 0.08, 0.16, 'square'), dur);   // bonk at the wall
+      pendingReturn = { fromTX: nx, fromTY: ny, toX: startX, toY: startY,
+                        dx, dy, dur, lag, due: ts + dur, petDue: ts + dur + lag,
+                        playerTurned: false };
+      slideLockUntil = ts + 2 * dur + 2 * lag;
+      return;
+    }
+  }
+
+  // 5. Normal move
+  moveLinear  = (tile === T.ICE && !buddyHasType('Ice')); // uncontrolled ice slides glide at constant speed
+  const stepMs = (!moveLinear && buddyIsSwift()) ? SWIFT_MOVE_ANIM_MS : MOVE_ANIM_MS;
+  moveAnimDur = Math.max(1, Math.abs(nx - playerX) + Math.abs(ny - playerY)) * stepMs;
+  const cur = getRenderPos(ts);
+  fromPx.x   = cur.x;
+  fromPx.y   = cur.y;
+  moveAnimTs = ts;
+
+  const oldX = playerX, oldY = playerY;
   playerX   = nx;
   playerY   = ny;
   playerStep ^= 1;
+  petFollow(nx - dx, ny - dy, ts);   // buddy trails just behind (handles ice slides too)
+  if (activePet != null) tickBond(activePet);   // a step closer to a buddy evolution
 
   beep(220, 0.04, 0.04, 'square');
 
-  if (tile === T.GRASS && Math.random() < ENCOUNTER_RATE) {
-    const uncaught = POKEMON_DATA.filter(p => !caughtIds.has(p.id));
-    if (uncaught.length === 0) {
-      showMessage('You caught every Lukeymon! 🏆');
-      return;
-    }
-    const poke = uncaught[Math.floor(Math.random() * uncaught.length)];
-    setTimeout(() => beginEncounter(poke), 80);
+  // First time surfing this session — let the player know what's happening.
+  if (surfing && !surfNoted) {
+    surfNoted = true;
+    const b = buddyPoke();
+    showMessage(`🌊 ${b ? b.name : 'Your buddy'} carries you across the water!`);
+    learnTip('water');
   }
+
+  // Step onto a cave mouth (or other point-portal) → warp into the linked zone.
+  const portal = portalAt(currentZone, playerX, playerY);
+  if (portal) {
+    // Cave-mouth seam-gates: block until unlocked once, then warp on through.
+    const sgi = seamGateInfo(portal.from, portal.to);
+    if (sgi && !seamGateOpen(sgi.key, sgi.g)) {
+      if (buddyMeetsSeam(sgi.g)) {
+        clearedSeams.add(sgi.key); saveGame();
+        beep(523, 0.1, 0.1); setTimeout(() => beep(784, 0.14, 0.18), 110);
+        showMessage(seamClearMsg(sgi.g));
+      } else {
+        beep(160, 0.07, 0.1, 'square');
+        showMessage(seamGateHint(sgi.g));
+        return;                                   // sealed — no warp
+      }
+    }
+    beep(300, 0.08, 0.1);
+    setTimeout(() => warpTo(portal.to, portal.tx, portal.ty, 'down'), 110);
+    return;
+  }
+
+  // (The shop tile now warps into the Poké Mart interior via the portal above.)
+
+  // Check if player stepped onto a wild Pokémon's tile
+  if (wildPoke && wildPoke.zone === currentZone &&
+      wildPoke.x === playerX && wildPoke.y === playerY) {
+    const poke = wildPoke.poke;
+    clearWild();
+    setTimeout(() => beginEncounter(poke), 80);
+    return;
+  }
+
+  // Found a fixed collectible (badge) sitting on this tile? Big celebration.
+  const item = collectibleAt(currentZone, playerX, playerY);
+  if (item && !collected.has(item.id)) {
+    collected.add(item.id);
+    if (!wonGame && landBadgesDone()) pendingChampion = true;  // 4 land badges → Champion
+    saveGame();
+    updateHud();
+    celebrateBadge(item);
+    return;
+  }
+
+  // Picked up a hidden evolution Stone?
+  const stoneFind = stoneFindAt(currentZone, playerX, playerY);
+  if (stoneFind && !foundStones.has(stoneFind.id)) {
+    foundStones.add(stoneFind.id);
+    stones[stoneFind.stone] = (stones[stoneFind.stone] || 0) + 1;
+    saveGame();
+    updateHud();
+    celebrateStone(stoneFind);
+    return;
+  }
+
+  // Random grass pickup — chance to find a ball (more common) or a coin
+  if (MAPS[currentZone][ny][nx] === T.GRASS && Math.random() < GRASS_PICKUP_CHANCE) {
+    if (Math.random() < 0.6) {
+      balls++;
+      showMessage(`<span class="pb"></span> Found a PokéBall! (${balls} total)`);
+      beep(660, 0.1, 0.08);
+      setTimeout(() => beep(880, 0.1, 0.1), 90);
+    } else {
+      coins++;
+      showMessage(`💰 Found a coin! (${coins} total)`);
+      beep(880, 0.08, 0.08);
+      setTimeout(() => beep(1100, 0.08, 0.08), 90);
+    }
+    updateHud();
+    saveGame();
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// ZONE TRANSITION
+// ═══════════════════════════════════════════════════
+// Move the player to (x, y) of another zone — used by both edge exits and
+// point-portals (cave mouths). The buddy is teleported along too.
+function warpTo(zone, x, y, dirKey) {
+  clearTrainer();                     // any wandering trainer stays in the zone you left
+  visited.add(zone);                  // fog of war: this zone is now discovered
+  beginZoneSlide(dirKey || 'down');   // snapshot the old zone, then scroll into the new one
+  currentZone = zone;
+  playerX     = x;
+  playerY     = y;
+  playerDir   = dirKey || 'down';
+
+  // Reset animation state — snap to position, no slide glitch
+  fromPx.x   = playerX * TILE_SIZE;
+  fromPx.y   = playerY * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec    = null;
+
+  // Buddy comes through with you, landing on your tile.
+  petX = playerX; petY = playerY;
+  petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+  petMoveAnimTs = -9999;
+  noteParticles = [];
+
+  saveGame();
+  updateHud();
+  if (ZONE_INFO[zone].base === T.CAVE && !buddyLightsCave()) {
+    showMessage("🕯️ It's pitch black! Bring a glowing buddy (a Fire-type, say) to light the way…");
+    learnTip('cave');
+  }
+  else
+    showMessage('📍 ' + ZONE_INFO[zone].name);
+
+  // Transition sound: two rising beeps
+  beep(330, 0.1, 0.1);
+  setTimeout(() => beep(440, 0.12, 0.15), 80);
+
+  clearWild();
+  scheduleSpawn();
+}
+
+function doTransition(exit, ts) {
+  const dirMap = { south: 'down', north: 'up', west: 'left', east: 'right' };
+  warpTo(exit.to, exit.entryX, exit.entryY, dirMap[exit.dir]);
+}
+
+// Grab the current frame so we can scroll the old zone out while the new one
+// slides in from the direction the player is heading. (Skipped if the canvas
+// isn't ready, e.g. during the headless tests.)
+function beginZoneSlide(dir) {
+  if (!canvas || !canvas.width) return;
+  const snap = document.createElement('canvas');
+  snap.width  = canvas.width;
+  snap.height = canvas.height;
+  try { snap.getContext('2d').drawImage(canvas, 0, 0); }
+  catch (_) { return; }                       // tainted/empty canvas — just skip the effect
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  zoneSlide = { dir, t0: now, dur: ZONE_SLIDE_MS, snap };
+  slideLockUntil = now + ZONE_SLIDE_MS;        // hold movement until the scroll finishes
+}
+
+// Composite the cross-zone scroll: new zone drawn translated, old snapshot
+// drawn on the complementary side, the pair sliding across the screen.
+function drawZoneSlide(ts) {
+  const z = zoneSlide;
+  const t = Math.min((ts - z.t0) / z.dur, 1);
+  if (t >= 1) { zoneSlide = null; drawWorld(ts); return; }
+  const e = 1 - Math.pow(1 - t, 3);            // ease-out
+  const W = canvas.width, H = canvas.height;
+  let ox = 0, oy = 0, sx = 0, sy = 0;          // new-zone offset / old-snapshot offset
+  if      (z.dir === 'right') { ox =  (1 - e) * W; sx = ox - W; }
+  else if (z.dir === 'left')  { ox = -(1 - e) * W; sx = ox + W; }
+  else if (z.dir === 'up')    { oy = -(1 - e) * H; sy = oy + H; }
+  else                        { oy =  (1 - e) * H; sy = oy - H; }   // 'down' (default)
+
+  ctx.save();
+  ctx.translate(Math.round(ox), Math.round(oy));
+  drawWorld(ts);                               // new zone fills its own region
+  ctx.restore();
+  ctx.drawImage(z.snap, Math.round(sx), Math.round(sy));  // old zone on the other side
+}
+
+// ═══════════════════════════════════════════════════
+// WILD POKÉMON SPAWNING
+// ═══════════════════════════════════════════════════
+function scheduleSpawn() {
+  clearTimeout(spawnTimerId);
+  const delay = 4000 + Math.random() * 5000; // 4–9 s between spawns
+  spawnTimerId = setTimeout(spawnWild, delay);
+}
+
+function clearWild() {
+  clearTimeout(expireTimerId);
+  wildPoke = null;
+}
+
+// ── Wandering trainers ───────────────────────────────
+const TRAINER_NAMES  = ['Hiker Joe', 'Bug Catcher Lia', 'Camper Sam', 'Picnicker Mae', 'Youngster Tim', 'Lass Ivy', 'Fisher Gil', 'Bird Keeper Ann', 'Sailor Moe', 'Painter Bea'];
+const TRAINER_EMOJIS = ['🧗', '🧒', '🎒', '🧺', '👦', '👧', '🎣', '🦅', '⚓', '🎨'];
+const TRAINER_ART    = ['hiker', 'bugcatcher', 'camper', 'picnicker', 'youngster', 'lass', 'angler', 'birdkeeper', 'sailor', 'painter'];
+function trainerAt(zone, x, y) {
+  return (wildTrainer && wildTrainer.zone === zone && wildTrainer.x === x && wildTrainer.y === y) ? wildTrainer : null;
+}
+function spawnTrainer() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE || PEACEFUL_ZONES.has(currentZone)) return false;   // not in caves/indoors/your home meadow
+  if (caughtIds.size === 0) return false;                // need a team before trainers appear
+  const map = MAPS[currentZone], { cols, rows } = z;
+  const okTile = (c, r) => npcStandOK(c, r, null) && map[r][c] !== T.GRASS;   // clear, unoccupied, off the tall grass
+  // 1) Where they'll stop — a spot NEAR you, like they're trying to get your attention.
+  const targets = [];
+  for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
+    const d = Math.abs(c - playerX) + Math.abs(r - playerY);
+    if (d >= 2 && d <= 4 && okTile(c, r)) targets.push({ x: c, y: r });
+  }
+  if (!targets.length) return false;
+  const tgt = targets[(Math.random() * targets.length) | 0];
+  // 2) Where they come FROM: off-screen if the zone is big enough, else a map-edge
+  //    entrance, else stepping out of a building doorway.
+  const vc0 = Math.floor(camX / TILE_SIZE), vc1 = vc0 + Math.ceil(canvas.width / TILE_SIZE);
+  const vr0 = Math.floor(camY / TILE_SIZE), vr1 = vr0 + Math.ceil(canvas.height / TILE_SIZE);
+  const collect = pred => { const a = []; for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) if (okTile(c, r) && pred(c, r)) a.push({ x: c, y: r }); return a; };
+  const dToT = p => Math.abs(p.x - tgt.x) + Math.abs(p.y - tgt.y);
+  let pool = collect((c, r) => (c < vc0 || c > vc1 || r < vr0 || r > vr1) && dToT({ x: c, y: r }) <= 12);   // off-screen, not too far
+  if (!pool.length) pool = collect((c, r) => c === 1 || c === cols - 2 || r === 1 || r === rows - 2);        // edge entrance
+  if (!pool.length) pool = collect((c, r) => { const a = map[r - 1] && map[r - 1][c]; return a === T.HOUSE || a === T.SHOP || a === T.HOSPITAL || a === T.GYM; });  // a building door
+  // Find an approach point that can actually REACH the target (BFS), trying the
+  // closest few. If nothing can path to it, cancel — no trainers popping out of
+  // thin air or getting stuck behind walls/water.
+  pool.sort((a, b) => dToT(a) - dToT(b));
+  let chosen = null, path = null;
+  for (const cand of pool.slice(0, 8)) {
+    const p = bfsPath(cand.x, cand.y, tgt.x, tgt.y);
+    if (p && p.length) { chosen = cand; path = p; break; }
+  }
+  if (!chosen) return false;                          // boxed-in target — skip (a wild Lukéymon spawns instead)
+  const i = (Math.random() * TRAINER_NAMES.length) | 0;
+  wildTrainer = { x: chosen.x, y: chosen.y, zone: currentZone, name: TRAINER_NAMES[i], emoji: TRAINER_EMOJIS[i], art: TRAINER_ART[i],
+                  approaching: true,
+                  _w: { st: 'idle', dir: 'down', fromX: chosen.x * TILE_SIZE, fromY: chosen.y * TILE_SIZE, animTs: -9999, destX: tgt.x, destY: tgt.y, spawnX: chosen.x, spawnY: chosen.y, path, pi: 0 } };
+  beep(440, 0.06, 0.08); setTimeout(() => beep(550, 0.06, 0.09), 100);
+  showMessage(`👀 ${wildTrainer.name} spotted you — here they come!`);
+  return true;   // wait-timer starts on ARRIVAL (see tickTrainer), so the walk-in doesn't eat into it
+}
+// Breadth-first shortest path over walkable tiles from (sx,sy) to (tx,ty).
+// Returns the tiles to step onto (excluding the start), or null if unreachable.
+function bfsPath(sx, sy, tx, ty) {
+  const W = ZONE_INFO[currentZone].cols, key = (x, y) => y * W + x;
+  const prev = new Map(), seen = new Set([key(sx, sy)]), q = [[sx, sy]];
+  let qi = 0;
+  while (qi < q.length) {
+    const [cx, cy] = q[qi++];
+    if (cx === tx && cy === ty) {
+      const path = []; let k = key(cx, cy);
+      while (k !== key(sx, sy)) { path.push({ x: k % W, y: (k / W) | 0 }); k = prev.get(k); }
+      return path.reverse();
+    }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy, k = key(nx, ny);
+      if (seen.has(k)) continue;
+      if (!(nx === tx && ny === ty) && !npcStandOK(nx, ny, null)) continue;   // target tile is pre-validated
+      seen.add(k); prev.set(k, key(cx, cy)); q.push([nx, ny]);
+    }
+  }
+  return null;
+}
+// Walk an approaching (or departing) trainer along its path, one tile at a time.
+function tickTrainer(ts) {
+  const t = wildTrainer;
+  if (!t || t.zone !== currentZone || !t._w || (!t.approaching && !t.leaving)) return;
+  const w = t._w;
+  if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return;       // mid-step
+  // Arrived at your square → stop, get excited, and start the give-up countdown.
+  if (t.approaching && t.x === w.destX && t.y === w.destY) { trainerArrived(); return; }
+  const next = w.path && w.path[w.pi];
+  if (t.approaching && (!next || !npcStandOK(next.x, next.y, t))) { trainerArrived(); return; }   // you stepped onto the path → stop here
+  if (t.leaving && (!next || !npcStandOK(next.x, next.y, t))) { clearTrainer(); scheduleSpawn(); return; }   // walked back out (or blocked) → gone
+  w.pi++;
+  w.fromX = t.x * TILE_SIZE; w.fromY = t.y * TILE_SIZE;
+  const dx = next.x - t.x, dy = next.y - t.y;
+  t.x = next.x; t.y = next.y; w.animTs = ts; w.st = 'walk';
+  w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+}
+// Trainer reached your square: hold position, bounce excitedly, and wait TRAINER_WAIT_MS
+// for you to come battle. Ignore them and they'll walk back the way they came.
+function trainerArrived() {
+  const t = wildTrainer; if (!t || !t._w) return;
+  t.approaching = false; t._w.st = 'idle';
+  clearTimeout(trainerTimerId);
+  trainerTimerId = setTimeout(startTrainerLeave, TRAINER_WAIT_MS);
+}
+// Gave up waiting → retrace the path back to where they entered, then despawn.
+function startTrainerLeave() {
+  const t = wildTrainer; if (!t || !t._w) return;
+  const w = t._w;
+  const back = (w.path || []).slice(0, Math.max(0, w.pi - 1)).reverse();   // tiles already walked, in reverse
+  back.push({ x: w.spawnX, y: w.spawnY });                                  // …finishing at the entrance tile
+  w.path = back; w.pi = 0; w.st = 'idle';
+  t.leaving = true;
+}
+function clearTrainer() { clearTimeout(trainerTimerId); wildTrainer = null; }
+
+// A Jigglypuff buddy hums everyone to sleep instead of talking.
+function buddyIsJigglypuff() { return activePet === JIGGLYPUFF_ID && caughtIds.has(JIGGLYPUFF_ID); }
+
+// ── Night ghosts ─────────────────────────────────────
+// At night, outdoors, the Gastly line drifts around. Bump one → "Boo!", a
+// random treat, and it vanishes. A glowing (light) buddy scares them off.
+const GHOST_IDS = [92, 93, 94];   // Gastly, Haunter, Gengar
+function ghostAt(zone, x, y) { return (nightGhost && nightGhost.zone === zone && nightGhost.x === x && nightGhost.y === y) ? nightGhost : null; }
+function ghostTileOK(map, z, c, r) {
+  const t = map[r][c];
+  if (isObstacleTile(t) || t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
+  if (decorSolidAt(currentZone, c, r) || portalAt(currentZone, c, r) || buildingFootprintSolid(currentZone, c, r) || propSolidAt(currentZone, c, r)) return false;
+  if ((c === playerX && r === playerY) || npcAt(currentZone, c, r) || lairAt(currentZone, c, r) || roamerAt(currentZone, c, r) || trainerAt(currentZone, c, r)) return false;
+  return true;
+}
+function spawnGhost(ts) {
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone], cands = [];
+  for (let r = 1; r < z.rows - 1; r++) for (let c = 1; c < z.cols - 1; c++) {
+    if (!ghostTileOK(map, z, c, r)) continue;
+    const d = Math.abs(c - playerX) + Math.abs(r - playerY);
+    if (d >= 3 && d <= 7) cands.push({ x: c, y: r });
+  }
+  if (!cands.length) return;
+  const tile = cands[Math.floor(Math.random() * cands.length)];
+  const id = GHOST_IDS[Math.floor(Math.random() * GHOST_IDS.length)];
+  const p = POKEMON_DATA.find(x => x.id === id);
+  nightGhost = { x: tile.x, y: tile.y, zone: currentZone, id, emoji: (p && p.emoji) || '👻' };
+  _ghostDespawnTs = ts + 22000;
+  beep(180, 0.12, 0.16, 'sine');
+}
+function ghostStep() {
+  if (!nightGhost) return;
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
+  for (const [dx, dy] of dirs) {
+    const nx = nightGhost.x + dx, ny = nightGhost.y + dy;
+    if (nx < 1 || ny < 1 || nx >= z.cols - 1 || ny >= z.rows - 1) continue;
+    if (!ghostTileOK(map, z, nx, ny)) continue;
+    nightGhost.x = nx; nightGhost.y = ny; return;
+  }
+}
+function engageGhost() {
+  const g = nightGhost; if (!g) return;
+  nightGhost = null;                       // it vanishes the moment you touch it
+  const poke = POKEMON_DATA.find(p => p.id === g.id) || {};
+  // Roll a random REAL gift, granted now and revealed with fanfare at dialog end.
+  const roll = Math.random();
+  let badge, label;
+  if (roll < 0.03) { masterBalls += 1; badge = '🟣'; label = 'A MASTER BALL!'; }
+  else if (roll < 0.45) { const n = 1 + Math.floor(Math.random() * 3); balls += n; badge = '⚪'; label = `+${n} PokéBall${n > 1 ? 's' : ''}`; }
+  else { const n = 20 + Math.floor(Math.random() * 41); coins += n; badge = '💰'; label = `+${n} coins`; }
+  updateHud(); saveGame();
+  // A quick dialogue with the ghost (its sprite as the portrait), then the gift.
+  currentNPC = { name: '???', emoji: g.emoji || '👻', ghostGift: { badge, label } };
+  npcLineIdx = 0;
+  npcLines = ['👻 ...', '👻 BOO!!'];
+  const ne = document.getElementById('npc-emoji');
+  if (poke.sprite) ne.innerHTML = '<img class="char-portrait" src="' + poke.sprite + '" alt="">';
+  else { ne.innerHTML = ''; ne.textContent = g.emoji || '👻'; }
+  document.getElementById('npc-name').textContent = '???';
+  document.getElementById('npc-reward').classList.add('hidden');
+  pendingGift = 1;                          // any >0 → triggers revealGift (uses ghostGift)
+  clearTimeout(spawnTimerId);
+  beep(160, 0.1, 0.14, 'sine'); setTimeout(() => beep(110, 0.16, 0.22, 'sawtooth'), 150);
+  renderNpcLine();
+  showScreen('npc');
+}
+// Per-frame ghost tick from the game loop (world only).
+function tickGhosts(ts) {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE || PEACEFUL_ZONES.has(currentZone)) { nightGhost = null; return; }
+  const lit = buddyLightsCave();
+  if (nightGhost && (nightGhost.zone !== currentZone || !isNightNow() || ts > _ghostDespawnTs || lit)) {
+    if (lit && nightGhost.zone === currentZone) showMessage('🔦 The ghost shrinks from your glowing buddy and slips away!');
+    nightGhost = null;
+  }
+  if (!nightGhost && isNightNow() && !lit && ts > _ghostCheckTs) {
+    _ghostCheckTs = ts + 5000;
+    if (Math.random() < 0.28) spawnGhost(ts);
+  }
+  if (nightGhost && ts > _ghostMoveTs) { _ghostMoveTs = ts + 1500; ghostStep(); }
+}
+
+// ── Wandering NPCs ───────────────────────────────────
+// NPCs flagged `wander: N` stroll within N tiles of where they start; `wander:
+// 'free' roams the whole zone in short hops. They idle a while, pick a nearby
+// tile, walk to it at a calm pace, idle again — alive but never running off.
+const NPC_STEP_MS = 360;          // ms per tile (a relaxed walk)
+const TRAINER_WAIT_MS = 22000;    // how long a trainer waits at your square before giving up & walking off
+function npcStandOK(x, y, self) {
+  const z = ZONE_INFO[currentZone], m = MAPS[currentZone];
+  if (x < 1 || y < 1 || x >= z.cols - 1 || y >= z.rows - 1) return false;
+  const t = m[y][x];
+  if (isObstacleTile(t) || t === T.WATER || t === T.ICE || t === T.LAVA ||
+      t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM || t === T.CAVE_ENTRANCE) return false;
+  if (decorSolidAt(currentZone, x, y) || portalAt(currentZone, x, y) || buildingFootprintSolid(currentZone, x, y) || propSolidAt(currentZone, x, y)) return false;
+  if (x === playerX && y === playerY) return false;
+  if (lairAt(currentZone, x, y) || roamerAt(currentZone, x, y) || trainerAt(currentZone, x, y)) return false;
+  for (const o of NPCS) if (o !== self && o.zone === currentZone && o.x === x && o.y === y) return false;
+  return true;
+}
+function npcPickDest(n) {
+  const free = n.wander === 'free';
+  // A third of the time a bounded wanderer heads back to its starting square.
+  if (!free && Math.random() < 0.33 && (n.hx !== n.x || n.hy !== n.y) && npcStandOK(n.hx, n.hy, n)) return { x: n.hx, y: n.hy };
+  const rad = free ? 6 : n.wander;                 // free roams from where it stands; bounded from home
+  const ox = free ? n.x : n.hx, oy = free ? n.y : n.hy;
+  for (let tries = 0; tries < 14; tries++) {
+    const tx = ox + ((Math.random() * (2 * rad + 1)) | 0) - rad;
+    const ty = oy + ((Math.random() * (2 * rad + 1)) | 0) - rad;
+    if ((tx !== n.x || ty !== n.y) && npcStandOK(tx, ty, n)) return { x: tx, y: ty };
+  }
+  return null;
+}
+function npcStartStep(n, ts) {                       // step one tile toward the destination
+  const w = n._w;
+  const ddx = Math.sign(w.destX - n.x), ddy = Math.sign(w.destY - n.y);
+  const opts = Math.abs(w.destX - n.x) >= Math.abs(w.destY - n.y)
+    ? [[ddx, 0], [0, ddy], [0, -ddy], [-ddx, 0]] : [[0, ddy], [ddx, 0], [-ddx, 0], [0, -ddy]];
+  for (const [dx, dy] of opts) {
+    if (!dx && !dy) continue;
+    const nx = n.x + dx, ny = n.y + dy;
+    if (npcStandOK(nx, ny, n)) {
+      w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
+      n.x = nx; n.y = ny;                            // claim the tile now; the sprite slides into it
+      w.animTs = ts; w.st = 'walk';
+      w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+      return true;
+    }
+  }
+  return false;                                      // boxed in — give up this trip
+}
+function tickNpcs(ts) {
+  for (const n of NPCS) {
+    if (n.wander == null || n.zone !== currentZone) continue;
+    if (n.greetHop && !metNPCs.has(n.metKey || n.name)) continue;   // excited greeter — holds still & hops until you talk
+    if (npcAtNightSpot(n)) continue;                   // off at their night spot — don't wander the day position
+    if (n._bt && n._bt.phase !== 'awake') continue;    // heading to bed / asleep → the bedtime system drives them, not the wander
+    if (npcBedAlpha(n) < 0.98) continue;               // dusk/night/dawn → fading out, hold the wander
+    if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
+    let w = n._w;
+    if (!w) { w = n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts + 1200 + Math.random() * 3000, destX: n.x, destY: n.y }; }
+    if (w.frozenUntil && ts < w.frozenUntil) continue;   // just talked to — hold still a beat
+    if (w.st === 'idle') {
+      if (ts >= w.until) {
+        const d = npcPickDest(n);
+        if (d) { w.destX = d.x; w.destY = d.y; if (!npcStartStep(n, ts)) w.until = ts + 1500; }
+        else w.until = ts + 1500;
+      }
+    } else if (ts - w.animTs >= NPC_STEP_MS) {
+      if (n.x === w.destX && n.y === w.destY) {
+        w.st = 'idle';
+        if (n.x === n.hx && n.y === n.hy) w.dir = 'down';   // back home → face forward; otherwise keep last facing
+        w.until = ts + 2500 + Math.random() * 4500;
+      } else if (!npcStartStep(n, ts)) { w.st = 'idle'; w.until = ts + 1500; }   // blocked → stop, keep facing
+    }
+  }
+}
+// Find an "exit" tile from (fx,fy): the nearest reachable tile beside a building
+// door, else a map-edge tile (off the screen). Returns { tx, ty, path } where path
+// is the BFS route fx,fy → tx,ty (possibly []), or null if boxed in.
+function npcExitFrom(fx, fy, self) {
+  const z = ZONE_INFO[currentZone], map = MAPS[currentZone], { cols, rows } = z;
+  if (!map) return null;
+  const isBldg = t => t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
+  const cand = [];
+  for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
+    if (!(c === fx && r === fy) && !npcStandOK(c, r, self)) continue;
+    const nearBldg = isBldg(map[r - 1] && map[r - 1][c]) || isBldg(map[r + 1] && map[r + 1][c]) || isBldg(map[r][c - 1]) || isBldg(map[r][c + 1]);
+    const edge = (c <= 1 || c >= cols - 2 || r <= 1 || r >= rows - 2);
+    if (nearBldg || edge) cand.push({ x: c, y: r, pri: nearBldg ? 0 : 1 });
+  }
+  if (!cand.length) return null;
+  const d = p => Math.abs(p.x - fx) + Math.abs(p.y - fy);
+  cand.sort((a, b) => (a.pri - b.pri) || (d(a) - d(b)));   // a building door first, then nearest
+  for (const c of cand.slice(0, 10)) {
+    if (c.x === fx && c.y === fy) return { tx: c.x, ty: c.y, path: [] };
+    const p = bfsPath(fx, fy, c.x, c.y);
+    if (p && p.length) return { tx: c.x, ty: c.y, path: p };
+  }
+  return null;
+}
+// Take one step along an NPC's bedtime path (shared by the dusk walk-off and the
+// dawn walk-in). Returns true while still walking, false once the path is spent.
+function npcStepPath(n, ts) {
+  const w = n._w, bt = n._bt;
+  if (!bt.path) return false;
+  if (w.st === 'walk' && ts - w.animTs < NPC_STEP_MS) return true;   // mid-stride
+  const next = bt.path[bt.pi];
+  if (!next || !npcStandOK(next.x, next.y, n)) { w.st = 'idle'; bt.path = null; return false; }
+  bt.pi++;
+  w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE;
+  const dx = next.x - n.x, dy = next.y - n.y;
+  n.x = next.x; n.y = next.y; w.animTs = ts; w.st = 'walk';
+  w.dir = dy < 0 ? 'up' : dy > 0 ? 'down' : dx < 0 ? 'left' : 'right';
+  return true;
+}
+// Drive the dusk walk-off and dawn walk-in for NPCs in the current zone. Off-zone
+// NPCs just aren't there at night (nobody's watching), handled by npcBedAlpha.
+function tickNpcBedtime(ts) {
+  if (ZONE_INFO[currentZone].interior || ZONE_INFO[currentZone].cave) return;
+  for (const n of NPCS) {
+    if (n.nightOwl || n.nightSpot || n.zone !== currentZone) continue;
+    if (n.hx == null) { n.hx = n.x; n.hy = n.y; }
+    if (!n._w) n._w = { st: 'idle', dir: 'down', fromX: n.x * TILE_SIZE, fromY: n.y * TILE_SIZE, animTs: -9999, until: ts, destX: n.x, destY: n.y };
+    const a = npcBedAlpha(n), bt = n._bt || (n._bt = { phase: 'awake', path: null, pi: 0, gone: false });
+    const w = n._w;
+    if (a <= 0.03) {                                   // fully dark → asleep (hidden); park at home for now
+      if (!bt.gone) {
+        bt.gone = true; bt.phase = 'asleep'; bt.path = null;
+        n.x = n.hx; n.y = n.hy;
+        w.st = 'idle'; w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE; w.destX = n.x; w.destY = n.y; w.until = ts + 1500; w.dir = 'down';
+      }
+      continue;
+    }
+    if (bt.phase !== 'awake' && bt.phase !== 'arriving' && a >= 0.98) { bt.phase = 'awake'; bt.gone = false; w.st = 'idle'; }
+    // DUSK: first hint of night → head for an exit and fade out (once).
+    if (bt.phase === 'awake' && npcNightRising() && npcNightFactor() > 0.02) {
+      const ex = npcExitFrom(n.x, n.y, n);
+      bt.path = (ex && ex.path.length) ? ex.path : null; bt.pi = 0; bt.phase = 'leaving'; w.st = 'idle';
+    }
+    // DAWN: asleep and the sky is brightening → appear at an entrance and walk home.
+    if (bt.phase === 'asleep' && !npcNightRising()) {
+      const ex = npcExitFrom(n.hx, n.hy, n);           // an entrance near home, + route home→entrance
+      if (ex && ex.path.length) {
+        const back = ex.path.slice(0, ex.path.length - 1).reverse();   // entrance → home
+        back.push({ x: n.hx, y: n.hy });
+        n.x = ex.tx; n.y = ex.ty;                       // pop in at the entrance (still near-invisible)
+        w.st = 'idle'; w.fromX = n.x * TILE_SIZE; w.fromY = n.y * TILE_SIZE; w.destX = n.x; w.destY = n.y;
+        bt.path = back; bt.pi = 0;
+      } else { n.x = n.hx; n.y = n.hy; bt.path = null; }   // no route → just fade in at home
+      bt.gone = false; bt.phase = 'arriving';
+    }
+    // Walk the active route (dusk out, or dawn in). When the dawn walk finishes
+    // AND it's fully light, hand back to the wander system.
+    if (bt.phase === 'leaving' || bt.phase === 'arriving') {
+      const walking = npcStepPath(n, ts);
+      if (bt.phase === 'arriving' && !walking && a >= 0.98) { bt.phase = 'awake'; w.st = 'idle'; }
+    }
+  }
+}
+
+// ── Time/weather-specific wild spawns ────────────────
+// SPAWN_COND[id] = { night?: 'only'|'more', rain?: 'only'|'more' }.
+//   'only' → appears ONLY under that condition;  'more' → appears 3× as often then.
+const SPAWN_COND = {
+  35:  { night: 'only' },   // Clefairy — only comes out at night
+  96:  { night: 'only' },   // Drowzee  — only comes out at night
+  39:  { night: 'more' }, 41: { night: 'more' }, 43: { night: 'more' }, 48: { night: 'more' }, 52: { night: 'more' },
+  131: { rain: 'only' },    // Lapras   — only surfaces in the rain
+  54:  { rain: 'more' }, 60: { rain: 'more' }, 72: { rain: 'more' }, 90: { rain: 'more' },
+  98:  { rain: 'more' }, 116: { rain: 'more' }, 118: { rain: 'more' }, 120: { rain: 'more' }, 129: { rain: 'more' },
+};
+function isNightNow() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return false;
+  return nightMode || !!z.night || (nightCycle && autoNight(performance.now()) >= 0.5);
+}
+function isRainNow() {
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return false;
+  return rainMode || zoneRain() >= 0.5;
+}
+function spawnAllowed(id, night, rain) {
+  const c = SPAWN_COND[id]; if (!c) return true;
+  if (c.night === 'only' && !night) return false;
+  if (c.rain === 'only' && !rain) return false;
+  return true;
+}
+function weightedPick(pool, night, rain) {
+  const wof = p => { const c = SPAWN_COND[p.id]; let w = 1; if (c && night && c.night) w *= 3; if (c && rain && c.rain) w *= 3; return w; };
+  let total = pool.reduce((s, p) => s + wof(p), 0), r = Math.random() * total;
+  for (const p of pool) { r -= wof(p); if (r <= 0) return p; }
+  return pool[pool.length - 1];
+}
+
+function spawnWild() {
+  // Not in the overworld (menu/encounter)? Try again later — never let the
+  // spawn loop die.
+  if (gameState !== 'world') { scheduleSpawn(); return; }
+  if (ZONE_INFO[currentZone].interior) return;   // no wild Lukeymon indoors
+
+  clearWild();
+  if (!metNPCs.has('Prof. Birch')) { scheduleSpawn(); return; }       // no wild Lukeymon until the Professor sends you off
+  if (NO_WILD_ZONES.has(currentZone)) { scheduleSpawn(); return; }   // fully-peaceful passage zone
+
+  // Now and then a wandering trainer turns up instead, looking for a quick battle.
+  if (!wildTrainer && Math.random() < 0.09 && spawnTrainer()) return;
+
+  // Pick an uncaught Pokémon for the current zone — respecting night & rain.
+  const night = isNightNow(), rain = isRainNow();
+  const pool = POKEMON_DATA.filter(p => p.zones.includes(currentZone) && !caughtIds.has(p.id) && !p.boss && !p.legend
+    && spawnAllowed(p.id, night, rain));
+  if (pool.length === 0) { scheduleSpawn(); return; }
+  const poke = weightedPick(pool, night, rain);
+
+  // Find all grass tiles in this zone (excluding edges)
+  const map = MAPS[currentZone];
+  const candidates = [];
+  const { cols: sc, rows: sr } = ZONE_INFO[currentZone];
+  for (let r = 1; r < sr - 1; r++) {
+    for (let c = 1; c < sc - 1; c++) {
+      if (map[r][c] === T.GRASS) candidates.push({ x: c, y: r });
+    }
+  }
+  if (candidates.length === 0) { scheduleSpawn(); return; }
+
+  const tile = candidates[Math.floor(Math.random() * candidates.length)];
+  wildPoke = { poke, x: tile.x, y: tile.y, zone: currentZone, expireAt: Date.now() + WILD_TIMEOUT };
+
+  // Rustle sound
+  beep(350, 0.05, 0.07, 'sine');
+  setTimeout(() => beep(290, 0.04, 0.09, 'sine'), 110);
+
+  // If player is already standing there, trigger immediately
+  if (playerX === tile.x && playerY === tile.y) {
+    const p = wildPoke.poke;
+    clearWild();
+    beginEncounter(p);
+    return;
+  }
+
+  // Auto-despawn after timeout
+  expireTimerId = setTimeout(() => {
+    wildPoke = null;
+    scheduleSpawn();
+  }, WILD_TIMEOUT);
+}
+
+let npcLines = [];   // resolved dialogue for the NPC currently being talked to
+
+function talkNPC(npc) {
+  currentNPC = npc;
+  if (npc._w) { npc._w.st = 'idle'; npc._w.dir = 'down'; npc._w.until = npc._w.frozenUntil = performance.now() + 4000; }   // a wanderer stops to chat
+  npcLineIdx = 0;
+  clearTimeout(spawnTimerId);
+  // 🎵 A Jigglypuff buddy hums them straight to sleep — no chatting (or gifts).
+  const asleep = buddyIsJigglypuff();
+  pendingFanfare = null;           // an NPC's lines() may queue a fanfare (daily freebies, etc.)
+  npcLines = asleep ? ['💤  Zzzzz...  zzzzzz...'] : (typeof npc.lines === 'function' ? npc.lines() : npc.lines);
+  if (asleep) pendingFanfare = null;
+
+  const ne = document.getElementById('npc-emoji');
+  if (npc.art) ne.innerHTML = '<img class="char-portrait" src="art/portrait/' + npc.art + '.png?v=' + ART_V + '" alt="" onerror="this.parentNode.textContent=\'' + npc.emoji + '\'">';
+  else { ne.innerHTML = ''; ne.textContent = npc.emoji; }
+  document.getElementById('npc-name').textContent  = asleep ? npc.name + ' 😴' : npc.name;
+  document.getElementById('npc-reward').classList.add('hidden');
+
+  // One-time gift the first time you meet this character — but hold it back
+  // for a big reveal once the conversation wraps up (see advanceNPC).
+  const mk = npc.metKey || npc.name;   // metKey lets the same character give a fresh gift elsewhere
+  const firstMeet = !metNPCs.has(mk);
+  if (!asleep) metNPCs.add(mk);        // "greeted" — counts toward Quest "Characters Met"
+  pendingGift = (!asleep && firstMeet && npc.gift > 0) ? npc.gift : 0;
+
+  // Prof. Birch: 1st visit hands over coins (the normal gift); the 2nd visit is the
+  // birthday cake — a fanfare, then it's waiting back at your house.
+  if (!asleep && npc.name === 'Prof. Birch' && !firstMeet && !gotBirthdayCake) {
+    gotBirthdayCake = true;
+    pendingFanfare = { badge: `<img src="art/prop/birthday_cake.png?v=${ART_V}" style="height:130px;image-rendering:pixelated">`, label: 'Birthday Cake!', after: `Prof. Birch left your cake at home — head back to enjoy it! 🎂` };
+    saveGame();
+  }
+
+  renderNpcLine();
+  showScreen('npc');
+}
+
+// ── Old-game typewriter ──────────────────────────────
+// Reveals text a character at a time — quick base speed, a soft blip of
+// chatter, and little halts at spaces / punctuation. HTML-aware: tags (<b>,
+// <br>) snap in instantly, entities count as one glyph. Used for every bit of
+// character dialogue. finishTyper() (tap-to-skip) renders the whole thing now.
+let _typer = null;   // { el, units, idx, out, isHtml, onDone, blip, timer }
+function _tokenize(content, isHtml) {
+  if (!isHtml) return Array.from(content);   // code-point aware → emoji stay whole
+  const units = []; let i = 0;
+  while (i < content.length) {
+    if (content[i] === '<') { const e = content.indexOf('>', i); const tag = e === -1 ? content.slice(i) : content.slice(i, e + 1); units.push({ tag }); i += tag.length; }
+    else if (content[i] === '&') { const e = content.indexOf(';', i); if (e !== -1 && e - i <= 8) { units.push(content.slice(i, e + 1)); i = e + 1; } else { units.push(content[i++]); } }
+    else { const chr = String.fromCodePoint(content.codePointAt(i)); units.push(chr); i += chr.length; }   // keep surrogate pairs together
+  }
+  return units;
+}
+function startTyper(el, content, isHtml, onDone) {
+  if (_typer) clearTimeout(_typer.timer);
+  _typer = { el, units: _tokenize(content || '', isHtml), idx: 0, out: '', isHtml: !!isHtml, onDone: onDone || null, blip: 0, timer: null };
+  el[isHtml ? 'innerHTML' : 'textContent'] = '';
+  _stepTyper();
+}
+function _render(T) { T.el[T.isHtml ? 'innerHTML' : 'textContent'] = T.out; }
+function _stepTyper() {
+  const T = _typer; if (!T) return;
+  let ch = '';
+  while (T.idx < T.units.length) {
+    const u = T.units[T.idx++];
+    if (u && u.tag) { T.out += u.tag; continue; }   // tag snaps in, keep going
+    ch = u; T.out += u; break;                       // one visible glyph this step
+  }
+  _render(T);
+  if (T.idx >= T.units.length && !ch) { finishTyper(); return; }
+  if (ch && ch !== ' ' && (T.blip++ % 2 === 0)) beep(500 + Math.random() * 60, 0.03, 0.012, 'square');
+  let delay = 24;
+  if ('.!?…'.includes(ch))       delay = 250;
+  else if (',;:'.includes(ch))   delay = 140;
+  else if (ch === ' ')           delay = 50 + (Math.random() < 0.25 ? 80 : 0);
+  else if (Math.random() < 0.05) delay = 95;
+  T.timer = setTimeout(_stepTyper, delay);
+}
+function typerActive() { return !!_typer; }
+function finishTyper() {                              // tap-to-skip: render it all at once
+  const T = _typer; if (!T) return;
+  clearTimeout(T.timer);
+  T.out = ''; for (const u of T.units) T.out += (u && u.tag) ? u.tag : u;
+  _render(T);
+  const cb = T.onDone; _typer = null;
+  if (cb) cb();
+}
+
+function renderNpcLine() {
+  const last = npcLineIdx >= npcLines.length - 1;
+  document.getElementById('npc-advance').textContent = last ? 'CLOSE ✓' : 'NEXT ▶';
+  startTyper(document.getElementById('npc-text'), npcLines[npcLineIdx], false);
+}
+
+function advanceNPC() {
+  if (typerActive()) { finishTyper(); return; }   // first tap finishes the line, next tap advances
+  if (npcLineIdx >= npcLines.length - 1) {
+    if (pendingGift > 0) { revealGift(pendingGift); return; }   // big reveal at the end
+    if (pendingFanfare) { const f = pendingFanfare; pendingFanfare = null; showFanfare(f.badge, f.label, f.after ? () => { closeNPC(); showMessage(f.after); } : closeNPC); return; }
+    closeNPC();
+    return;
+  }
+  npcLineIdx++;
+  renderNpcLine();
+}
+
+// The one true "you got something!" fanfare — full-screen reveal with the badge
+// jingle and confetti. Used for NPC gifts, battle rewards, daily freebies… every
+// time the player is handed anything. `onDone` runs when they tap continue.
+let _fanfareDone = null;
+function showFanfare(badge, label, onDone, title) {
+  document.getElementById('gift-title').textContent = title || 'A GIFT!';
+  const gb = document.getElementById('gift-badge');
+  if (badge && badge.charAt(0) === '<') gb.innerHTML = badge; else gb.textContent = badge;   // HTML (e.g. cake img) or emoji
+  document.getElementById('gift-amount').textContent = label;
+  _fanfareDone = onDone || null;
+  showScreen('gift');
+  playBadgeJingle();
+  badgeConfetti(document.getElementById('gift-screen'));
+}
+
+// The held-back gift, revealed once the conversation ends.
+function revealGift(amount) {
+  pendingGift = 0;
+  const gg = currentNPC && currentNPC.ghostGift;   // ghost reward (already granted) → custom badge/label
+  const KINDS = { bacon: ['🥓', 'A piece of bacon!'], steak: ['🥩', 'A piece of steak!'], trophy: ['🏆', 'MEGA CHAMPION TROPHY!'] };
+  const kind = currentNPC && KINDS[currentNPC.giftKind];
+  if (!gg && !kind) coins += amount;   // novelty foods are useless; ghost gift already paid out
+  updateHud();
+  saveGame();
+  showFanfare(gg ? gg.badge : (kind ? kind[0] : '💰'),
+              gg ? gg.label : (kind ? kind[1] : `+${amount} coins`),
+              closeNPC);
+}
+
+function continueGift() {
+  beep(523, 0.08, 0.08);
+  const cb = _fanfareDone; _fanfareDone = null;
+  if (cb) cb();
+  else closeNPC();
+}
+
+function closeNPC() {
+  if (_typer) { clearTimeout(_typer.timer); _typer = null; }
+  currentNPC = null;
+  pendingGift = 0;
+  showScreen('world');
+  scheduleSpawn();
+}
+
+// Cached Image objects for drawing sprites onto the canvas (pixelated).
+const _canvasSprites = {};
+function canvasSprite(poke) {
+  let img = _canvasSprites[poke.id];
+  if (!img) { img = new Image(); img.src = poke.sprite; _canvasSprites[poke.id] = img; }
+  return img;
+}
+
+// Draw fixed collectibles (bobbing) and NPCs for the current zone.
+// ── Per-entity draws (collected into a y-sorted pass by drawWorld) ──
+// NPC/character art (real sprites where available; emoji otherwise).
+const _npcArt = {};
+function npcArtImg(key) {
+  if (!key) return null;
+  let img = _npcArt[key];
+  if (!img) { img = new Image(); img.src = 'art/npc/' + key + '.png?v=' + ART_V; _npcArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+// Character field sprites: art/walk/<key>.png = a vertical strip of 4 facings
+// (down, up, left, right). Portrait (shoulders-up) lives in art/portrait/<key>.png.
+const DIR_ROW = { down: 0, up: 1, left: 2, right: 3 };
+const _walkArt = {};
+function walkSheet(key) {
+  if (!key) return null;
+  let img = _walkArt[key];
+  if (!img) { img = new Image(); img.src = 'art/walk/' + key + '.png?v=' + ART_V; _walkArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+const _portraitArt = {};
+function portraitImg(key) {
+  if (!key) return null;
+  let img = _portraitArt[key];
+  if (!img) { img = new Image(); img.src = 'art/portrait/' + key + '.png?v=' + ART_V; _portraitArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+// Animated character sheets: art/anim/<key>.png is a grid of 4 rows (down/up/
+// left/right per DIR_ROW) × ANIM_FRAMES columns (a walk cycle). Used by the
+// player. Frame 1 is the neutral/idle pose; walking ping-pongs 0→1→2→1.
+const ANIM_FRAMES = 3;
+const WALK_SEQ = [0, 1, 2, 1];
+const _animArt = {};
+function animSheet(key) {
+  if (!key) return null;
+  let img = _animArt[key];
+  if (!img) { img = new Image(); img.src = 'art/anim/' + key + '.png?v=' + ART_V; _animArt[key] = img; }
+  return (img.complete && img.naturalWidth) ? img : null;
+}
+// Eagerly preload character art at boot. walkSheet()/npcArtImg() are otherwise
+// lazy — they only kick off the download on the FIRST draw, so on a cold load
+// (or right after an ART_V cache bump) the explorer PNG isn't decoded yet and
+// the player falls back to the procedural figure, making the body appear to
+// "change" once the real sprite finishes loading. Requesting these up front
+// means they're ready before the world first renders.
+(function preloadCharArt() {
+  walkSheet('player'); animSheet('player');             // our own body — load this first
+  try {
+    const keys = new Set(['player']);
+    if (typeof NPCS !== 'undefined') for (const n of NPCS) if (n.art) keys.add(n.art);
+    if (typeof TRAINER_ART !== 'undefined') for (const a of TRAINER_ART) keys.add(a);
+    keys.forEach(k => { walkSheet(k); npcArtImg(k); });  // overworld sprites
+  } catch (e) { /* NPCS not ready yet — the player sheet above still preloads */ }
+})();
+
+// ── Crisp sprite downscaling ─────────────────────────
+// Source character art is high-res (~150–240px). Rescaling it to ~53px with
+// nearest-neighbour every frame drops source pixels unevenly and shimmers as
+// the sprite bobs/walks. Instead, downscale each (frame, size) ONCE into an
+// offscreen canvas with high-quality smoothing, cache it, then blit that baked
+// bitmap 1:1 at integer coordinates — stable, clean edges, no per-frame jank.
+const _scaleCache = new Map();
+let _srcIdSeq = 0; const _srcIds = new WeakMap();
+function srcKey(img) {                       // stable key for <img> (by src) or <canvas> (by identity)
+  if (img.src) return img.src;
+  let k = _srcIds.get(img); if (!k) { k = 'cv' + (++_srcIdSeq); _srcIds.set(img, k); } return k;
+}
+function scaledSprite(img, sx, sy, sw, sh, w, h) {
+  const key = srcKey(img) + '|' + sx + ',' + sy + ',' + sw + ',' + sh + '|' + w + 'x' + h;
+  let cv = _scaleCache.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    // Step the downscale down in halves first, so the final smoothing has less
+    // than 2× to cover (sharper, less mushy than one big jump).
+    let curW = sw, curH = sh, src = img, ssx = sx, ssy = sy;
+    while (curW > w * 2 && curH > h * 2) {
+      const nW = Math.max(w, Math.floor(curW / 2)), nH = Math.max(h, Math.floor(curH / 2));
+      const tmp = document.createElement('canvas'); tmp.width = nW; tmp.height = nH;
+      const tc = tmp.getContext('2d'); tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high';
+      tc.drawImage(src, ssx, ssy, curW, curH, 0, 0, nW, nH);
+      src = tmp; ssx = 0; ssy = 0; curW = nW; curH = nH;
+    }
+    c.drawImage(src, ssx, ssy, curW, curH, 0, 0, w, h);
+    _scaleCache.set(key, cv);
+  }
+  return cv;
+}
+function blitSprite(img, sx, sy, sw, sh, cx, py, H, footPad) {
+  const w = Math.max(1, Math.round(H * sw / sh)), h = Math.max(1, Math.round(H));
+  const cv = scaledSprite(img, sx, sy, sw, sh, w, h);
+  const dx = Math.round(cx - w / 2), dy = Math.round(py + TILE_SIZE - H + (footPad == null ? 1 : footPad));
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cv, dx, dy);
+  ctx.imageSmoothingEnabled = prev;
+}
+// Blit a whole image/canvas scaled to w×h via the cache, at integer (dx,dy),
+// optionally flipped horizontally. Used for Pokémon sprites (buddy, ghosts,
+// roamers) and tall structures so they get the same crisp, jank-free downscale.
+function blitImg(img, dx, dy, w, h, flip) {
+  w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+  const cv = scaledSprite(img, 0, 0, img.naturalWidth || img.width, img.naturalHeight || img.height, w, h);
+  dx = Math.round(dx); dy = Math.round(dy);
+  const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  if (flip) { ctx.save(); ctx.translate(dx + w, dy); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0); ctx.restore(); }
+  else ctx.drawImage(cv, dx, dy);
+  ctx.imageSmoothingEnabled = prev;
+}
+// Draw a character sprite with its feet near the tile's bottom (px = tile centre x,
+// py = tile top y, both already in screen space).
+function drawCharSprite(img, px, py, H) {
+  blitSprite(img, 0, 0, img.naturalWidth, img.naturalHeight, px, py, H, 2);
+}
+// Draw a character's overworld sprite for a facing. Prefers the 4-row walk sheet,
+// then a single sprite, then returns false so the caller can fall back to an emoji.
+function drawCharField(key, dir, cx, py, H) {
+  const sheet = walkSheet(key);
+  if (sheet) {
+    const cellW = sheet.naturalWidth, cellH = sheet.naturalHeight / 4;
+    blitSprite(sheet, 0, (DIR_ROW[dir] || 0) * cellH, cellW, cellH, cx, py, H);
+    return true;
+  }
+  const single = npcArtImg(key);
+  if (single) { drawCharSprite(single, cx, py, H); return true; }
+  return false;
+}
+// Draw one animation frame for a facing. Returns false if the sheet isn't ready
+// so the caller can fall back to the static walk sheet / emoji.
+function drawAnimChar(key, dir, frame, cx, py, H) {
+  const sheet = animSheet(key);
+  if (!sheet) return false;
+  const cellW = sheet.naturalWidth / ANIM_FRAMES, cellH = sheet.naturalHeight / 4;
+  const col = ((frame % ANIM_FRAMES) + ANIM_FRAMES) % ANIM_FRAMES;
+  blitSprite(sheet, col * cellW, (DIR_ROW[dir] || 0) * cellH, cellW, cellH, cx, py, H);
+  return true;
+}
+// A soft little drop-shadow at an entity's feet so it pops off the ground.
+function drawShadow(centerX, footY, rx, alpha = 0.22) {
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(centerX, footY, rx, rx * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// A bright pulsing beacon glow behind a pickup so it's easy to spot against
+// busy or dark terrain.
+function pickupGlow(px, cy, ts, rgb) {
+  const pulse = 0.6 + 0.4 * Math.sin(ts * 0.005);
+  const R = 17;
+  ctx.save();
+  ctx.globalAlpha = 1;
+  const g = ctx.createRadialGradient(px, cy, 1, px, cy, R);
+  g.addColorStop(0, `rgba(${rgb},${0.4 * pulse})`);
+  g.addColorStop(0.55, `rgba(${rgb},${0.14 * pulse})`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, cy, R, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawCollectibleE(c, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const px = c.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = c.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 5, 8);
+  pickupGlow(px, py + 13 + bob, ts, '255,224,120');   // warm gold beacon
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center';
+  ctx.font = '13px serif'; ctx.fillText('✨', px, py - 11 + bob);
+  const badge = collectibleBadgeImg(c);
+  if (badge) {
+    const h = 28, w = Math.round(h * badge.naturalWidth / badge.naturalHeight);
+    ctx.drawImage(badge, px - w / 2, py + 6 + bob, w, h);
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(c.emoji, px, py + 21 + bob);
+  }
+}
+function drawStoneE(s, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const px = s.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = s.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 5, 8);
+  pickupGlow(px, py + 13 + bob, ts, '150,230,255');   // bright cyan beacon
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center';
+  ctx.font = '12px serif'; ctx.fillText('✨', px, py - 11 + bob);
+  const img = stoneImg(s.stone);
+  if (img) {
+    const h = 30, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    ctx.drawImage(img, px - w / 2, py + 4 + bob, w, h);
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(STONES[s.stone].emoji, px, py + 21 + bob);
+  }
+}
+function drawNPCE(n, ts) {
+  if (npcAtNightSpot(n)) {                            // relocated for the evening — stand still at the spot
+    const ns = n.nightSpot;
+    const px = ns.x * TILE_SIZE - camX + TILE_SIZE / 2, py = ns.y * TILE_SIZE - camY;
+    drawShadow(px, ns.y * TILE_SIZE - camY + TILE_SIZE - 4, 11);
+    if (n.art && drawCharField(n.art, ns.dir || 'down', px, py, 53)) return;
+    ctx.textAlign = 'center'; ctx.font = '22px serif';
+    ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+    return;
+  }
+  // Excited greeting — bounce in place facing you (two little hops, a beat, repeat)
+  // until you've come over to talk. (Mom when you first wake up at home.)
+  if (n.greetHop && !metNPCs.has(n.metKey || n.name)) {
+    const bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE - camY;
+    const dx = playerX - n.x, dy = playerY - n.y;
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+    const cyc = ts % 1500;
+    let hop = 0;
+    if (cyc < 280) hop = -Math.abs(Math.sin((cyc / 280) * Math.PI)) * 7;
+    else if (cyc < 560) hop = -Math.abs(Math.sin(((cyc - 280) / 280) * Math.PI)) * 7;
+    const px = bx - camX + TILE_SIZE / 2, py = by + hop;
+    drawShadow(px, by + TILE_SIZE - 4, 11);
+    if (!(n.art && drawCharField(n.art, dir, px, py, 53))) { ctx.textAlign = 'center'; ctx.font = '22px serif'; ctx.fillText(n.emoji, px, py + 24); }
+    ctx.textAlign = 'center'; ctx.font = '14px serif';
+    ctx.fillText('❗', px, py - 8 + Math.sin(ts * 0.006) * 2);
+    return;
+  }
+  const w = n._w;
+  let bx = n.x * TILE_SIZE, by = n.y * TILE_SIZE, dir = (w ? w.dir : 'down'), hop = 0;   // idle keeps the last facing
+  if (w && w.st === 'walk') {                        // sliding between tiles
+    const t = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
+    bx = w.fromX + (n.x * TILE_SIZE - w.fromX) * t;
+    by = w.fromY + (n.y * TILE_SIZE - w.fromY) * t;
+    dir = w.dir;
+    hop = Math.sin(t * Math.PI * 2) * -1.5;          // a gentle step-hop suggests walking
+  }
+  const px = bx - camX + TILE_SIZE / 2, py = by - camY + hop;
+  drawShadow(px, by - camY + TILE_SIZE - 4, 11);
+  if (n.art && drawCharField(n.art, dir, px, py, 53)) return;   // 25% larger so faces read better
+  ctx.textAlign = 'center'; ctx.font = '22px serif';
+  ctx.fillText(n.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+}
+function drawTrainerE(t, ts) {
+  const w = t._w;
+  let bx = t.x * TILE_SIZE, by = t.y * TILE_SIZE, dir = (w && w.dir) || 'down', hop = 0;
+  if (w && w.st === 'walk') {                          // striding toward you (or away)
+    const k = Math.min((ts - w.animTs) / NPC_STEP_MS, 1);
+    bx = w.fromX + (t.x * TILE_SIZE - w.fromX) * k;
+    by = w.fromY + (t.y * TILE_SIZE - w.fromY) * k;
+    dir = w.dir; hop = Math.sin(k * Math.PI * 2) * -1.5;
+  } else if (!t.approaching && !t.leaving) {           // arrived & waiting → face you, two excited hops, a beat, repeat
+    const dx = playerX - t.x, dy = playerY - t.y;       // turn to look right at you
+    dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+    const cyc = ts % 1500;
+    if (cyc < 280) hop = -Math.abs(Math.sin((cyc / 280) * Math.PI)) * 7;               // hop 1
+    else if (cyc < 560) hop = -Math.abs(Math.sin(((cyc - 280) / 280) * Math.PI)) * 7;  // hop 2
+  }
+  const px = bx - camX + TILE_SIZE / 2, py = by - camY + hop;
+  drawShadow(px, by - camY + TILE_SIZE - 4, 11);
+  if (!(t.art && drawCharField(t.art, dir, px, py, 53))) {   // sliced sprite, else emoji
+    ctx.textAlign = 'center'; ctx.font = '22px serif';
+    ctx.fillText(t.emoji, px, py + 24 + Math.sin(ts * 0.004) * 2);
+  }
+  if (!t.leaving) {                                   // approaching → spotted; arrived → battle me!  (no bubble once they give up)
+    ctx.textAlign = 'center'; ctx.font = '14px serif';
+    ctx.fillText(t.approaching ? '👀' : '❗', px, py - 8 + Math.sin(ts * 0.006) * 2);
+  }
+}
+function drawGhostE(g, ts) {
+  const px = g.x * TILE_SIZE - camX, py = g.y * TILE_SIZE - camY;
+  const bob = Math.sin(ts * 0.004) * 3;
+  const poke = POKEMON_DATA.find(p => p.id === g.id);
+  const img = poke && canvasSprite(poke);
+  ctx.save();
+  ctx.globalAlpha = 0.5 + 0.2 * Math.sin(ts * 0.006);     // flickering, see-through
+  if (img && img.complete && img.naturalWidth) {
+    const h = 44, w = Math.round(h * img.naturalWidth / img.naturalHeight);  // oversized like the buddy
+    blitImg(img, px + (TILE_SIZE - w) / 2, py + TILE_SIZE - h + 5 + bob, w, h);
+  } else {
+    ctx.textAlign = 'center'; ctx.font = '24px serif';
+    ctx.fillText(g.emoji || '👻', px + TILE_SIZE / 2, py + 22 + bob);
+  }
+  ctx.restore();
+}
+function drawRocketE(r, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = r.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
+  ctx.textAlign = 'center';
+  if (rocketDefeated.has(r.bird)) {
+    const bird = POKEMON_DATA.find(p => p.id === r.bird);
+    ctx.font = '13px serif';
+    ctx.fillText('✨', px - 13, py + 6 + bob); ctx.fillText('✨', px + 13, py - bob);
+    const img = canvasSprite(bird);
+    if (img.complete && img.naturalWidth) {
+      const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+      blitImg(img, px - w / 2, py + TILE_SIZE - h + bob, w, h);
+    } else { ctx.font = '26px serif'; ctx.fillText(bird.emoji, px, py + 24 + bob); }
+  } else if (!(r.art && drawCharField(r.art, 'down', px, py, 44))) {   // sprite already wears the "R"
+    ctx.font = '22px serif';
+    ctx.fillText(r.emoji, px, py + 24 + Math.sin(ts * 0.004 + 1) * 2);
+    ctx.fillStyle = '#e0202c'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('R', px + 9, py + 9);
+  }
+}
+function drawRoamerE(r, ts) {
+  const bob = Math.sin(ts * 0.005) * 3;
+  const poke = POKEMON_DATA.find(p => p.id === r.pokeId);
+  const px = r.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = r.y * TILE_SIZE - camY;
+  drawShadow(px, py + TILE_SIZE - 4, 11);
+  ctx.textAlign = 'center'; ctx.font = '13px serif';
+  ctx.fillText('✨', px - 14, py + 4 + bob);
+  ctx.fillText('✨', px + 14, py - 2 - bob);
+  const img = canvasSprite(poke);
+  if (img.complete && img.naturalWidth) {
+    const h = 40, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    blitImg(img, px - w / 2, py + TILE_SIZE - h + bob, w, h);
+  } else {
+    ctx.font = '26px serif'; ctx.fillText(poke.emoji, px, py + 24 + bob);
+  }
+}
+// Queue a tall structure sprite (building/tree) into the depth list, anchored at the
+// tile's bottom and extending upward. Accepts an <img> or a pre-rendered canvas.
+function pushStruct(sprites, img, c, r, targetH) {
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const w = Math.round(targetH * iw / ih);
+  const bx = c * TILE_SIZE + TILE_SIZE / 2, by = (r + 1) * TILE_SIZE;
+  sprites.push({ y: by, o: 0, draw: () => {
+    blitImg(img, bx - camX - w / 2, by - camY - targetH, w, targetH);
+  } });
+}
+// Like pushStruct, but cycles through key_0..key_(frames-1) at draw time (animated props).
+function pushAnimStruct(sprites, key, frames, fps, c, r, targetH) {
+  const bx = c * TILE_SIZE + TILE_SIZE / 2, by = (r + 1) * TILE_SIZE;
+  sprites.push({ y: by, o: 0, draw: () => {
+    const f = Math.floor(performance.now() / (1000 / fps)) % frames;
+    const img = propImg(key + '_' + f) || propImg(key);
+    if (!img) return;
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    const w = Math.round(targetH * iw / ih);
+    blitImg(img, bx - camX - w / 2, by - camY - targetH, w, targetH);
+  } });
+}
+
+// A ripple under the player while surfing on water.
+function surfRipple(renderPos) {
+  if (MAPS[currentZone][playerY][playerX] !== T.WATER || !canSurf()) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(220,240,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(renderPos.x - camX + TILE_SIZE / 2, renderPos.y - camY + TILE_SIZE - 4,
+              TILE_SIZE * 0.42, TILE_SIZE * 0.16, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// A frosty skid-trail under the player while sliding on ice (no Ice buddy to
+// keep your footing). Mirrors the surf ripple — a glossy sheen plus, when
+// actually sliding, speed streaks trailing behind in the travel direction.
+function iceTrail(renderPos, ts) {
+  if (MAPS[currentZone][playerY][playerX] !== T.ICE || buddyHasType('Ice')) return;
+  const cx = renderPos.x - camX + TILE_SIZE / 2;
+  const cy = renderPos.y - camY + TILE_SIZE - 4;
+  ctx.save();
+  // glossy icy sheen under the feet
+  ctx.strokeStyle = 'rgba(190,235,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, TILE_SIZE * 0.40, TILE_SIZE * 0.15, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // speed streaks while a slide is in motion
+  if (moveLinear) {
+    const dirX = playerDir === 'left' ? -1 : playerDir === 'right' ? 1 : 0;
+    const dirY = playerDir === 'up'   ? -1 : playerDir === 'down'  ? 1 : 0;
+    for (let i = 1; i <= 3; i++) {
+      ctx.strokeStyle = `rgba(215,248,255,${0.6 - i * 0.16})`;
+      ctx.lineWidth = 2;
+      const bx = cx - dirX * i * 7, by = cy - dirY * i * 7;
+      ctx.beginPath();
+      if (dirX !== 0) { ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4); }
+      else            { ctx.moveTo(bx - 6, by); ctx.lineTo(bx + 6, by); }
+      ctx.stroke();
+    }
+  }
+
+  // a couple of twinkling frost sparkles
+  ctx.fillStyle = 'rgba(235,252,255,0.9)';
+  for (let i = 0; i < 2; i++) {
+    if ((Math.floor(ts * 0.01) + i) % 3 === 0) continue;   // twinkle on/off
+    const sx = cx + (i === 0 ? -8 : 9), sy = cy - 2 - (i * 3);
+    ctx.fillRect(Math.round(sx), Math.round(sy), 2, 2);
+  }
+  ctx.restore();
+}
+
+function drawWild(ts) {
+  if (!wildPoke || wildPoke.zone !== currentZone) return;
+
+  const remaining = wildPoke.expireAt - Date.now();
+  if (remaining <= 0) return;
+
+  const px = wildPoke.x * TILE_SIZE - camX;
+  const py = wildPoke.y * TILE_SIZE - camY;
+
+  // Blink in final 2.5 s — every 300 ms
+  if (remaining < 2500 && Math.floor(remaining / 300) % 2 === 0) return;
+
+  // Off-screen? Pin an arrow to the edge so the player can hunt it down.
+  const sx = px + TILE_SIZE / 2, sy = py + TILE_SIZE / 2;
+  const margin = 18;
+  if (sx < margin || sx > canvas.width - margin || sy < margin || sy > canvas.height - margin) {
+    drawWildOffscreen(sx, sy, ts);
+    return;
+  }
+
+  // A red "!" alert over the spawn tile. It pops in on appear (scale overshoot +
+  // drop), then idles with a gentle bob and a side-to-side wiggle.
+  const elapsed = WILD_TIMEOUT - remaining;
+  const POP = 280;
+  let scale, yoff;
+  if (elapsed < POP) {
+    const t = elapsed / POP;
+    const c1 = 1.70158, c3 = c1 + 1;            // easeOutBack
+    scale = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    yoff  = -10 * (1 - t);                        // drops down into place
+  } else {
+    scale = 1;
+    yoff  = Math.sin(ts * 0.006) * 1.5;          // gentle idle bob
+  }
+  const wiggle = Math.sin(ts * 0.012) * 0.22;    // side-to-side wiggle
+
+  ctx.save();
+  ctx.translate(px + TILE_SIZE / 2, py + TILE_SIZE / 2 + yoff);
+  ctx.rotate(wiggle);
+  ctx.scale(scale * 1.5, scale * 1.5);           // 1.5× bigger
+  // dark outline
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(-4, -12, 8, 15);
+  ctx.fillRect(-4, 4, 8, 8);
+  // red fill
+  ctx.fillStyle = '#e81028';
+  ctx.fillRect(-3, -11, 6, 13);
+  ctx.fillRect(-3, 5, 6, 6);
+  ctx.restore();
+}
+
+// A red "!" badge clamped to the screen edge, with an arrow pointing toward an
+// off-screen wild spawn so you know which way to head.
+function drawWildOffscreen(sx, sy, ts) {
+  const W = canvas.width, H = canvas.height, pad = 26;
+  const cx0 = W / 2, cy0 = H / 2;
+  const dx = sx - cx0, dy = sy - cy0;
+  // Project the direction onto the inset rectangle's border.
+  const sc = 1 / Math.max(Math.abs(dx) / (W / 2 - pad), Math.abs(dy) / (H / 2 - pad), 1e-6);
+  const ex = cx0 + dx * sc, ey = cy0 + dy * sc;
+  const ang = Math.atan2(dy, dx);
+  const pulse = 1 + Math.sin(ts * 0.008) * 0.12;
+
+  ctx.save();
+  ctx.translate(Math.round(ex), Math.round(ey));
+  // soft glow
+  ctx.fillStyle = 'rgba(232,16,40,0.22)';
+  ctx.beginPath(); ctx.arc(0, 0, 14 * pulse, 0, Math.PI * 2); ctx.fill();
+  // arrow tip pointing toward the spawn
+  ctx.save();
+  ctx.rotate(ang);
+  ctx.fillStyle = '#e81028';
+  ctx.beginPath();
+  ctx.moveTo(16, 0); ctx.lineTo(8, -6); ctx.lineTo(8, 6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // disc with dark outline
+  ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(0, 0, 10.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e81028'; ctx.beginPath(); ctx.arc(0, 0,  8.5, 0, Math.PI * 2); ctx.fill();
+  // the "!"
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-1.5, -6, 3, 7);
+  ctx.fillRect(-1.5,  3, 3, 3);
+  ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════
 // WORLD RENDERING
 // ═══════════════════════════════════════════════════
-function drawWorld() {
-  // Tiles
-  for (let r = 0; r < MAP_ROWS; r++) {
-    for (let c = 0; c < MAP_COLS; c++) {
-      ctx.drawImage(tileCache[MAP[r][c]], c * TILE_SIZE, r * TILE_SIZE);
-    }
-  }
-  // Player
-  drawPlayer(playerX * TILE_SIZE, playerY * TILE_SIZE);
+function updateCamera(renderPos) {
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const mapW = cols * TILE_SIZE;
+  const mapH = rows * TILE_SIZE;
+  const cx = renderPos.x + TILE_SIZE / 2 - canvas.width / 2;
+  const cy = renderPos.y + TILE_SIZE / 2 - canvas.height / 2;
+  // Maps smaller than the viewport (building interiors) are centred; larger ones follow the player.
+  camX = mapW <= canvas.width  ? Math.round((mapW - canvas.width)  / 2) : Math.max(0, Math.min(cx, mapW - canvas.width));
+  camY = mapH <= canvas.height ? Math.round((mapH - canvas.height) / 2) : Math.max(0, Math.min(cy, mapH - canvas.height));
 }
 
-function drawPlayer(px, py) {
+// ═══════════════════════════════════════════════════
+// WEATHER / TIME-OF-DAY OVERLAYS
+// ═══════════════════════════════════════════════════
+// A day↔night cycle runs on its own (fades through dusk/dawn); rain drifts in
+// and out at random, except where a zone forces it ("rain") or forbids it
+// ("norain"). Debug toggles can force night/rain for previewing.
+const DAYNIGHT_CYCLE_MS = 600000;   // full cycle ≈ 5 min day / 5 min night — tweak here
+let nightMode = false, rainMode = false, nightCycle = true, rainDrops = [];
+let rainLevel = 0, rainTarget = 0, _rainNext = 0, _rainLastTs = 0;
+
+// A player-centred "lantern" light field — the same mechanic as the cave darkness,
+// reused for night so you keep a visible bubble around you. A Fire/light buddy
+// widens it (buddyLightsCave), exactly like in caves.
+function drawLightField(renderPos, ts, near, dim, far, rgb, warm, baseR, litR) {
+  const lit = buddyLightsCave();
+  const flick = lit ? Math.sin(ts * 0.009) * 0.08 + Math.sin(ts * 0.02) * 0.05 : 0;
+  const R = (lit ? litR : baseR) + flick;
+  const pcx = renderPos.x - camX + TILE_SIZE / 2, pcy = renderPos.y - camY + TILE_SIZE / 2;
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const startC = Math.max(0, Math.floor(camX / TILE_SIZE)), endC = Math.min(cols, startC + 22);
+  const startR = Math.max(0, Math.floor(camY / TILE_SIZE)), endR = Math.min(rows, startR + 16);
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      const dxp = (c * TILE_SIZE - camX + TILE_SIZE / 2) - pcx;
+      const dyp = (r * TILE_SIZE - camY + TILE_SIZE / 2) - pcy;
+      const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R;
+      const a = edge <= 0 ? near : edge <= 1.0 ? dim : far;
+      // Floor to integers so abutting translucent rects tile pixel-perfectly —
+      // fractional positions anti-alias their edges and leave a dark seam grid.
+      const x = Math.floor(c * TILE_SIZE - camX), y = Math.floor(r * TILE_SIZE - camY);
+      if (a > 0) { ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+      else if (warm && lit) { ctx.fillStyle = 'rgba(255,168,70,0.07)'; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE); }
+    }
+  }
+}
+
+// 0 = full day, 1 = full night, with smooth dusk/dawn fades.
+function autoNight(ts) {
+  const p = (ts % DAYNIGHT_CYCLE_MS) / DAYNIGHT_CYCLE_MS;
+  const smooth = t => t * t * (3 - 2 * t);
+  if (p < 0.45) return 0;                         // day
+  if (p < 0.50) return smooth((p - 0.45) / 0.05); // dusk
+  if (p < 0.95) return 1;                         // night
+  return 1 - smooth((p - 0.95) / 0.05);           // dawn
+}
+
+// Roaming rain: occasionally starts/stops on its own and fades smoothly.
+function updateRainState(ts) {
+  if (!_rainLastTs) _rainLastTs = ts;
+  const dt = Math.min(120, ts - _rainLastTs); _rainLastTs = ts;
+  if (ts > _rainNext) {
+    _rainNext = ts + 15000;                       // reconsider every 15s
+    if (rainTarget < 0.5) { if (Math.random() < 0.06) rainTarget = 1; }  // starts now and then
+    else { if (Math.random() < 0.12) rainTarget = 0; }                   // showers last a few minutes
+  }
+  rainLevel += Math.sign(rainTarget - rainLevel) * Math.min(Math.abs(rainTarget - rainLevel), 0.0004 * dt);
+}
+function zoneRain() {
+  const w = ZONE_INFO[currentZone].weather;
+  if (w === 'rain')   return 1;    // always (Dark Forest)
+  if (w === 'norain') return 0;    // never  (Volcano)
+  return rainLevel;                // elsewhere: the roaming weather
+}
+
+// Warm radial pools cast by the light props at night. Drawn with 'lighter' so
+// they brighten the dark overlay. Streetlights hold steady (a hair of breathing);
+// the fire pit flickers on layered noise like a campfire.
+function drawPropGlows(ts, nf) {
+  for (const p of PROPS) {
+    if (p.zone !== currentZone) continue;
+    const ty = propType(p); if (!ty.light) continue;
+    const sx = p.x * TILE_SIZE + TILE_SIZE / 2 - camX;
+    const sy = (p.y + 1) * TILE_SIZE - camY + (ty.gy || -16);   // glow origin near the lamp head / flames
+    let amp = nf, radius = (ty.rad || 2.5) * TILE_SIZE;
+    if (ty.light === 'fire') {
+      const flick = 0.78 + 0.14 * Math.sin(ts * 0.018) + 0.06 * Math.sin(ts * 0.043 + 2.1) + 0.05 * Math.sin(ts * 0.007 + 0.7);
+      amp *= flick; radius *= 0.9 + 0.12 * flick;
+    } else {
+      amp *= 0.96 + 0.04 * Math.sin(ts * 0.0015);   // barely-there breathing
+    }
+    const a = Math.min(0.6, 0.62 * amp);
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
+    g.addColorStop(0,   `rgba(${ty.rgb},${a})`);
+    g.addColorStop(0.5, `rgba(${ty.rgb},${a * 0.4})`);
+    g.addColorStop(1,   `rgba(${ty.rgb},0)`);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, radius, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawWeather(ts, renderPos) {
+  updateRainState(ts);                            // weather keeps evolving everywhere…
+  const z = ZONE_INFO[currentZone];
+  if (z.interior || z.base === T.CAVE) return;    // …but the sky only shows outdoors
+
+  // ── Time of day ──  (cave-identical lantern when lit; only the outer night is lighter)
+  const nf = z.night ? 1 : (nightMode ? 1 : (nightCycle ? autoNight(ts) : 0));   // some zones are always night
+  if (nf > 0.01) {
+    if (buddyLightsCave())
+      drawLightField(renderPos, ts, 0.0, 0.55 * nf, 0.62 * nf, '10,15,42', true, 1.3, 4.3);
+    else { ctx.fillStyle = `rgba(10,15,42,${0.62 * nf})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    drawPropGlows(ts, nf);                          // warm pools punched back through the dark
+  }
+
+  // ── Rain ──
+  const rf = rainMode ? 1 : zoneRain();
+  if (rf > 0.01) {
+    drawLightField(renderPos, ts, 0.0, 0.05 * rf, 0.12 * rf, '26,36,58', false, 4.0, 7.0);  // super-minimal darkening
+    drawRain(ts, rf);
+  }
+}
+function drawRain(ts, rf) {
+  const W = canvas.width, H = canvas.height;
+  if (!rainDrops.length || rainDrops._w !== W || rainDrops._h !== H) {
+    rainDrops = []; rainDrops._w = W; rainDrops._h = H;
+    const n = Math.round(W * H / 2000);     // plenty of drops — a real downpour
+    for (let i = 0; i < n; i++) rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: 9 + Math.random() * 12, s: 9 + Math.random() * 7 });
+  }
+  const slant = 2.2;
+  ctx.save();
+  ctx.lineCap = 'round';
+  // Build the streaks once, then stroke. The dark wider pass only helps white
+  // rain show on LIGHT ground (sand/snow); on dark zones (forest, highlands,
+  // caves) it reads as ugly black streaks, so skip it there and just draw the
+  // bright core.
+  const zb = ZONE_INFO[currentZone] && ZONE_INFO[currentZone].base;
+  const lightGround = zb === T.SAND || zb === T.ICE;
+  ctx.beginPath();
+  for (const d of rainDrops) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - slant, d.y + d.l); }
+  if (lightGround) { ctx.strokeStyle = `rgba(30,55,110,${0.5 * rf})`; ctx.lineWidth = 2.2; ctx.stroke(); }
+  ctx.strokeStyle = `rgba(225,238,255,${0.9 * rf})`; ctx.lineWidth = 1.0; ctx.stroke();
+  ctx.restore();
+  // advance the drops
+  for (const d of rainDrops) {
+    d.y += d.s; d.x -= slant * 0.4;
+    if (d.y > H) { d.y = -d.l; d.x = Math.random() * W; }
+    if (d.x < 0) d.x += W;
+  }
+}
+// Console/debug helpers — force night or rain on/off for previewing.
+function setNight(on) { nightMode = on === undefined ? !nightMode : !!on; return nightMode; }
+function setRain(on)  { rainMode  = on === undefined ? !rainMode  : !!on;  return rainMode; }
+
+// ── Soft tile corners ────────────────────────────────────────────
+// De-blockifier (no new art): after the flat ground grid is drawn, round the OUTER
+// corners where one outdoor terrain pokes into another, so paths/grass/sand/water
+// read as organic blobs instead of hard squares. At each corner where the two
+// edge-neighbours AND the diagonal are all the same *other* terrain, we clip the
+// little sliver outside a quarter-circle and draw THAT neighbour's real textured
+// tile into it — so the rounded reveal matches the ground beside it (no flat colour).
+let TILE_ROUND = true;            // master toggle (window.TILE_ROUND to flip live)
+const TILE_ROUND_R = 11;          // corner radius in px (0..16); bigger = rounder
+const ROUNDABLE = new Set([T.PATH, T.GRASS, T.WATER, T.SAND, T.CITY]);   // outdoor terrains that blob
+const TILE_BASE_COLOR = {         // fallback colour if a tile image isn't ready yet
+  [T.PATH]: '#d0b068', [T.GRASS]: '#38b038', [T.WATER]: '#2060d0', [T.SAND]: '#e8c870', [T.CITY]: '#909090',
+};
+// The textured tile image for a terrain at a given cell (art if present, else the
+// procedural variant) — same selection the main ground pass uses.
+function groundTileImg(zone, r, c, id) {
+  const cnt = TILE_ART[zone] && TILE_ART[zone][id];
+  if (cnt) { const img = tileArtImg(zone, id, tileVariant(zone, r, c, cnt)); if (img) return img; }
+  const variants = tileCache[id];
+  return variants ? variants[tileVariant(zone, r, c, variants.length)] : null;
+}
+function cornerSliverPath(dx, dy, which) {
+  const R = TILE_ROUND_R, TS = TILE_SIZE, H = Math.PI / 2;
+  ctx.beginPath();
+  if (which === 'tl')      { ctx.moveTo(dx, dy);            ctx.lineTo(dx + R, dy);            ctx.arc(dx + R,      dy + R,      R, 3 * H, 2 * H, true); }
+  else if (which === 'tr') { ctx.moveTo(dx + TS, dy);       ctx.lineTo(dx + TS, dy + R);       ctx.arc(dx + TS - R, dy + R,      R, 0,     -H,    true); }
+  else if (which === 'bl') { ctx.moveTo(dx, dy + TS);       ctx.lineTo(dx, dy + TS - R);       ctx.arc(dx + R,      dy + TS - R, R, 2 * H,  H,    true); }
+  else                     { ctx.moveTo(dx + TS, dy + TS);  ctx.lineTo(dx + TS - R, dy + TS);  ctx.arc(dx + TS - R, dy + TS - R, R, H,     0,    true); }
+  ctx.closePath();
+}
+function roundOuterCorner(zone, r, c, dx, dy, which, nbId) {
+  ctx.save();
+  cornerSliverPath(dx, dy, which);
+  ctx.clip();
+  const img = groundTileImg(zone, r, c, nbId);          // the neighbour terrain's real texture
+  if (img) ctx.drawImage(img, dx, dy, TILE_SIZE + 1, TILE_SIZE + 1);
+  else { ctx.fillStyle = TILE_BASE_COLOR[nbId] || '#000'; ctx.fillRect(dx, dy, TILE_SIZE, TILE_SIZE); }
+  ctx.restore();
+}
+function roundTileCorners(map, startR, endR, startC, endC, rows, cols) {
+  const z = currentZone, TS = TILE_SIZE;
+  const at = (r, c) => (r >= 0 && r < rows && c >= 0 && c < cols) ? map[r][c] : -1;
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      const t = map[r][c];
+      if (!ROUNDABLE.has(t)) continue;
+      const dx = Math.floor(c * TS - camX), dy = Math.floor(r * TS - camY);
+      const up = at(r - 1, c), dn = at(r + 1, c), lf = at(r, c - 1), rt = at(r, c + 1);
+      const ul = at(r - 1, c - 1), ur = at(r - 1, c + 1), dl = at(r + 1, c - 1), dr = at(r + 1, c + 1);
+      if (up !== t && up === lf && up === ul && ROUNDABLE.has(up)) roundOuterCorner(z, r, c, dx, dy, 'tl', up);
+      if (up !== t && up === rt && up === ur && ROUNDABLE.has(up)) roundOuterCorner(z, r, c, dx, dy, 'tr', up);
+      if (dn !== t && dn === lf && dn === dl && ROUNDABLE.has(dn)) roundOuterCorner(z, r, c, dx, dy, 'bl', dn);
+      if (dn !== t && dn === rt && dn === dr && ROUNDABLE.has(dn)) roundOuterCorner(z, r, c, dx, dy, 'br', dn);
+    }
+  }
+}
+
+// ── Ground shading overlay ───────────────────────────────────────
+// After normalizing the tile variants the ground can read a touch flat. This adds
+// gentle, world-anchored light/dark blotches that span several tiles and ignore the
+// grid — so the surface feels organic without bringing back per-tile checkerboarding.
+let GROUND_SHADE = true;          // master toggle
+const GROUND_SHADE_ALPHA = 0.67;  // strength of the soft-light blend (0..1)
+let _groundNoise = null;
+function buildGroundNoise() {
+  const N = 384;                                  // texture size (tiles seamlessly)
+  const [cv, x] = makeCanvas(N, N);
+  const smooth = t => t * t * (3 - 2 * t);
+  // Two octaves of tileable value-noise → big soft blobs + a little finer detail.
+  const octave = G => {
+    const g = [];
+    for (let i = 0; i < G; i++) { g[i] = []; for (let j = 0; j < G; j++) g[i][j] = Math.random(); }
+    return (px, py) => {
+      const gx = px / N * G, gy = py / N * G;
+      const x0 = Math.floor(gx) % G, y0 = Math.floor(gy) % G, x1 = (x0 + 1) % G, y1 = (y0 + 1) % G;
+      const fx = smooth(gx - Math.floor(gx)), fy = smooth(gy - Math.floor(gy));
+      const top = g[y0][x0] * (1 - fx) + g[y0][x1] * fx, bot = g[y1][x0] * (1 - fx) + g[y1][x1] * fx;
+      return top * (1 - fy) + bot * fy;
+    };
+  };
+  const o1 = octave(6), o2 = octave(12);          // ~2-tile blobs + ~1-tile detail
+  const img = x.createImageData(N, N), d = img.data;
+  for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+    const v = o1(px, py) * 0.7 + o2(px, py) * 0.3;          // 0..1
+    const g = Math.max(0, Math.min(255, 128 + (v - 0.5) * 150));   // grey around neutral 128
+    const i = (py * N + px) * 4;
+    d[i] = d[i + 1] = d[i + 2] = g; d[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  _groundNoise = cv;
+}
+function drawGroundNoise() {
+  if (!_groundNoise) buildGroundNoise();
+  const N = _groundNoise.width;
+  const ox = ((camX % N) + N) % N, oy = ((camY % N) + N) % N;   // world-anchored: scrolls with the terrain
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = GROUND_SHADE_ALPHA;
+  for (let y = -oy; y < canvas.height; y += N)
+    for (let x = -ox; x < canvas.width; x += N)
+      ctx.drawImage(_groundNoise, Math.floor(x), Math.floor(y));
+  ctx.restore();
+}
+
+function drawWorld(ts) {
+  const renderPos = getRenderPos(ts);
+  updateCamera(getRenderPos(ts, true));   // centre on the true grid position, not the bob/hop
+
+  ctx.fillStyle = '#000';                                  // letterbox around small interiors
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const map = MAPS[currentZone];
+  const { cols, rows } = ZONE_INFO[currentZone];
+  const startC = Math.max(0, Math.floor(camX / TILE_SIZE));
+  const endC   = Math.min(cols, startC + 22);
+  const startR = Math.max(0, Math.floor(camY / TILE_SIZE));
+  const endR   = Math.min(rows, startR + 16);
+  // Ground tiles are drawn at floored integer positions and 1px oversized so
+  // neighbours overlap — no black seams peek through during sub-pixel scrolling.
+  const TS1 = TILE_SIZE + 1;
+  const smPrev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
+  for (let r = startR; r < endR; r++) {
+    for (let c = startC; c < endC; c++) {
+      const t = map[r][c];
+      // A structure (building, or a tree we have art for) sits on grass; its body is
+      // drawn later in the depth pass. Everything else just uses its own tile art.
+      const isBuild = t === T.HOUSE || t === T.SHOP || t === T.HOSPITAL || t === T.GYM;
+      const _zo = ZONE_INFO[currentZone];
+      const isCaveEnt = t === T.CAVE_ENTRANCE && _zo.base !== T.CAVE && !_zo.cave && !_zo.interior && propImg('cave_entrance');   // new arch art → sit on natural ground (outdoor mouths only)
+      const isStruct = isBuild || isCaveEnt || (t === T.TREE && treeArtImg(currentZone));
+      const zbase = ZONE_INFO[currentZone].base;
+      // Trees carry their own grass patch, so on sandy zones (beach/desert/coast)
+      // sit them on SAND and let that patch ground them — no hard grass square.
+      const structGround = zbase === T.SAND ? T.SAND : T.GRASS;
+      const groundId = isBuild ? (zbase === T.CITY ? T.CITY : T.GRASS)
+                               : (isStruct ? structGround : t);
+      const cnt = TILE_ART[currentZone] && TILE_ART[currentZone][groundId];
+      const dx = Math.floor(c * TILE_SIZE - camX), dy = Math.floor(r * TILE_SIZE - camY);
+      let drew = false;
+      if (cnt) {
+        const img = tileArtImg(currentZone, groundId, tileVariant(currentZone, r, c, cnt));
+        if (img) { ctx.drawImage(img, dx, dy, TS1, TS1); drew = true; }
+      }
+      if (!drew) {                                    // procedural fallback
+        const variants = tileCache[groundId];
+        ctx.drawImage(variants[tileVariant(currentZone, r, c, variants.length)], dx, dy, TS1, TS1);
+      }
+    }
+  }
+  if (TILE_ROUND && TILE_ROUND_R > 0) roundTileCorners(map, startR, endR, startC, endC, rows, cols);
+  ctx.imageSmoothingEnabled = smPrev;
+  if (GROUND_SHADE && !ZONE_INFO[currentZone].interior && ZONE_INFO[currentZone].base !== T.CAVE) drawGroundNoise();
+  const zoneTints = {
+    4: 'rgba(255,80,0,0.14)',
+    5: 'rgba(0,30,0,0.22)',
+    6: 'rgba(160,210,255,0.16)',
+    7: 'rgba(220,170,50,0.08)',
+    14: 'rgba(70,70,130,0.12)',   // Lunar Pass — moonlit
+    15: 'rgba(210,180,90,0.07)',  // Safari Savanna — warm
+    16: 'rgba(170,215,255,0.16)', // Frostpeak Ridge — icy
+    17: 'rgba(240,220,80,0.07)',  // Voltage Works — electric
+    18: 'rgba(120,180,220,0.08)', // Seafoam Shore — sea
+    19: 'rgba(80,40,120,0.12)',   // Haunted Hollow — eerie
+  };
+  if (zoneTints[currentZone]) {
+    ctx.fillStyle = zoneTints[currentZone];
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  drawBarriers(ts);
+  drawSeamGates(ts);
+
+  // Rugs lie flat on the floor — drawn here (above the floor tiles, below every
+  //    structure/actor) so they never cover the player or furniture.
+  for (const d of (DECOR[currentZone] || [])) {
+    if (!RUG_KEYS.has(d.s)) continue;
+    const img = decorImg(d.s); if (!img) continue;
+    const h = Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE));
+    const w = Math.round(h * (img.naturalWidth || 32) / (img.naturalHeight || 32));
+    blitImg(img, d.x * TILE_SIZE + TILE_SIZE / 2 - camX - w / 2, (d.y + 1) * TILE_SIZE - camY - h, w, h);
+  }
+
+  // ── Depth pass: tall structures + actors drawn back-to-front by their foot Y,
+  //    so the player/buddy/NPCs are correctly occluded by buildings (and, later,
+  //    tall trees). At an equal foot Y, structures (o:0) draw behind actors (o:1).
+  const sprites = [];
+  for (let r = startR; r < Math.min(rows, endR + 2); r++) {
+    for (let c = startC; c < endC; c++) {
+      const t = map[r][c];
+      if (t === T.HOUSE) {
+        if (ZONE_INFO[currentZone].name === "Champion's Cove") { const bh = blueHouseArtImg(); pushStruct(sprites, bh || buildingSprites.HOUSE_BLUE, c, r, bh ? 104 : 87); }
+        else { const h = houseArtImg(); pushStruct(sprites, h || buildingSprites[T.HOUSE], c, r, h ? 93 : 87); }
+      }
+      else if (t === T.SHOP) { const s = shopArtImg(); pushStruct(sprites, s || buildingSprites[T.SHOP], c, r, s ? 93 : 87); }
+      else if (t === T.HOSPITAL) { const hp = hospitalArtImg(); pushStruct(sprites, hp || buildingSprites[T.HOSPITAL], c, r, hp ? 93 : 90); }
+      else if (t === T.GYM)      { const gy = gymArtImg();      pushStruct(sprites, gy || buildingSprites[T.GYM],      c, r, gy ? 93 : 90); }
+      else if (t === T.CAVE_ENTRANCE) { const z = ZONE_INFO[currentZone]; const cv = (z.base !== T.CAVE && !z.cave && !z.interior) && propImg('cave_entrance'); if (cv) pushStruct(sprites, cv, c, r, 50); }   // new rocky arch art (outdoor mouths)
+      else if (t === T.TREE) { const tr = treeArtImg(currentZone); if (tr) pushStruct(sprites, tr, c, r, Math.round(54 * (0.9 + tileNoise(currentZone, r, c) * 0.28))); }   // size jitter (0.9–1.18×) so each reads unique
+    }
+  }
+  // Interior décor props (furniture) — y-sorted like structures so the player
+  // walks correctly behind/in front of them. (Rugs are drawn flat above, not here.)
+  for (const d of (DECOR[currentZone] || [])) {
+    if (RUG_KEYS.has(d.s)) continue;
+    const img = decorImg(d.s);
+    if (img) pushStruct(sprites, img, d.x, d.y, Math.min(64, Math.round((img.naturalHeight || 32) * DECOR_SCALE)));
+  }
+  // Outdoor light props (streetlights, fire pit) — y-sorted so you walk behind the pole.
+  for (const p of PROPS) {
+    if (p.zone !== currentZone) continue;
+    const ty = propType(p);
+    if (ty.frames) { pushAnimStruct(sprites, p.s, ty.frames, ty.fps || 8, p.x, p.y, ty.h || 40); continue; }
+    const img = propImg(p.s);
+    if (img) pushStruct(sprites, img, p.x, p.y, ty.h || 40);
+  }
+  // Birthday cake — appears in your home once Prof. Birch gives it.
+  if (gotBirthdayCake && currentZone === HOME_CAKE.zone) {
+    const ck = propImg('birthday_cake');
+    if (ck) pushStruct(sprites, ck, HOME_CAKE.x, HOME_CAKE.y, 132);
+  }
+  // The cleared Gigantamax Gengar, asleep forever in the meadow beyond the seam.
+  if (currentZone === GENGAR_SLEEP.zone && isBarrierUnlocked('lullaby'))
+    sprites.push({ y: (GENGAR_SLEEP.y + 1) * TILE_SIZE, o: 1, draw: () => drawSleepingGengar(ts) });
+  // The awake Gengar guardian — depth-sorted so it stands in front of trees behind it.
+  for (const e of EXITS) {
+    if (e.from !== currentZone || e.barrier !== 'lullaby') continue;
+    const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+    if (lullabyClearFX) sprites.push({ y: titanSortY(e, zc, zr), o: 1, draw: () => drawLullabyClear(e, zc, zr, ts) });
+    else if (!isBarrierUnlocked('lullaby')) sprites.push({ y: titanSortY(e, zc, zr), o: 1, draw: () => drawSlumberingTitan(e, zc, zr, ts) });
+  }
+  for (const c of COLLECTIBLES)
+    if (c.zone === currentZone && !collected.has(c.id)) sprites.push({ y: (c.y + 1) * TILE_SIZE, o: 1, draw: () => drawCollectibleE(c, ts) });
+  for (const s of STONE_FINDS)
+    if (s.zone === currentZone && !foundStones.has(s.id)) sprites.push({ y: (s.y + 1) * TILE_SIZE, o: 1, draw: () => drawStoneE(s, ts) });
+  for (const n of NPCS) {
+    const a = npcBedAlpha(n);
+    if (a <= 0.02) continue;                           // tucked in for the night
+    const v = npcView(n);
+    if (v.zone === currentZone) sprites.push({ y: (v.y + 1) * TILE_SIZE, o: 1, draw: () => {
+      if (a >= 0.99) { drawNPCE(n, ts); return; }
+      ctx.save(); ctx.globalAlpha = a; drawNPCE(n, ts); ctx.restore();   // fading out at dusk / in at dawn
+    } });
+  }
+  if (wildTrainer && wildTrainer.zone === currentZone)
+    sprites.push({ y: (wildTrainer.y + 1) * TILE_SIZE, o: 1, draw: () => drawTrainerE(wildTrainer, ts) });
+  if (nightGhost && nightGhost.zone === currentZone)
+    sprites.push({ y: (nightGhost.y + 1) * TILE_SIZE, o: 1, draw: () => drawGhostE(nightGhost, ts) });
+  for (const r of ROCKETS)
+    if (r.zone === currentZone && !caughtIds.has(r.bird)) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRocketE(r, ts) });
+  for (const r of roamers)
+    if (r.zone === currentZone) sprites.push({ y: (r.y + 1) * TILE_SIZE, o: 1, draw: () => drawRoamerE(r, ts) });
+  if (activePet != null) {
+    const prp = getPetRenderPos(ts);
+    // When walking left/right the buddy shares our row, so anchor its sort key
+    // firmly behind the player (ignoring both idle-bobs) to stop the draw order
+    // flickering. Vertically, sort by its actual feet so depth stays correct.
+    const horiz = (playerDir === 'left' || playerDir === 'right');
+    const petSortY = horiz ? renderPos.y + TILE_SIZE - 6 : prp.y + TILE_SIZE + petDirOffsetY();
+    sprites.push({ y: petSortY, o: 0, draw: () => drawPet(ts) });
+  }
+  sprites.push({ y: renderPos.y + TILE_SIZE, o: 1, draw: () => { surfRipple(renderPos); iceTrail(renderPos, ts); drawPlayer(renderPos.x - camX, renderPos.y - camY, ts); } });
+  if (window.MP) MP.collectSprites(sprites, ts);
+  sprites.sort((a, b) => a.y - b.y || a.o - b.o);
+  sprites.forEach(s => s.draw());
+
+  drawWild(ts);
+  drawBuddyNotes(ts);
+
+  // Cave darkness — old-school, lit block-by-block. Each tile gets one of a few
+  // discrete darkness levels by its distance from the player, making stepped
+  // concentric rings (no smooth gradient). The lit radius is large only with a
+  // glowing buddy (Fire types, etc.); otherwise it's a tiny sliver.
+  if (ZONE_INFO[currentZone].base === T.CAVE) {
+    const lit = buddyLightsCave();
+    const flick = lit ? Math.sin(ts * 0.009) * 0.08 + Math.sin(ts * 0.02) * 0.05 : 0; // gentle torch flicker
+    const R = (lit ? 4.3 : 1.3) + flick;   // lit radius, in tiles
+    const pcx = renderPos.x - camX + TILE_SIZE / 2;
+    const pcy = renderPos.y - camY + TILE_SIZE / 2;
+    for (let r = startR; r < endR; r++) {
+      for (let c = startC; c < endC; c++) {
+        const dxp = (c * TILE_SIZE - camX + TILE_SIZE / 2) - pcx;
+        const dyp = (r * TILE_SIZE - camY + TILE_SIZE / 2) - pcy;
+        const edge = Math.sqrt(dxp * dxp + dyp * dyp) / TILE_SIZE - R; // tiles past the lit edge
+        let a;
+        if      (edge <= 0)   a = 0;      // fully lit
+        else if (edge <= 1.0) a = 0.55;   // one dim ring
+        else                  a = 1;      // pitch black
+        const x = Math.floor(c * TILE_SIZE - camX), y = Math.floor(r * TILE_SIZE - camY);   // integer-align to avoid seam grid
+        if (a > 0) {
+          ctx.fillStyle = a >= 1 ? '#000' : `rgba(4,3,14,${a})`;
+          ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        } else if (lit) {                  // faint warm torch tint on fully-lit tiles
+          ctx.fillStyle = 'rgba(255,168,70,0.07)';
+          ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  drawWeather(ts, renderPos);
+}
+
+// A Jigglypuff buddy sings — emit little music notes that drift up and fade.
+function drawBuddyNotes(ts) {
+  if (activePet === JIGGLYPUFF_ID && caughtIds.has(JIGGLYPUFF_ID)) {
+    if (ts - lastNoteTs > 460) {
+      lastNoteTs = ts;
+      const rp = getPetRenderPos(ts);
+      const chars = ['🎵', '🎶', '♪', '♫'];
+      noteParticles.push({
+        x: rp.x + TILE_SIZE / 2 + (Math.random() * 12 - 6),
+        y: rp.y + 2,
+        born: ts,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        sway: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  if (!noteParticles.length) return;
+  const LIFE = 1500;
+  noteParticles = noteParticles.filter(n => ts - n.born < LIFE);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const n of noteParticles) {
+    const t = (ts - n.born) / LIFE;
+    const sx = n.x + Math.sin(n.sway + t * 5) * 7 - camX;
+    const sy = n.y - t * 38 - camY;
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.font = Math.round(13 + t * 5) + 'px serif';
+    ctx.fillStyle = '#ffc8ec';   // (emoji notes keep their own colour)
+    ctx.fillText(n.char, sx, sy);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// Draw the buddy Pokémon trailing the player (small sprite, idle bob).
+function drawPet(ts) {
+  if (activePet == null) return;
+  const poke = POKEMON_DATA.find(p => p.id === activePet);
+  if (!poke || !caughtIds.has(poke.id)) return;
+  const rp = getPetRenderPos(ts);
+  const px = rp.x - camX, py = rp.y - camY + petDirOffsetY();
+  drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 12);
+  const img = canvasSprite(poke);
+  if (img.complete && img.naturalWidth) {
+    // Oversized (taller than a tile) so the buddy reads clearly.
+    const h = 46, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+    const dx = Math.round(px + (TILE_SIZE - w) / 2);
+    const dy = Math.round(py + TILE_SIZE - h + 5);
+    blitImg(img, dx, dy, w, h, petFacing === 1);   // flip when moving right
+  } else {
+    ctx.font = '32px serif';
+    ctx.textAlign = 'center';
+    ctx.save();
+    if (petFacing === 1) {
+      ctx.translate(px + TILE_SIZE, 0); ctx.scale(-1, 1);
+      ctx.fillText(poke.emoji, TILE_SIZE / 2, py + TILE_SIZE - 2);
+    } else {
+      ctx.fillText(poke.emoji, px + TILE_SIZE / 2, py + TILE_SIZE - 2);
+    }
+    ctx.restore();
+  }
+}
+
+// ─── Barrier graphics ────────────────────────────────
+// Screen position of one barrier block (the tile at offset p along the exit edge).
+function barrierBlockPos(exit, p, zc, zr) {
+  if      (exit.dir === 'south') return { bx: p * TILE_SIZE - camX, by: (zr - 1) * TILE_SIZE - camY };
+  else if (exit.dir === 'north') return { bx: p * TILE_SIZE - camX, by: 0 - camY };
+  else if (exit.dir === 'west')  return { bx: 0 - camX,             by: p * TILE_SIZE - camY };
+  else                           return { bx: (zc - 1) * TILE_SIZE - camX, by: p * TILE_SIZE - camY };
+}
+// Indicators for the extra seam-gates (friend count / required type / required buddy).
+function drawSeamGates(ts) {
+  const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+  for (const exit of EXITS) {
+    if (exit.from !== currentZone) continue;
+    const sgi = seamGateInfo(exit.from, exit.to);
+    if (!sgi || seamGateOpen(sgi.key, sgi.g)) continue;
+    const g = sgi.g, key = sgi.key;
+    const tint = seamTint(g);
+    const horiz = exit.dir === 'north' || exit.dir === 'south';
+    // A glowing energy wall filling every tile along the seam.
+    exit.pos.forEach((p, i) => {
+      const { bx, by } = barrierBlockPos(exit, p, zc, zr);
+      drawSeamCell(bx, by, tint, ts, i, horiz);
+    });
+    // Emblem on the centre tile so the requirement is legible.
+    const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+    const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+    drawSeamEmblem(g, tint, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2);
+  }
+  // Cave-mouth portals are gated too — mark the mouth so it reads as sealed.
+  for (const portal of PORTALS) {
+    if (portal.from !== currentZone) continue;
+    const sgi = seamGateInfo(portal.from, portal.to);
+    if (!sgi || seamGateOpen(sgi.key, sgi.g)) continue;
+    const bx = portal.fx * TILE_SIZE - camX, by = portal.fy * TILE_SIZE - camY;
+    drawSeamCell(bx, by, seamTint(sgi.g), ts, 0, true);
+    drawSeamEmblem(sgi.g, seamTint(sgi.g), bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + Math.sin(ts * 0.003) * 2);
+  }
+  // Open bursts for seams that were just cleared (match either crossing direction).
+  for (const key in seamFX) {
+    const exit = EXITS.find(e => {
+      if (e.from !== currentZone) return false;
+      const i = seamGateInfo(e.from, e.to);
+      return i && i.key === key;
+    });
+    if (!exit) continue;
+    drawSeamBurst(exit, seamFX[key], ts, zc, zr);
+  }
+}
+// The legible requirement badge in the middle of a gate (type icon / buddy / count).
+function drawSeamEmblem(g, tint, cx, cy) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(14,10,20,.7)'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = tint; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (g.type != null) {
+    const ic = typeIconImg(g.type);
+    if (ic) { const h = 26, w = Math.round(h * ic.naturalWidth / ic.naturalHeight); ctx.drawImage(ic, cx - w / 2, cy - h / 2, w, h); }
+  } else if (g.buddyId != null) {
+    const pk = POKEMON_DATA.find(x => x.id === g.buddyId), img = pk && canvasSprite(pk);
+    if (img && img.complete && img.naturalWidth) { const h = 28, w = Math.round(h * img.naturalWidth / img.naturalHeight); ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h); }
+    ctx.font = '11px serif'; ctx.fillText('🔒', cx + 10, cy - 9);
+  } else {
+    ctx.font = '15px serif'; ctx.fillText('🔒', cx, cy - 4);
+    ctx.fillStyle = caughtIds.size >= g.friends ? '#7fe0a0' : '#ffe070';
+    ctx.font = 'bold 10px sans-serif'; ctx.fillText(caughtIds.size + '/' + g.friends, cx, cy + 9);
+  }
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+// One tile of the energy wall: a tinted pane with a sweeping shimmer and glow border.
+function drawSeamCell(bx, by, tint, ts, idx, horiz) {
+  ctx.save();
+  ctx.globalAlpha = 0.20 + 0.06 * Math.sin(ts * 0.004 + idx * 0.9);
+  ctx.fillStyle = tint;
+  ctx.fillRect(bx + 1, by + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+  // Sweeping highlight band.
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = '#ffffff';
+  const t = (ts * 0.06 + idx * 11) % (TILE_SIZE + 16) - 8;
+  if (horiz) ctx.fillRect(bx + t, by + 2, 5, TILE_SIZE - 4);
+  else       ctx.fillRect(bx + 2, by + t, TILE_SIZE - 4, 5);
+  // Glowing border.
+  ctx.globalAlpha = 0.55 + 0.2 * Math.sin(ts * 0.005 + idx);
+  ctx.lineWidth = 2; ctx.strokeStyle = tint;
+  ctx.shadowBlur = 8; ctx.shadowColor = tint;
+  ctx.strokeRect(bx + 1.5, by + 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
+  ctx.restore();
+}
+// Expanding ring + sparks when a seam dissolves.
+function drawSeamBurst(exit, fx, ts, zc, zr) {
+  const k = Math.min(1, (ts - fx.start) / SEAM_FX_MS);
+  if (k >= 1) return;
+  const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+  const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+  const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2;
+  ctx.save();
+  ctx.globalAlpha = 1 - k;
+  ctx.lineWidth = 3; ctx.strokeStyle = fx.tint; ctx.shadowBlur = 10; ctx.shadowColor = fx.tint;
+  ctx.beginPath(); ctx.arc(cx, cy, 6 + k * (TILE_SIZE * (exit.pos.length * 0.4 + 0.8)), 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = fx.tint;
+  for (let s = 0; s < 8; s++) {
+    const a = s / 8 * Math.PI * 2, r = 4 + k * 26;
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2.2 * (1 - k) + 0.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawBarriers(ts) {
+  const zoneExits = EXITS.filter(e => e.from === currentZone);
+  for (const exit of zoneExits) {
+    if (!exit.barrier) continue;
+    const { cols: zc, rows: zr } = ZONE_INFO[currentZone];
+    if (exit.barrier === 'lullaby') continue;          // Gengar IS the blocker — body drawn in the depth pass, no box
+    if (barrierFX[exit.barrier]) { drawBarrierFX(exit, barrierFX[exit.barrier], zc, zr, ts); continue; }   // breaking!
+    if (isBarrierUnlocked(exit.barrier)) continue;
+    const signEmoji = BARRIERS[exit.barrier].sign;
+    const midP = exit.pos[Math.floor(exit.pos.length / 2)];
+    exit.pos.forEach((p, i) => {
+      const { bx, by } = barrierBlockPos(exit, p, zc, zr);
+      drawBarrierTile(ctx, exit.barrier, bx, by, ts, i, exit.pos.length);
+    });
+    // Sign sits ON the middle barrier block (what TYPE breaks it).
+    const { bx, by } = barrierBlockPos(exit, midP, zc, zr);
+    const bob = Math.sin(ts * 0.003) * 2;
+    const icon = typeIconImg(BARRIERS[exit.barrier].needsType);
+    if (icon) {
+      const h = 26, w = Math.round(h * icon.naturalWidth / icon.naturalHeight);
+      ctx.drawImage(icon, bx + TILE_SIZE / 2 - w / 2, by + TILE_SIZE / 2 - h / 2 + bob, w, h);
+    } else {
+      ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(signEmoji, bx + TILE_SIZE / 2, by + TILE_SIZE / 2 + bob);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+}
+// The break effect: each block erupts in a storm of little type-icons that fly
+// out and grow, while the blocks shake then shrink — then the path opens.
+function drawBarrierFX(exit, fx, zc, zr, ts) {
+  if (!fx.parts) {                                  // spawn the particle storm once
+    fx.parts = [];
+    const PER = 14;                                 // little icons per block
+    for (let bi = 0; bi < exit.pos.length; bi++) {
+      for (let k = 0; k < PER; k++) {
+        fx.parts.push({
+          bi,
+          ang: Math.random() * Math.PI * 2,
+          spd: 16 + Math.random() * 46,             // how far it flies over the effect
+          delay: Math.random() * 0.4,               // staggered bursts
+          s0: 3 + Math.random() * 3,                // starts tiny
+          s1: 15 + Math.random() * 16,              // grows big
+          rise: 4 + Math.random() * 12,             // slight upward drift
+          wob: Math.random() * 6.28,
+        });
+      }
+    }
+  }
+  const p = Math.min((ts - fx.start) / BARRIER_FX_MS, 1);
+  const shake = (p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4)) * 3.2;
+  const scale = p < 0.6 ? 1 : Math.max(0, 1 - (p - 0.6) / 0.4);     // blocks shrink over the last 40%
+  const bfade = p < 0.65 ? 1 : Math.max(0, 1 - (p - 0.65) / 0.35);
+  // dissolving blocks underneath
+  exit.pos.forEach((pp, i) => {
+    const { bx, by } = barrierBlockPos(exit, pp, zc, zr);
+    const jx = (Math.random() * 2 - 1) * shake, jy = (Math.random() * 2 - 1) * shake;
+    ctx.save();
+    ctx.globalAlpha = bfade;
+    ctx.translate(bx + TILE_SIZE / 2 + jx, by + TILE_SIZE / 2 + jy);
+    ctx.scale(scale, scale);
+    drawBarrierTile(ctx, exit.barrier, -TILE_SIZE / 2, -TILE_SIZE / 2, ts, i, exit.pos.length);
+    ctx.restore();
+  });
+  // the particle storm of type-icons (glowy "fx" art, emoji fallback)
+  const fxIcon = typeFxImg(fx.needsType);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const pt of fx.parts) {
+    const a = (p - pt.delay) / (1 - pt.delay);
+    if (a <= 0) continue;
+    const { bx, by } = barrierBlockPos(exit, exit.pos[pt.bi], zc, zr);
+    const cx = bx + TILE_SIZE / 2, cy = by + TILE_SIZE / 2;
+    const dist = pt.spd * a;
+    const x = cx + Math.cos(pt.ang) * dist + Math.sin(ts * 0.02 + pt.wob) * 2;
+    const y = cy + Math.sin(pt.ang) * dist - pt.rise * a;
+    const size = pt.s0 + (pt.s1 - pt.s0) * a;       // tiny → big
+    ctx.globalAlpha = a < 0.6 ? 1 : Math.max(0, 1 - (a - 0.6) / 0.4);
+    if (fxIcon) {
+      const w = size * fxIcon.naturalWidth / fxIcon.naturalHeight;
+      ctx.drawImage(fxIcon, x - w / 2, y - size / 2, w, size);
+    } else {
+      ctx.font = Math.round(size) + 'px serif';
+      ctx.fillText(fx.sign, x, y);
+    }
+  }
+  ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
+}
+
+// The Gigantamax Gengar art that guards the lullaby seam (awake) + its sleeping form.
+let _titanImg = null, _titanSleepImg = null;
+function titanImg() {
+  if (!_titanImg) { _titanImg = new Image(); _titanImg.src = 'art/titan/gengar.png?v=' + ART_V; }
+  return (_titanImg.complete && _titanImg.naturalWidth) ? _titanImg : null;
+}
+function titanSleepImg() {
+  if (!_titanSleepImg) { _titanSleepImg = new Image(); _titanSleepImg.src = 'art/titan/gengar_sleep.png?v=' + ART_V; }
+  return (_titanSleepImg.complete && _titanSleepImg.naturalWidth) ? _titanSleepImg : null;
+}
+// Where the cleared Gengar curls up to sleep, forever, in the meadow beyond the seam.
+const GENGAR_SLEEP = { zone: 29, x: 13, y: 12 };
+let lullabyClearFX = null;   // { start } while the awake Gengar fades into sleep at the seam
+
+// The tiles each Gengar's body physically blocks (≈ its footprint). The awake one
+// guards the east edge of Sunpetal Meadow; the sleeper sprawls across the SE meadow.
+function tileRect(x0, y0, x1, y1) { const s = new Set(); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) s.add(x + ',' + y); return s; }
+const AWAKE_GENGAR = { zone: 13, tiles: tileRect(26, 3, 29, 11) };
+const SLEEP_GENGAR = { zone: 29, tiles: tileRect(9, 8, 17, 13) };
+// What (if anything) a Gengar is blocking at a destination tile.
+function gengarBlockAt(nx, ny) {
+  if (currentZone === AWAKE_GENGAR.zone && !isBarrierUnlocked('lullaby') && AWAKE_GENGAR.tiles.has(nx + ',' + ny)) return 'awake';
+  if (currentZone === SLEEP_GENGAR.zone && isBarrierUnlocked('lullaby') && SLEEP_GENGAR.tiles.has(nx + ',' + ny)) return 'sleep';
+  return null;
+}
+
+// Screen centre of a barrier opening.
+function titanCenter(exit, zc, zr) {
+  const ps = exit.pos, lo = Math.min(...ps), hi = Math.max(...ps) + 1;
+  const vert = (exit.dir === 'east' || exit.dir === 'west');
+  let cx, cy;
+  if      (exit.dir === 'east')  { cx = (zc - 1) * TILE_SIZE - camX - TILE_SIZE * 0.25; cy = (lo + hi) / 2 * TILE_SIZE - camY; }
+  else if (exit.dir === 'west')  { cx = TILE_SIZE * 1.25 - camX; cy = (lo + hi) / 2 * TILE_SIZE - camY; }
+  else if (exit.dir === 'south') { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = (zr - 1) * TILE_SIZE - camY - TILE_SIZE * 0.25; }
+  else                           { cx = (lo + hi) / 2 * TILE_SIZE - camX; cy = TILE_SIZE * 1.25 - camY; }
+  return { cx, cy, vert };
+}
+// World-Y the awake Gengar sorts at (feet), so trees behind him draw underneath.
+function titanSortY(exit, zc, zr) {
+  const ps = exit.pos, lo = Math.min(...ps), hi = Math.max(...ps) + 1;
+  if (exit.dir === 'east' || exit.dir === 'west') return ((lo + hi) / 2 + 3) * TILE_SIZE;
+  if (exit.dir === 'south') return (zr + 2) * TILE_SIZE;
+  return 3 * TILE_SIZE;
+}
+// The awake Gengar's draw rect (2.25× big, dropped 1.5 tiles, with a breathing wobble).
+function awakeGengarRect(cx, cy, ts) {
+  const U = TILE_SIZE, down = U * 1.5;
+  const breathe = Math.sin(ts * 0.0022) * 3;
+  const img = titanImg();
+  const H = U * 2.8 * 3 + breathe;                       // 3× bigger
+  const W = img ? H * img.naturalWidth / img.naturalHeight : U * 2.8;
+  return { img, W, H, x: cx - W / 2, y: cy + U * 0.55 + down - H, footY: cy + U * 0.5 + down };
+}
+// Sporadic little angry hop: most ~2.4s windows it stays put; some it leaps.
+function gengarHop(ts) {
+  const period = 2400, idx = Math.floor(ts / period);
+  const r = Math.abs(Math.sin(idx * 12.9898) * 43758.5453) % 1;   // pseudo-random per window
+  if (r > 0.55) return 0;                                          // this window: no jump
+  const local = (ts % period) / period, dur = 0.20;
+  if (local >= dur) return 0;
+  return Math.sin(local / dur * Math.PI) * TILE_SIZE * (0.45 + r * 0.7);
+}
+// A gentle rising stream of sleepy "z"s.
+function drawSleepZs(x, baseY, ts, scale, alpha) {
+  scale = scale || 1; alpha = alpha == null ? 1 : alpha;
+  ctx.save(); ctx.textAlign = 'left';
+  for (let i = 0; i < 3; i++) {
+    const t = ((ts * 0.0011) + i / 3) % 1;            // 0→1 drifting up-and-right
+    const a = alpha * Math.sin(Math.PI * t);          // fade in then out
+    if (a <= 0.02) continue;
+    ctx.globalAlpha = a; ctx.fillStyle = '#cfe6ff';
+    ctx.font = `${Math.round((9 + t * 9) * scale)}px serif`;
+    ctx.fillText('z', x + t * 16 * scale, baseY - t * 36 * scale);
+  }
+  ctx.restore();
+}
+// The colossal Gengar, wide AWAKE, looming over the seam (drawn in the depth pass
+// so it sits in front of the trees behind it). Sing it to sleep to clear the seam.
+function drawSlumberingTitan(exit, zc, zr, ts) {
+  const { cx, cy, vert } = titanCenter(exit, zc, zr);
+  const r = awakeGengarRect(cx, cy, ts);
+  const hop = gengarHop(ts);                          // sporadic angry leap
+  const jitter = Math.sin(ts * 0.021) * 0.8 + (hop > 0 ? Math.sin(ts * 0.08) * 2 : 0);  // extra shake mid-jump
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(cx, r.footY, r.W * (0.30 - hop * 0.0008), Math.max(4, 9 - hop * 0.06), 0, 0, Math.PI * 2); ctx.fill();  // shadow shrinks as it leaps
+  if (r.img) ctx.drawImage(r.img, r.x + jitter, r.y - hop, r.W, r.H);
+  else { ctx.fillStyle = '#3a1d4a'; ctx.fillRect(r.x, r.y - hop, r.W, r.H); }
+  ctx.restore();
+  const bob = Math.sin(ts * 0.003) * 3;               // hint it's AWAKE — sing it down
+  ctx.font = '22px serif'; ctx.textAlign = 'left';
+  ctx.fillText('🎵', cx + (vert ? -14 : -4), Math.round(r.y - hop - 6) + bob);
+}
+// The lullaby lands: the awake Gengar fades out in a swelling cloud of zzz.
+function drawLullabyClear(exit, zc, zr, ts) {
+  const { cx, cy } = titanCenter(exit, zc, zr);
+  const r = awakeGengarRect(cx, cy, ts);
+  const p = Math.min((ts - lullabyClearFX.start) / LULLABY_FX_MS, 1);
+  if (r.img) { ctx.save(); ctx.globalAlpha = 1 - p; ctx.drawImage(r.img, r.x, r.y, r.W, r.H); ctx.restore(); }
+  drawSleepZs(cx - 4, r.y + r.H * 0.35, ts, 1.8, 0.5 + 0.5 * p);
+}
+// The cleared Gengar, curled up asleep in the meadow — breathing slowly, puffing z's.
+function drawSleepingGengar(ts) {
+  const img = titanSleepImg();
+  const U = TILE_SIZE;
+  const px = GENGAR_SLEEP.x * TILE_SIZE - camX + TILE_SIZE / 2;
+  const py = (GENGAR_SLEEP.y + 1) * TILE_SIZE - camY;
+  const breath = Math.sin(ts * 0.0016);               // slow, deep sleep-breathing
+  if (img) {
+    const baseH = U * 2.1 * 4, H = baseH * (1 + 0.03 * breath), W = baseH * img.naturalWidth / img.naturalHeight;   // 4× bigger
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.26)';
+    ctx.beginPath(); ctx.ellipse(px, py - 3, W * 0.38, 11, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(img, px - W / 2, py - H, W, H);      // anchored at the feet so it puffs up/down
+    ctx.restore();
+    drawSleepZs(px + W * 0.16, py - H * 0.78, ts, 1.6, 0.9);
+  }
+}
+
+// Real barrier art: a 3-tile-wide strip per type, sliced across the barrier's blocks.
+const BARRIER_ART = new Set(['log', 'fence', 'lava', 'vine', 'frost', 'sand', 'psychic']);
+const _barrierStrip = {};
+function barrierStripImg(key) {
+  let i = _barrierStrip[key];
+  if (!i) { i = new Image(); i.src = 'art/barrier/' + key + '.png?v=' + ART_V; _barrierStrip[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+// Type symbols: framed "sign" icons (shown on the barrier block) + glowy "fx" icons (the break particles).
+const _typeIcon = {}, _typeFx = {};
+function typeIconImg(type) { let i = _typeIcon[type]; if (!i) { i = new Image(); i.src = 'art/typeicon/' + type + '.png?v=' + ART_V; _typeIcon[type] = i; } return (i.complete && i.naturalWidth) ? i : null; }
+function typeFxImg(type)   { let i = _typeFx[type];   if (!i) { i = new Image(); i.src = 'art/typefx/'   + type + '.png?v=' + ART_V; _typeFx[type]   = i; } return (i.complete && i.naturalWidth) ? i : null; }
+function drawBarrierTile(ctx, key, bx, by, ts, idx, n) {
+  if (BARRIER_ART.has(key)) {                          // sliced strip art
+    const img = barrierStripImg(key);
+    if (img) {
+      const total = n || 1, i = idx || 0;
+      const sliceW = img.naturalWidth / total;
+      ctx.drawImage(img, i * sliceW, 0, sliceW, img.naturalHeight, bx, by + TILE_SIZE - 34, TILE_SIZE, 34);
+      return;
+    }
+  }
+  if (key === 'log') {
+    ctx.fillStyle = '#5C2A0A';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(bx + 1, by + 2 + i * 7, 30, 5);
+      ctx.fillStyle = '#A0522D';
+      ctx.fillRect(bx + 1, by + 2 + i * 7, 30, 2);
+    }
+    ctx.fillStyle = '#4a1a05';
+    ctx.fillRect(bx + 5, by + 3, 3, 3);
+    ctx.fillRect(bx + 22, by + 10, 3, 3);
+  } else if (key === 'rock') {
+    const img = propImg('boulder');                  // real boulder art → a row of river rocks
+    if (img) {
+      const h = 34, w = Math.round(h * img.naturalWidth / img.naturalHeight);
+      ctx.drawImage(img, bx + TILE_SIZE / 2 - w / 2, by + TILE_SIZE - h + 1, w, h);
+      return;
+    }
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    const rocks = [
+      { cx: 6,  cy: 4,  rx: 14, ry: 12 },
+      { cx: 18, cy: 6,  rx: 10, ry: 10 },
+      { cx: 4,  cy: 18, rx: 12, ry: 10 },
+      { cx: 20, cy: 20, rx: 8,  ry: 8  },
+    ];
+    for (const r of rocks) {
+      ctx.fillStyle = '#707070';
+      ctx.beginPath();
+      ctx.ellipse(bx + r.cx + r.rx/2, by + r.cy + r.ry/2, r.rx/2, r.ry/2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#909090';
+      ctx.beginPath();
+      ctx.ellipse(bx + r.cx + r.rx/2 - r.rx/3 + 1, by + r.cy + r.ry/2 - r.ry/3 + 1, r.rx/4, r.ry/4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (key === 'fence') {
+    ctx.fillStyle = '#0a0a18';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    // Posts
+    ctx.fillStyle = '#555';
+    ctx.fillRect(bx + 3, by + 1, 5, 30);
+    ctx.fillRect(bx + 24, by + 1, 5, 30);
+    // Animated wires
+    const sparking = Math.sin(ts * 0.008) > 0;
+    ctx.strokeStyle = sparking ? '#ffff44' : '#cc9900';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + 8, by + 9);
+    ctx.lineTo(bx + 24, by + 9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx + 8, by + 21);
+    ctx.lineTo(bx + 24, by + 21);
+    ctx.stroke();
+    // Insulator blobs
+    ctx.fillStyle = '#cc4400';
+    ctx.fillRect(bx + 6, by + 7, 4, 4);
+    ctx.fillRect(bx + 6, by + 19, 4, 4);
+    // Spark dots
+    if (sparking) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx + 14, by + 7, 2, 2);
+      ctx.fillRect(bx + 18, by + 19, 2, 2);
+    }
+  } else if (key === 'vine') {
+    ctx.fillStyle = '#1a4010';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#3a7020';
+    ctx.fillRect(bx + 5,  by, 4, TILE_SIZE);
+    ctx.fillRect(bx + 13, by, 4, TILE_SIZE);
+    ctx.fillRect(bx + 21, by, 4, TILE_SIZE);
+    ctx.fillStyle = '#50a030';
+    [[3,6,8,6],[11,12,8,6],[19,4,8,6],[5,20,6,6],[15,18,8,6]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+    ctx.fillStyle = '#70c050';
+    [[4,7,4,3],[12,13,4,3],[20,5,4,3]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+  } else if (key === 'frost') {
+    ctx.fillStyle = '#a0c8e8';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#d8eeff';
+    ctx.fillRect(bx+2, by+2, 12, 28);
+    ctx.fillRect(bx+16, by+6, 12, 22);
+    ctx.fillStyle = '#b8d8f8';
+    ctx.fillRect(bx+4, by+8, 6, 16);
+    ctx.fillRect(bx+18, by+4, 8, 20);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx+6,  by+4,  2, 8);
+    ctx.fillRect(bx+4,  by+8,  8, 2);
+    ctx.fillRect(bx+20, by+10, 2, 8);
+    ctx.fillRect(bx+18, by+14, 8, 2);
+  } else if (key === 'sand') {
+    ctx.fillStyle = '#c89828';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = '#b88020';
+      ctx.fillRect(bx, by + i * 8, TILE_SIZE, 7);
+      ctx.fillStyle = '#d0a030';
+      ctx.fillRect(bx + (i % 2 === 0 ? 0 : 14), by + i * 8, 14, 6);
+    }
+    ctx.fillStyle = '#e8c040';
+    [[4,2,3,3],[16,10,3,3],[8,18,3,3],[22,26,3,3]].forEach(([lx,ly,lw,lh]) => {
+      ctx.fillRect(bx+lx, by+ly, lw, lh);
+    });
+  } else if (key === 'lava') {
+    ctx.fillStyle = '#c03010';
+    ctx.fillRect(bx, by, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#ff6010';
+    ctx.fillRect(bx, by,      TILE_SIZE, 6);
+    ctx.fillRect(bx, by + 12, TILE_SIZE, 6);
+    ctx.fillRect(bx, by + 24, TILE_SIZE, 6);
+    ctx.fillStyle = '#ffaa30';
+    ctx.beginPath();
+    ctx.ellipse(bx+8,  by+9,  5, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(bx+22, by+21, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffd060';
+    ctx.fillRect(bx+6,  by+8,  2, 2);
+    ctx.fillRect(bx+20, by+20, 2, 2);
+  }
+}
+
+function drawPlayer(px, py, ts) {
+  drawShadow(px + TILE_SIZE / 2, py + TILE_SIZE - 4, 11);
+  // Animated explorer: 4 facings × 4 walk frames. Cycle the frames while we're
+  // sliding between tiles; rest on the idle frame (0) when standing still.
+  if (ts != null) {
+    const moving = (ts - moveAnimTs) < moveAnimDur;
+    const frame  = moving ? WALK_SEQ[Math.floor(ts / 120) % WALK_SEQ.length] : 1;   // idle = neutral pose
+    if (drawAnimChar('player', playerDir, frame, px + TILE_SIZE / 2, py, 53)) return;   // 25% larger, matching NPCs
+  }
+  // Static explorer field sprite (4-row facing sheet); falls back to the pixel sprite.
+  if (drawCharField('player', playerDir, px + TILE_SIZE / 2, py, 53)) return;
   const rows   = PLAYER_SPRITE[playerDir];
   const scale  = 3;
   const pw     = 8 * scale;
@@ -337,27 +4691,49 @@ function drawPlayer(px, py) {
 // ═══════════════════════════════════════════════════
 // ENCOUNTER
 // ═══════════════════════════════════════════════════
-function beginEncounter(poke) {
+function beginEncounter(poke, roamer = null) {
+  encHappy = false;
+  encTries = 0;
   currentPoke = poke;
+  currentLegend = roamer;
   gameState   = 'encounter';
+  seenIds.add(poke.id);
+  learnTip('befriend');
+
+  clearWild();
+  clearTimeout(spawnTimerId);
+
+  // Reset throw animation from previous encounter
+  const pokeWrap = document.getElementById('enc-pokemon-wrap');
+  pokeWrap.style.animation = '';
+  pokeWrap.style.opacity   = '';
+  pokeWrap.style.transform = '';
+  document.getElementById('throw-ball').classList.add('hidden');
 
   document.getElementById('enc-name').textContent      = poke.name;
   document.getElementById('enc-type-badge').textContent = poke.type;
   document.getElementById('enc-type-badge').style.background = typeColor(poke.type);
-  document.getElementById('enc-emoji-display').textContent   = poke.emoji;
-  document.getElementById('enc-thought-emoji').textContent   = poke.actionEmoji;
-  document.getElementById('enc-thought-text').textContent    =
-    poke.action === 'feed' ? 'I want food!' :
-    poke.action === 'pet'  ? 'Pet me please!' :
-                             'Play with me!';
+  setPokeDisplay(document.getElementById('enc-emoji-display'), poke, 120);
+  document.getElementById('enc-bottom').classList.remove('hidden');
+  setActionIcon(document.getElementById('enc-thought-emoji'), poke.actionEmoji);
 
   // Enable/reset buttons
   document.querySelectorAll('.action-btn').forEach(b => {
     b.disabled = false;
     b.classList.remove('correct', 'wrong');
   });
+  document.getElementById('enc-throw-wrap').classList.add('hidden');
+  document.getElementById('enc-no-balls-msg').classList.add('hidden');
+  document.getElementById('enc-buttons').classList.remove('hidden');
+  // Restore the taming info for this fresh encounter (hidden once tamed).
+  document.getElementById('enc-thought-bubble').classList.remove('hidden');
+  const prompt = document.getElementById('enc-prompt');
+  prompt.classList.remove('hidden');
+  prompt.textContent = 'What does it want?';
+  document.getElementById('timer-wrap').classList.remove('hidden');
 
   showScreen('encounter');
+  flashScreen();
   playEncounterJingle();
   startTimer();
 }
@@ -375,7 +4751,13 @@ function startTimer() {
   fill.style.width = '0%';
 
   timerStart = Date.now();
-  timerId = setTimeout(() => fled(), TIMER_MS);
+  timerId = setTimeout(() => encounterFailed(), TIMER_MS);
+}
+
+// A failed encounter: legendaries slip away and relocate; others just flee.
+function encounterFailed() {
+  if (currentLegend) legendaryEscaped();
+  else fled();
 }
 
 function resolveAction(action, btnEl) {
@@ -383,31 +4765,252 @@ function resolveAction(action, btnEl) {
   document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
 
   if (action === currentPoke.action) {
+    encHappy = true;
     btnEl.classList.add('correct');
-    setTimeout(() => caught(), 500);
+    beep(523, 0.12, 0.1);
+    setTimeout(() => beep(659, 0.12, 0.15), 120);
+    // Tamed! Clear away the taming info — just leave the THROW button.
+    const legend = currentLegend;
+    setTimeout(() => {
+      document.getElementById('enc-buttons').classList.add('hidden');
+      document.getElementById('enc-thought-bubble').classList.add('hidden');
+      document.getElementById('enc-prompt').classList.add('hidden');
+      document.getElementById('timer-wrap').classList.add('hidden');
+      document.getElementById('enc-throw-wrap').classList.remove('hidden');
+      const haveBall = legend ? masterBalls > 0 : balls > 0;
+      document.getElementById('enc-happy-msg').textContent = legend
+        ? '✨ It trusts you! Throw the Master Ball!'
+        : "❤️ It's happy!  Throw a PokéBall!";
+      document.getElementById('enc-throw-btn').innerHTML = legend
+        ? '🟣 Throw Master Ball!'
+        : '<span class="pb"></span> Throw!';
+      if (!haveBall) {
+        document.getElementById('enc-no-balls-msg').classList.remove('hidden');
+        document.getElementById('enc-throw-btn').disabled = true;
+        setTimeout(() => encounterFailed(), 4000);
+      } else {
+        document.getElementById('enc-throw-btn').disabled = false;
+        document.getElementById('enc-no-balls-msg').classList.add('hidden');
+      }
+      setNav([document.getElementById('enc-throw-btn')]);   // A throws the ball
+    }, 400);
   } else {
+    encTries++;
     btnEl.classList.add('wrong');
-    // Highlight the correct button
+    btnEl.disabled = true;
+    beep(196, 0.12, 0.18, 'square');                       // a soft "not quite"
+
+    if (encTries < 2) {                                    // one gentle second chance
+      document.getElementById('enc-prompt').textContent = "Hmm… it's still a little wary. Look again!";
+      const left = Array.from(document.querySelectorAll('.action-btn')).filter(b => !b.classList.contains('wrong'));
+      left.forEach(b => b.disabled = false);
+      startTimer();                                        // a fresh moment to choose
+      setNav(left, { cols: 3 });
+      return;
+    }
+
+    // Out of patience — reveal what it wanted, then it slips away.
     document.querySelectorAll('.action-btn').forEach(b => {
       if (b.dataset.action === currentPoke.action) b.classList.add('correct');
     });
-    setTimeout(() => fled(), 700);
+    setTimeout(() => encounterFailed(), 900);
   }
 }
 
+function throwBall() {
+  if (currentLegend) {
+    if (masterBalls <= 0) return;
+    masterBalls--;
+  } else {
+    if (balls <= 0) return;
+    balls--;
+  }
+  updateHud();
+  saveGame();
+
+  document.getElementById('enc-throw-btn').disabled = true;
+  document.getElementById('enc-bottom').classList.add('hidden');   // instructions go away on throw
+
+  const ballEl   = document.getElementById('throw-ball');
+  const pokeWrap = document.getElementById('enc-pokemon-wrap');
+
+  // Reset
+  ballEl.style.animation   = 'none';
+  pokeWrap.style.animation = '';
+  pokeWrap.style.opacity   = '1';
+  ballEl.classList.remove('hidden');
+
+  // Phase 1 — ball spins upward (0–380ms)
+  beep(420, 0.18, 0.1);
+  setTimeout(() => beep(310, 0.14, 0.1), 130);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ballEl.style.animation = 'ball-fly 0.38s ease-in forwards';
+  }));
+
+  // Phase 2 — impact thud + pokemon wiggles (380ms)
+  setTimeout(() => {
+    ballEl.classList.add('hidden');
+    beep(180, 0.25, 0.1, 'square');
+    setTimeout(() => beep(140, 0.2, 0.15, 'square'), 75);
+    pokeWrap.style.animation = 'poke-wiggle 0.58s ease-in-out forwards';
+  }, 370);
+
+  // Phase 3 — pokemon shrinks into the ball (1000ms)
+  setTimeout(() => {
+    beep(120, 0.15, 0.55, 'square');
+    pokeWrap.style.animation = 'poke-shrink 0.55s ease-in forwards';
+  }, 1000);
+
+  // Phase 4 — the ball drops in and wiggles 2× before the catch confirms.
+  setTimeout(() => {
+    const screen = document.getElementById('encounter-screen');
+    const wR = pokeWrap.getBoundingClientRect();
+    const sR = screen.getBoundingClientRect();
+    ballWiggleFinale(screen, !!currentLegend, {
+      left: Math.round((wR.left - sR.left) + wR.width / 2) + 'px',
+      top:  Math.round((wR.top  - sR.top)  + wR.height / 2) + 'px',
+      marginLeft: '-21px', marginTop: '-21px',
+    }, caught);
+  }, 1560);
+}
+
+// Traditional capture finale: a big ball tosses into place and wiggles twice
+// (click… click…) before a confirming chime, then onDone. Used by every catch.
+function ballWiggleFinale(container, isMaster, place, onDone) {
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball' + (isMaster ? ' master' : '');
+  Object.assign(ball.style, place);
+  container.appendChild(ball);
+
+  ball.style.animation = 'ball-toss 0.42s ease-out forwards';
+  beep(180, 0.16, 0.12, 'square');                       // ball lands
+  setTimeout(() => beep(140, 0.14, 0.13, 'square'), 80);
+
+  setTimeout(() => {                                      // two wiggles (rock side to side)
+    ball.style.animation = 'ball-wiggle 0.55s ease-in-out 2';
+    beep(330, 0.05, 0.1);
+    setTimeout(() => beep(330, 0.05, 0.1), 560);
+  }, 430);
+
+  // …then a tense beat with the ball still before the catch confirms.
+  setTimeout(() => {                                      // caught!
+    beep(660, 0.1, 0.12);
+    setTimeout(() => beep(880, 0.16, 0.14), 120);
+    ball.remove();
+    onDone && onDone();
+  }, 430 + 1100 + 750);
+}
+
+// Battle capture: you SEE the (Master) Ball thrown in an arc from the bottom up to
+// the boss, which is then sucked in; the ball settles and wiggles twice before the
+// catch confirms.
+function battleCapture(isMaster, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const boss  = document.getElementById('battle-mewtwo');
+  document.getElementById('battle-win').classList.add('hidden');
+
+  const sR = stage.getBoundingClientRect();
+  const bR = boss.getBoundingClientRect();
+  const cx = Math.round((bR.left - sR.left) + bR.width / 2);   // ball's resting spot
+  const cy = Math.round((bR.top  - sR.top)  + bR.height / 2);
+
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball' + (isMaster ? ' master' : '');
+  ball.style.left = cx + 'px';
+  ball.style.top  = cy + 'px';
+  ball.style.marginLeft = '-21px';
+  ball.style.marginTop  = '-21px';
+  stage.appendChild(ball);
+
+  // Where the throw starts (bottom-centre, "from the trainer") relative to rest.
+  const dx = Math.round(sR.width / 2 - cx);
+  const dy = Math.round(sR.height - 26 - cy);
+
+  beep(440, 0.16, 0.1);                       // whoosh of the throw
+  setTimeout(() => beep(320, 0.12, 0.1), 120);
+
+  const onLanded = () => {
+    boss.style.animation = 'poke-shrink 0.45s ease-in forwards';   // sucked in
+    beep(180, 0.22, 0.12, 'square');
+    setTimeout(() => beep(140, 0.18, 0.14, 'square'), 80);
+    setTimeout(() => {
+      boss.style.visibility = 'hidden';
+      boss.style.animation  = '';
+      ball.style.animation  = 'ball-wiggle 0.55s ease-in-out 2';    // wiggle ×2
+      beep(330, 0.05, 0.1);
+      setTimeout(() => beep(330, 0.05, 0.1), 560);
+      setTimeout(() => {                                            // caught!
+        beep(660, 0.1, 0.12);
+        setTimeout(() => beep(880, 0.16, 0.14), 120);
+        ball.remove();
+        boss.style.visibility = '';
+        onDone && onDone();
+      }, 1100 + 750);   // hold a tense beat after the rock
+    }, 440);
+  };
+
+  if (ball.animate) {
+    const a = ball.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(0.5) rotate(-340deg)`, opacity: 0.3, offset: 0, easing: 'cubic-bezier(.25,.6,.4,1)' },
+      { transform: `translate(${Math.round(dx * 0.45)}px, ${Math.round(dy * 0.45) - 30}px) scale(0.9) rotate(-110deg)`, opacity: 1, offset: 0.55 },
+      { transform: 'translate(0,0) scale(1.08) rotate(0deg)', opacity: 1, offset: 0.85 },
+      { transform: 'translate(0,0) scale(1) rotate(0deg)',    opacity: 1, offset: 1 },
+    ], { duration: 580, fill: 'forwards' });
+    a.onfinish = onLanded;
+  } else {
+    setTimeout(onLanded, 560);
+  }
+}
+
+const NEW_CATCH_BOUNTY = 5; // coins awarded for each newly-discovered species
+
 function caught() {
-  const isNew = !caughtIds.has(currentPoke.id);
+  const isNew  = !caughtIds.has(currentPoke.id);
+  const legend = currentLegend;
   caughtIds.add(currentPoke.id);
-  saveCaught();
+  seenIds.add(currentPoke.id);
+  if (isNew) coins += NEW_CATCH_BOUNTY;   // reward discovering a new species
+
+  // Your very first catch automatically becomes your buddy, so the
+  // follow-me feature is discoverable. Swap buddies anytime in the Pokédex.
+  let becameBuddy = false;
+  if (activePet == null) {
+    activePet = currentPoke.id;
+    buddyUses[currentPoke.id] = (buddyUses[currentPoke.id] || 0) + 1;
+    petX = playerX; petY = playerY;
+    petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+    petMoveAnimTs = -9999;
+    becameBuddy = true;
+  }
+  if (legend) {                       // remove the captured roamer from the world
+    roamers = roamers.filter(r => r !== legend);
+    currentLegend = null;
+  }
+  awardTrioBadge();                   // catching the 3rd legendary bird grants a badge
+  refreshRoamers();                   // may now make Mewtwo appear
+
+  // Just completed every WILD species (legendaries still out there)? Nudge the hunt.
+  if (isNew && !legend && !pendingMsg) {
+    const wildLeft    = POKEMON_DATA.filter(p => !p.legend && !p.boss && !caughtIds.has(p.id)).length;
+    const legendsLeft = POKEMON_DATA.some(p => (p.legend || p.boss) && !caughtIds.has(p.id));
+    if (wildLeft === 0 && legendsLeft)
+      pendingMsg = '🌟 Every wild Lukeymon caught! Now track down the legends — the birds, Mew & Mewtwo.';
+  }
+
+  saveGame();
   updateHud();
 
   document.getElementById('result-stars').classList.remove('hidden');
-  document.getElementById('result-icon').textContent    = currentPoke.emoji;
-  document.getElementById('result-title').textContent   = isNew ? '✨ GOT IT! ✨' : '⭐ CAUGHT AGAIN! ⭐';
+  setPokeDisplay(document.getElementById('result-icon'), currentPoke, 80);
+  document.getElementById('result-title').textContent   = legend ? '🌟 LEGENDARY! 🌟'
+                                                        : isNew  ? '✨ GOT IT! ✨'
+                                                                 : '⭐ CAUGHT AGAIN! ⭐';
   document.getElementById('result-name').textContent    = currentPoke.name;
-  document.getElementById('result-message').textContent = isNew
-    ? 'Added to your PokéDex!'
-    : 'Already in your PokéDex — great job anyway!';
+  document.getElementById('result-message').textContent = becameBuddy
+    ? `${currentPoke.name} is now your buddy — it'll follow you around! 🐾  To switch buddies, open the 📖 Pokédex and tap "Buddies".`
+    : isNew
+      ? `Added to your PokéDex!  +${NEW_CATCH_BOUNTY} 💰`
+      : 'Already in your PokéDex — great job anyway!';
 
   const rs = document.getElementById('result-screen');
   rs.className = 'screen active success';
@@ -419,9 +5022,20 @@ function caught() {
   }
 }
 
+// Catching Articuno + Zapdos + Moltres grants the Trio Badge automatically.
+function awardTrioBadge() {
+  const birds = [144, 145, 146];
+  if (birds.every(id => caughtIds.has(id)) && !collected.has('badge_trio')) {
+    collected.add('badge_trio');
+    masterBalls++;                    // a guaranteed Master Ball toward a legendary
+    pendingMsg = '🦅 The legendary birds bond with you — Trio Badge earned, plus a 🟣 Master Ball!';
+  }
+}
+
 function fled() {
   document.getElementById('result-stars').classList.add('hidden');
-  document.getElementById('result-icon').textContent    = '💨';
+  const iconEl = document.getElementById('result-icon');
+  iconEl.innerHTML = '<span style="font-size:64px">💨</span>';
   document.getElementById('result-title').textContent   = 'IT GOT AWAY!';
   document.getElementById('result-name').textContent    = currentPoke.name;
   document.getElementById('result-message').textContent = 'Try again — walk in the grass!';
@@ -433,92 +5047,1935 @@ function fled() {
 }
 
 function returnToWorld() {
+  // The 4th land badge was just collected — segue from BADGE GET into the Champion screen.
+  if (pendingChampion) { pendingChampion = false; showChampion(); return; }
   showScreen('world');
+  scheduleSpawn();
+  if (pendingMsg) { showMessage(pendingMsg); pendingMsg = null; }
+  else checkEvoNotify();   // a battle may have just made something ready to evolve
+}
+
+// Initial victory: all four land badges earned. A "you won!" beat that leaves the
+// legendaries, Mew/Mewtwo, the caves and the full dex as optional post-game.
+function showChampion() {
+  wonGame = true;
+  masterBalls++;                       // a guaranteed Master Ball for hunting the legends
+  pendingMsg = '🟣 Champion! Take this Master Ball and track down Mew & Mewtwo.';
+  saveGame();
+  const row = document.getElementById('champion-row');
+  row.innerHTML = '';
+  LAND_BADGES.forEach(id => {
+    const c = COLLECTIBLES.find(b => b.id === id);
+    const s = c
+      ? Object.assign(new Image(), { src: collectibleBadgeSrc(c), className: 'champ-badge', alt: c.name })
+      : Object.assign(document.createElement('span'), { textContent: '🏅' });
+    s.style.margin = '0 2px';
+    row.appendChild(s);
+  });
+  showScreen('champion');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// ── 100% completion ("Perfect Island") ───────────────
+// Every category the Quest Log tracks is maxed out.
+function islandComplete() {
+  if (caughtIds.size !== POKEMON_DATA.length) return false;          // all 151
+  if (!COLLECTIBLES.every(b => collected.has(b.id))) return false;   // every badge
+  if (!STONE_FINDS.every(s => foundStones.has(s.id))) return false;  // every stone
+  if (!ZONE_INFO.filter(z => z.name).every(z => visited.has(z.id))) return false;  // every area
+  if (!NPCS.every(n => metNPCs.has(n.name))) return false;          // every character
+  if (knownTips.size < allTips().length) return false;              // every field note
+  if (!Object.keys(BARRIERS).every(k => unlockedBarriers.has(k))) return false;    // every barrier
+  return true;
+}
+// Cheap to call from saveGame(); queues the celebration for the next world frame.
+function maybePerfect() {
+  if (!perfectDone && wonGame && islandComplete()) pendingPerfect = true;
+}
+function showPerfect() {
+  perfectDone = true;
+  saveGame();
+  document.getElementById('champion-trophy').textContent = '🏝️';
+  document.getElementById('champion-title').textContent = 'PERFECT ISLAND!';
+  document.getElementById('champion-sub').textContent = '✨ 100% — every last thing found! ✨';
+  document.getElementById('champion-row').textContent = '🏆 🌟 💎 🦅 🌸 🧬 🗺️ 📖 💙';
+  document.getElementById('champion-praise').textContent =
+    `${saveName}, you found EVERYTHING — every Lukeymon, every badge, every stone, every secret, every soul on the island. You are the one and only TRUE Island Master. We are SO proud of you. 💙🌟`;
+  const next = document.getElementById('champion-next'); if (next) next.style.display = 'none';
+  const btn = document.getElementById('champion-continue'); if (btn) btn.textContent = '🌟 YOU DID IT ALL ▶';
+  showScreen('champion');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// A legendary you failed to capture vanishes and reappears elsewhere.
+function legendaryEscaped() {
+  const legend = currentLegend;
+  currentLegend = null;
+  const poke = POKEMON_DATA.find(p => p.id === legend.pokeId);
+  if (legend) relocateRoamer(legend);
+
+  document.getElementById('result-stars').classList.add('hidden');
+  document.getElementById('result-icon').innerHTML = '<span style="font-size:64px">💨</span>';
+  document.getElementById('result-title').textContent   = 'IT VANISHED!';
+  document.getElementById('result-name').textContent    = poke ? poke.name : '';
+  document.getElementById('result-message').textContent = 'It slipped away to another faraway land...';
+
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active fled';
+  showScreen('result');
+  playFledSound();
+}
+
+// Walking into a roaming legendary.
+function engageRoamer(roamer) {
+  const poke = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  if (masterBalls <= 0) {
+    showMessage(`✨ ${poke.name} appears! You need a 🟣 Master Ball to capture it — get one at the 🏪 Shop.`);
+    beep(300, 0.1, 0.12, 'sine');
+    setTimeout(() => beep(380, 0.1, 0.14, 'sine'), 130);
+    return;
+  }
+  if (roamer.legend === 'mewtwo') { startMewtwoBattle(roamer); return; }
+  beginEncounter(poke, roamer);
+}
+
+// ═══════════════════════════════════════════════════
+// BOSS BATTLES  (Mewtwo, the legendary birds, Team Rocket)
+// No timer; over N rounds pick the right Lukeymon, then resolve via cfg.onWin/onLose.
+// ═══════════════════════════════════════════════════
+let battleRoundNum = 0;
+let battleType     = null;
+let currentBoss    = null;   // active boss config
+
+// A per-biome battle backdrop (radial glow tuned to the zone you're fighting in).
+function battleBackdrop(zone) {
+  const BG = {
+    0: 'radial-gradient(circle at 50% 30%, #1d3a1d, #0a140a)',   // Meadow
+    1: 'radial-gradient(circle at 50% 30%, #2a3550, #0a0e18)',   // Beach
+    2: 'radial-gradient(circle at 50% 30%, #2e2e3e, #0c0c14)',   // City
+    3: 'radial-gradient(circle at 50% 30%, #20406a, #0a1018)',   // Highlands (Zapdos)
+    4: 'radial-gradient(circle at 50% 35%, #5a1808, #1a0604)',   // Volcano   (Moltres)
+    5: 'radial-gradient(circle at 50% 30%, #102814, #060c08)',   // Dark Forest
+    6: 'radial-gradient(circle at 50% 30%, #2a5a72, #0a1820)',   // Ice Cave  (Articuno)
+    7: 'radial-gradient(circle at 50% 35%, #5a4418, #1a1206)',   // Desert
+    8: 'radial-gradient(circle at 50% 30%, #1a1226, #060410)',   // Hidden Cave
+  };
+  return BG[zone] || 'radial-gradient(circle at 50% 30%, #2a1840, #0a0a18)';  // Mewtwo / default purple
+}
+
+function startBossBattle(cfg) {
+  currentBoss = cfg;
+  learnTip('battles');
+  clearWild();
+  clearTimeout(spawnTimerId);
+  battleRoundNum = 0;
+  document.getElementById('battle-header').textContent = cfg.title;
+  const bossEl = document.getElementById('battle-mewtwo');
+  if (cfg.imgSrc) { bossEl.innerHTML = '<img class="boss-char" src="' + cfg.imgSrc + '" alt="" style="height:' + (cfg.imgH || 80) + 'px">'; }   // arbitrary art (e.g. the cake)
+  else if (cfg.art) { setPokeDisplay(bossEl, cfg.art, 80); }                                  // real Pokémon sprite
+  else if (cfg.charArt) { bossEl.innerHTML = '<img class="boss-char" src="art/portrait/' + cfg.charArt + '.png?v=' + ART_V + '" alt="">'; } // Team Rocket grunt portrait
+  else { bossEl.innerHTML = ''; bossEl.textContent = cfg.emoji; }                         // emoji fallback
+  // The trainer sits in the corner once their Pokémon takes the field.
+  const foe = document.getElementById('battle-foe');
+  const foeEl = document.getElementById('battle-foe-emoji');
+  if (cfg.foeArt || cfg.foeEmoji) {
+    if (cfg.foeArt) foeEl.innerHTML = '<img class="foe-char" src="art/portrait/' + cfg.foeArt + '.png?v=' + ART_V + '" alt="">';
+    else { foeEl.innerHTML = ''; foeEl.textContent = cfg.foeEmoji; }
+    document.getElementById('battle-foe-badge').textContent = cfg.foeBadge != null ? cfg.foeBadge : (cfg.grunt || '');
+    foe.classList.remove('hidden');
+  } else {
+    foe.classList.add('hidden');
+  }
+  document.getElementById('battle-screen').style.background = battleBackdrop(currentZone);
+  document.getElementById('battle-win').classList.add('hidden');
+  document.getElementById('battle-options').classList.remove('hidden');
+  document.getElementById('battle-instruction').classList.remove('hidden');
+  showScreen('battle');
+  flashScreen('#c890f8');
+  playEncounterJingle();
+  if (cfg.intro) cfg.intro();   // e.g. Team Rocket's motto, then the rounds
+  else nextBattleRound();
+}
+
+// Team Rocket tosses out a Pokémon: a ball arcs in from the grunt's corner and the
+// Lukeymon pops out onto the field.
+function rocketSendOut(mon) {
+  const bossEl = document.getElementById('battle-mewtwo');
+  const stage  = document.getElementById('battle-screen');
+  setPokeDisplay(bossEl, mon, 80);
+  bossEl.style.visibility = 'hidden';          // hold the spot, hidden until the ball lands
+  const ball = document.createElement('div');
+  ball.className = 'capture-ball';
+  ball.style.cssText = 'left:50%;top:92px;margin-left:-13px;margin-top:-13px;width:26px;height:26px;';
+  stage.appendChild(ball);
+  beep(300, 0.12, 0.1, 'square');
+  const reveal = () => {                        // ball has landed & burst — pop the Pokémon out
+    ball.remove();
+    bossEl.style.visibility = '';
+    if (bossEl.animate) bossEl.animate([
+      { transform: 'translateY(-8px) scale(0.2)', opacity: 0, offset: 0 },
+      { transform: 'translateY(4px) scale(1.12)', opacity: 1, offset: 0.6 },
+      { transform: 'translateY(0) scale(1)',      opacity: 1, offset: 1 },
+    ], { duration: 320, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+    beep(440, 0.1, 0.12);
+  };
+  if (ball.animate) {
+    const a = ball.animate([
+      { transform: 'translate(120px,-60px) scale(0.4) rotate(0deg)',  opacity: 0, offset: 0 },
+      { transform: 'translate(45px,-22px) scale(0.9) rotate(240deg)', opacity: 1, offset: 0.55 },
+      { transform: 'translate(0,0) scale(1) rotate(360deg)',          opacity: 1, offset: 0.82 },
+      { transform: 'translate(0,0) scale(1.5)',                       opacity: 0, offset: 1 },   // burst open
+    ], { duration: 480, easing: 'ease-out' });
+    a.onfinish = reveal;
+  } else { setTimeout(reveal, 480); }
+}
+
+// Mewtwo — match its exact type for 3 rounds, then a Master Ball.
+function startMewtwoBattle(roamer) {
+  currentLegend = roamer;
+  const mew = POKEMON_DATA.find(p => p.id === roamer.pokeId);
+  seenIds.add(mew.id);
+  startBossBattle({
+    title: 'MEWTWO', art: mew, rounds: 3, rule: 'match',
+    pickDemand: (pool) => { const t = [...new Set(pool.map(p => p.type))]; return t[Math.floor(Math.random() * t.length)]; },
+    demandPre: 'Mewtwo unleashes a ', demandPost: ' surge!',
+    onWin: () => { currentPoke = mew; showBattleWin('✨ Mewtwo is calmed!', '🟣 Throw Master Ball!', masterBalls > 0, throwMasterAtMewtwo); },
+    onLose: () => legendaryEscaped(),
+  });
+}
+
+// Legendary birds — send a type that BEATS what it hurls (3 rounds), then a Poké Ball.
+const BIRD_DEMANDS = {
+  144: ['Ice', 'Flying', 'Water'],      // Articuno
+  145: ['Electric', 'Flying', 'Water'], // Zapdos
+  146: ['Fire', 'Flying', 'Rock'],      // Moltres
+};
+function startBirdBattle(birdId) {
+  const bird = POKEMON_DATA.find(p => p.id === birdId);
+  currentLegend = null;
+  seenIds.add(birdId);
+  const demands = BIRD_DEMANDS[birdId];
+  startBossBattle({
+    title: bird.name.toUpperCase(), art: bird, rounds: 3, rule: 'beats',
+    pickDemand: () => demands[Math.floor(Math.random() * demands.length)],
+    demandPre: `${bird.name} hurls a `, demandPost: ' blast — counter it!',
+    onWin: () => { currentPoke = bird; showBattleWin(`✨ ${bird.name} is worn out!`, '⚪ Throw Poké Ball!', balls > 0, () => throwBallAtBird(birdId)); },
+    onLose: () => bossFlee(bird, 'IT FLEW OFF!', 'It retreats to its nest. Heal up and challenge it again!'),
+  });
+}
+
+// Each grunt's two-Pokémon lineup — sent out one per round (id of the roster mon).
+const ROCKET_TEAMS = {
+  Jessie: [23, 24],  // Ekans  → Arbok    (Poison, Poison)
+  James:  [41, 27],  // Zubat  → Sandshrew (Poison, Ground)
+  Meowth: [23, 28],  // Ekans  → Sandslash (Poison, Ground)
+};
+
+// Team Rocket grunt — delivers the motto, then sends out 2 Pokémon (one per round).
+function startRocketBattle(rkt) {
+  const bird   = POKEMON_DATA.find(p => p.id === rkt.bird);
+  const lineup = ROCKET_TEAMS[rkt.name] || [23, 24];
+  currentLegend = null;
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: `TEAM ROCKET: ${rkt.name}`, emoji: rkt.emoji, rounds: lineup.length, rule: 'beats',
+    grunt: rkt.name, foeBadge: 'R · ' + rkt.name, lineup, foeEmoji: rkt.emoji, charArt: rkt.art, foeArt: rkt.art,
+    motto: '“Prepare for trouble!”<br>“…and make it double!”<br>' +
+           `<b>${rkt.name} of Team Rocket wants to battle!</b>`,
+    intro: () => rocketIntro(),
+    onWin: () => { rocketDefeated.add(rkt.bird); saveGame(); showBattleWin('💥 Team Rocket blasts off again!', `Face ${bird.name} ▶`, true, () => startBirdBattle(rkt.bird)); },
+    onLose: () => bossFlee({ name: rkt.name }, 'TEAM ROCKET WINS!', '“Better luck next time, twerp!” Come back when you are ready.'),
+  });
+}
+
+// Gym Leader — sends out a themed lineup (one per round); counter each type to win
+// the Rumble Badge plus a bundle of coins & balls.
+const GYM_BADGE_BALLS = 5;
+const GYM_BADGE_COINS = 30;
+function startGymBattle(leader) {
+  const lineup = leader.lineup || [74, 75, 95];
+  currentLegend = null;
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: `GYM · ${leader.leaderName}`, emoji: leader.battleEmoji || '🥋',
+    rounds: lineup.length, rule: 'beats',
+    grunt: leader.leaderName, lineup, foeEmoji: leader.battleEmoji || '🥋',
+    motto: `<b>${leader.leaderName} wants to battle!</b><br>“Show me the bond you share with your Lukéymon!”`,
+    intro: () => rocketIntro(),
+    onWin: () => awardGymBadge(leader),
+    onLose: () => bossFlee({ name: leader.leaderName }, 'GYM DEFENDED!', '“Train up and challenge me again!”'),
+  });
+}
+function awardGymBadge(leader) {
+  const first = !collected.has('badge_gym');
+  if (first) collected.add('badge_gym');
+  balls += GYM_BADGE_BALLS; coins += GYM_BADGE_COINS;
+  saveGame(); updateHud();
+  const badge = COLLECTIBLES.find(c => c.id === 'badge_gym');
+  // First win → fanfare the haul, then the BADGE GET celebration. Repeat wins →
+  // just fanfare the reward.
+  showFanfare('🏆', `+${GYM_BADGE_BALLS} ⚪  +${GYM_BADGE_COINS} 💰`,
+    () => { if (first) celebrateBadge(badge); else returnToWorld(); }, 'VICTORY!');
+}
+
+// Battle Dojo — endless practice. Each round you send out a Lukéymon (which counts
+// toward its battle evolution, win or lose); no stakes, just training.
+const DOJO_TYPES = ['Normal','Fire','Water','Electric','Grass','Ice','Fighting','Poison','Ground','Flying','Psychic','Bug','Rock','Ghost','Dragon','Fairy'];
+function startDojoBattle() {
+  clearTimeout(spawnTimerId);
+  startBossBattle({
+    title: 'BATTLE DOJO', emoji: '🥋', rounds: 3, rule: 'beats',
+    pickDemand: () => DOJO_TYPES[Math.floor(Math.random() * DOJO_TYPES.length)],
+    demandPre: 'Training partner uses ', demandPost: ' — counter it!',
+    onWin:  () => showBattleWin('🥋 Great training session!', 'Done ✓', true, returnToWorld),
+    onLose: () => showBattleWin('💪 Good effort — train again any time!', 'Done ✓', true, returnToWorld),
+  });
+}
+
+// A wandering trainer's quick 2-round battle: they send out a couple of common
+// Lukéymon; counter the type. A small reward on a win; either way it grows your
+// battle evolutions. (battleUses is credited per pick in chooseBattlePoke.)
+function startTrainerBattle() {
+  const t = wildTrainer;
+  if (!t) return;
+  clearTimeout(trainerTimerId);
+  const pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && p.zones && p.zones.length);
+  // Send out Lukéymon your team can actually counter, so the battle is winnable
+  // (and the small reward is reachable).
+  const owned = new Set([...caughtIds].map(id => (POKEMON_DATA.find(p => p.id === id) || {}).type).filter(Boolean));
+  const beatable = pool.filter(m => (BEATEN_BY[m.type] || [m.type]).some(ct => owned.has(ct)));
+  const src = beatable.length ? beatable : pool;
+  const pick = () => src[Math.floor(Math.random() * src.length)].id;
+  const lineup = [pick(), pick()];
+  const reward = 6 + Math.floor(Math.random() * 7);   // a small coin reward (6–12)
+  startBossBattle({
+    title: t.name, emoji: t.emoji, rounds: 2, rule: 'beats',
+    grunt: t.name, lineup, foeEmoji: t.emoji, charArt: t.art, foeArt: t.art,
+    motto: `<b>${t.name} wants to battle!</b><br>“Let’s see what your team can do!”`,
+    intro: () => rocketIntro(),
+    onWin:  () => { coins += reward; balls += 1; updateHud(); saveGame(); clearTrainer(); showFanfare('🏆', `+${reward} 💰  +1 ⚪`, returnToWorld, 'VICTORY!'); },
+    onLose: () => { clearTrainer(); showBattleWin('💪 They got the better of you this time!', 'Done ✓', true, returnToWorld); },
+  });
+}
+
+// The birthday cake in your home — a friendly "battle" you always win: send out
+// any Lukeymon to share a slice.
+function startCakeBattle() {
+  if (caughtIds.size === 0) { showMessage('🎂 Catch a Lukeymon first to share the cake!'); return; }
+  const cakeImg = 'art/prop/birthday_cake.png?v=' + ART_V;
+  startBossBattle({
+    title: 'Birthday Cake', emoji: '🎂', imgSrc: cakeImg, imgH: 150, rounds: 1, rule: 'any', pickDemand: () => 'Normal',
+    motto: `<b>Wow! A delicious birthday cake!</b><br>“Send out any Lukéymon to share a slice!”`,
+    intro: () => rocketIntro(),
+    onWin:  () => { coins += 20; updateHud(); saveGame(); showFanfare(`<img src="${cakeImg}" style="height:130px;image-rendering:pixelated">`, `Yum! Happy birthday, ${saveName}! 🍰  +20 💰`, returnToWorld, 'DELICIOUS!'); },
+    onLose: () => returnToWorld(),
+  });
+}
+
+// Show the grunt + their Team Rocket motto, then begin the rounds on tap.
+function rocketIntro() {
+  const cfg = currentBoss;
+  document.getElementById('battle-options').classList.add('hidden');
+  document.getElementById('battle-instruction').classList.add('hidden');
+  document.getElementById('battle-round').textContent = '';
+  document.getElementById('battle-demand-pre').textContent  = '';
+  document.getElementById('battle-demand-post').textContent = '';
+  const tEl = document.getElementById('battle-type');
+  tEl.textContent = ''; tEl.style.background = 'transparent';
+
+  const win = document.getElementById('battle-win');
+  win.classList.remove('hidden');
+  document.getElementById('battle-win-msg').innerHTML = cfg.motto;
+  const btn = document.getElementById('battle-throw');
+  btn.textContent = '⚔️ Battle!';
+  btn.disabled = false;
+  btn.onclick = () => {
+    wakeAudio();
+    win.classList.add('hidden');
+    document.getElementById('battle-options').classList.remove('hidden');
+    document.getElementById('battle-instruction').classList.remove('hidden');
+    nextBattleRound();
+  };
+  setNav([btn]);   // A = Battle!
+  // little motto sting
+  beep(330, 0.1, 0.1);
+  setTimeout(() => beep(392, 0.1, 0.1), 150);
+  setTimeout(() => beep(330, 0.14, 0.12), 320);
+}
+
+function nextBattleRound() {
+  const cfg = currentBoss;
+  battleRoundNum++;
+  document.getElementById('battle-round').textContent = `Round ${battleRoundNum} / ${cfg.rounds}`;
+
+  // Options are drawn only from the Lukeymon you've actually caught.
+  const pool = POKEMON_DATA.filter(p => !p.legend && !p.boss && caughtIds.has(p.id));
+
+  // A lineup boss (Team Rocket) sends out one Pokémon per round — show its sprite
+  // and make its type the thing you must counter. Otherwise use the static demand.
+  let demandPre = cfg.demandPre, demandPost = cfg.demandPost;
+  if (cfg.lineup) {
+    const mon = POKEMON_DATA.find(p => p.id === cfg.lineup[(battleRoundNum - 1) % cfg.lineup.length]);
+    rocketSendOut(mon);                 // ball-toss "sent out!" animation
+    battleType = mon.type;
+    demandPre  = `${cfg.grunt} sent out ${mon.name}! `;
+    demandPost = ' — counter it!';
+  } else {
+    battleType = cfg.pickDemand ? cfg.pickDemand(pool) : 'Normal';
+    // Keep it fair: if the player owns nothing that can answer this demand, re-roll
+    // a few times to a type they CAN counter (so practice/dojo rounds stay winnable).
+    if (cfg.rule !== 'any') {
+      const owned = new Set(pool.map(p => p.type));
+      const answerable = t => (cfg.rule === 'beats' ? (BEATEN_BY[t] || [t]) : [t]).some(ct => owned.has(ct));
+      for (let i = 0; i < 8 && !answerable(battleType); i++) battleType = cfg.pickDemand(pool);
+    }
+  }
+  // Which types count as a correct answer: ANY type (cake), the exact type (Mewtwo),
+  // or any type super-effective against the demand (birds / Team Rocket).
+  const correctTypes = cfg.rule === 'any'   ? Object.keys(BEATEN_BY)
+                     : cfg.rule === 'beats' ? (BEATEN_BY[battleType] || [battleType])
+                     : [battleType];
+
+  document.getElementById('battle-demand-pre').textContent  = cfg.rule === 'any' ? '' : demandPre;
+  document.getElementById('battle-demand-post').textContent = cfg.rule === 'any' ? '' : demandPost;
+  const tEl = document.getElementById('battle-type');
+  tEl.textContent = cfg.rule === 'any' ? '' : battleType;
+  tEl.style.background = cfg.rule === 'any' ? 'transparent' : typeColor(battleType);
+  document.getElementById('battle-instruction').textContent =
+    cfg.rule === 'any'
+      ? 'Send out ANY Lukeymon to share the cake! 🍰'
+      : cfg.rule === 'beats'
+        ? `Send a Lukeymon that's STRONG against ${battleType} — try ${correctTypes.join(' / ')}!`
+        : 'Send out a Lukeymon of that type!';
+  beep(150, 0.18, 0.3, 'square');
+
+  // Up to six options from your roster. A counter only appears if you own one.
+  const correctPool = pool.filter(p => correctTypes.includes(p.type));
+  // Prefer a lead that still owes a fight, so the correct answer also banks the
+  // battle it needs to evolve.
+  const needyCorrect = correctPool.filter(p => needsBattleEvo(p.id));
+  const leadPool = needyCorrect.length ? needyCorrect : correctPool;
+  const lead = leadPool[Math.floor(Math.random() * leadPool.length)];
+  const others = shuffle(pool.filter(p => p !== lead && !correctTypes.includes(p.type)));
+  let decoys = others.slice(0, 5);
+  // Always keep at least one Lukeymon that still owes a fight on the board — even if
+  // its type is wrong for this round, since a losing pick still counts as a battle.
+  if (!(lead && needsBattleEvo(lead.id)) && !decoys.some(p => needsBattleEvo(p.id))) {
+    const needy = others.find(p => needsBattleEvo(p.id));
+    if (needy) decoys = [needy, ...decoys.slice(0, 4)];
+  }
+  const opts = shuffle([lead, ...decoys]).filter(Boolean);
+
+  const grid = document.getElementById('battle-options');
+  grid.innerHTML = '';
+  opts.forEach(poke => {
+    const card = document.createElement('button');
+    card.className = 'battle-opt';
+    const ic = document.createElement('span');
+    ic.className = 'battle-opt-emoji';
+    ic.appendChild(pokeImg(poke, 30));
+    const nm = document.createElement('span');
+    nm.className = 'battle-opt-name';
+    nm.textContent = poke.name;
+    const tp = document.createElement('span');
+    tp.className = 'battle-opt-type';
+    tp.textContent = poke.type;
+    tp.style.background = typeColor(poke.type);
+    card.append(ic, nm, tp);
+    // ⚔️ marks a Lukeymon that still owes a fight to evolve.
+    if (needsBattleEvo(poke.id)) {
+      const evoTag = document.createElement('span');
+      evoTag.className = 'battle-opt-evo';
+      evoTag.textContent = '🥊';   // boxing glove, not ⚔ — crossed swords read as a dismiss ✕ at badge size
+      evoTag.title = 'Needs a battle to evolve';
+      card.classList.add('needs-evo');
+      card.appendChild(evoTag);
+    }
+    card.addEventListener('click', () => chooseBattlePoke(poke, card, correctTypes));
+    grid.appendChild(card);
+  });
+  setNav(Array.from(grid.querySelectorAll('.battle-opt')), { cols: 3 });   // D-pad picks a Lukeymon
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function chooseBattlePoke(poke, card, correctTypes) {
+  if (gameState !== 'battle') return;
+  document.querySelectorAll('.battle-opt').forEach(b => b.disabled = true);
+  battleUses[poke.id] = (battleUses[poke.id] || 0) + 1;   // used in battle (win or lose) → battle evolutions
+
+  if (correctTypes.includes(poke.type)) {
+    card.classList.add('correct');
+    beep(523, 0.12, 0.1);
+    setTimeout(() => beep(659, 0.12, 0.15), 110);
+    // The chosen Lukeymon charges in full-size and bumps the boss, then the
+    // battle moves on (next round, or the win once the last round is cleared).
+    battleAttack(poke, () => {
+      if (battleRoundNum >= currentBoss.rounds) currentBoss.onWin();
+      else nextBattleRound();
+    });
+  } else {
+    card.classList.add('wrong');
+    beep(160, 0.15, 0.2, 'square');
+    // Wrong choice — it charges in but bounces off, flashing, then the boss wins.
+    battleBounce(poke, () => currentBoss.onLose());
+  }
+}
+
+// Show the picked Pokémon at full size, lunge it up into Mewtwo (who recoils),
+// then run onDone. Positions are measured so the impact lands on Mewtwo.
+function battleAttack(poke, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const mew   = document.getElementById('battle-mewtwo');
+  const atk = document.createElement('div');
+  atk.className = 'battle-attacker';
+  atk.appendChild(pokeImg(poke, 150));   // the actual selected Lukeymon, full size
+  stage.appendChild(atk);
+
+  if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
+
+  requestAnimationFrame(() => {
+    const sR = stage.getBoundingClientRect();
+    const mR = mew.getBoundingClientRect();
+    const aR = atk.getBoundingClientRect();
+    const startX = sR.width / 2 - aR.width / 2;
+    const startY = sR.height - aR.height - 16;
+    atk.style.left = Math.round(startX) + 'px';
+    atk.style.top  = Math.round(startY) + 'px';
+    const hitY = (mR.top - sR.top) + mR.height * 0.45 - aR.height / 2;
+    const dy = hitY - startY;            // negative → moves up toward Mewtwo
+    const DUR = 1500;
+    const anim = atk.animate([
+      { transform: 'translateY(46px) scale(0.5)',       opacity: 0, offset: 0,    easing: 'ease-out' },
+      { transform: 'translateY(0) scale(1)',            opacity: 1, offset: 0.13 },                       // pops in…
+      { transform: 'translateY(0) scale(1)',            opacity: 1, offset: 0.48, easing: 'cubic-bezier(.6,0,.95,.35)' }, // …holds so you see it, then snaps
+      { transform: `translateY(${dy}px) scale(1.1)`,    opacity: 1, offset: 0.62 },  // SLAM into Mewtwo
+      { transform: `translateY(${dy + 22}px) scale(1)`, opacity: 1, offset: 0.71 },  // recoil back
+      { transform: 'translateY(24px) scale(0.7)',       opacity: 0, offset: 1 },
+    ], { duration: DUR, easing: 'linear' });
+
+    setTimeout(() => { mewtwoRecoil(mew); battleThud(stage, mR, sR); }, Math.round(DUR * 0.60));
+    anim.onfinish = () => { atk.remove(); onDone && onDone(); };
+  });
+}
+
+function mewtwoRecoil(mew) {
+  if (!mew.animate) return;
+  // shake + a double white flash, like taking a hit
+  mew.animate([
+    { transform: 'translate(0,0)',                      filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 0 },
+    { transform: 'translate(-3px,-10px) rotate(-5deg)', filter: 'brightness(4) drop-shadow(0 0 18px #fff)',    offset: 0.16 },
+    { transform: 'translate(3px,-3px) rotate(4deg)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 0.34 },
+    { transform: 'translate(-2px,-4px) rotate(-2deg)',  filter: 'brightness(4) drop-shadow(0 0 18px #fff)',    offset: 0.5 },
+    { transform: 'translate(0,0)',                      filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)', offset: 1 },
+  ], { duration: 440, easing: 'ease-out' });
+}
+
+function battleThud(stage, mR, sR) {
+  beep(110, 0.09, 0.26, 'square');
+  setTimeout(() => beep(880, 0.06, 0.12), 45);
+  const boom = document.createElement('div');
+  boom.className = 'battle-impact';
+  boom.textContent = '💥';
+  boom.style.left = Math.round((mR.left - sR.left) + mR.width / 2) + 'px';
+  boom.style.top  = Math.round((mR.top  - sR.top)  + mR.height / 2) + 'px';
+  stage.appendChild(boom);
+  setTimeout(() => boom.remove(), 460);
+}
+
+// Wrong pick: the Pokémon charges up, gets repelled by Mewtwo and tumbles back
+// down flashing red, then onDone (Mewtwo escapes).
+function battleBounce(poke, onDone) {
+  const stage = document.getElementById('battle-screen');
+  const mew   = document.getElementById('battle-mewtwo');
+  const atk = document.createElement('div');
+  atk.className = 'battle-attacker';
+  atk.appendChild(pokeImg(poke, 150));
+  stage.appendChild(atk);
+
+  if (!atk.animate) { setTimeout(() => { atk.remove(); onDone && onDone(); }, 600); return; }
+
+  requestAnimationFrame(() => {
+    const sR = stage.getBoundingClientRect();
+    const mR = mew.getBoundingClientRect();
+    const aR = atk.getBoundingClientRect();
+    const startX = sR.width / 2 - aR.width / 2;
+    const startY = sR.height - aR.height - 16;
+    atk.style.left = Math.round(startX) + 'px';
+    atk.style.top  = Math.round(startY) + 'px';
+    const hitY = (mR.top - sR.top) + mR.height * 0.5 - aR.height / 2;
+    const dy = hitY - startY;            // negative → up toward Mewtwo
+    const DUR = 1500;
+    const NORMAL = 'drop-shadow(0 5px 6px rgba(0,0,0,.55))';
+    const REDLIT = 'brightness(1.9) drop-shadow(0 0 12px #ff5050)';
+    const REDDIM = 'brightness(1) drop-shadow(0 0 6px #ff3030)';
+    const anim = atk.animate([
+      { transform: 'translateY(46px) scale(0.5)',  opacity: 0, filter: NORMAL, offset: 0, easing: 'ease-out' },
+      { transform: 'translateY(0) scale(1)',        opacity: 1, filter: NORMAL, offset: 0.13 },                  // pops in…
+      { transform: 'translateY(0) scale(1)',        opacity: 1, filter: NORMAL, offset: 0.46, easing: 'cubic-bezier(.6,0,.95,.35)' }, // …holds, then charges
+      { transform: `translateY(${dy}px) scale(1.05)`,            opacity: 1,    filter: REDLIT, offset: 0.57 },  // hits the shield
+      { transform: `translateY(${dy * 0.45}px) scale(0.92) rotate(-14deg)`, opacity: 0.2, filter: REDDIM, offset: 0.65, easing: 'ease-out' }, // bounces back, flash off
+      { transform: `translateY(${dy * 0.12}px) scale(1) rotate(11deg)`,     opacity: 1,   filter: REDLIT, offset: 0.74 }, // flash on
+      { transform: 'translateY(42px) scale(0.85) rotate(-6deg)',            opacity: 0.2, filter: REDDIM, offset: 0.86 }, // flash off
+      { transform: 'translateY(82px) scale(0.55) rotate(0)',               opacity: 0,   filter: REDDIM, offset: 1 },     // tumbles away
+    ], { duration: DUR, easing: 'linear' });
+
+    setTimeout(() => { mewtwoRepel(mew); battleRepelSound(); }, Math.round(DUR * 0.57));
+    anim.onfinish = () => { atk.remove(); onDone && onDone(); };
+  });
+}
+
+// Mewtwo shrugs off a wrong pick with a purple shield pulse.
+function mewtwoRepel(mew) {
+  if (!mew.animate) return;
+  mew.animate([
+    { transform: 'scale(1)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)' },
+    { transform: 'scale(1.12)', filter: 'brightness(1.6) drop-shadow(0 0 24px #c060ff)' },
+    { transform: 'scale(1)',    filter: 'brightness(1) drop-shadow(0 0 10px #a040f0)' },
+  ], { duration: 380, easing: 'ease-out' });
+}
+
+function battleRepelSound() {
+  beep(190, 0.10, 0.18, 'square');
+  setTimeout(() => beep(120, 0.12, 0.22, 'square'), 120);
+  setTimeout(() => beep(85,  0.16, 0.32, 'square'), 260);
+}
+
+// Show the win panel with a custom message + action button (capture / continue).
+function showBattleWin(msg, btnLabel, btnEnabled, onBtn) {
+  document.getElementById('battle-options').classList.add('hidden');
+  document.getElementById('battle-instruction').classList.add('hidden');
+  document.getElementById('battle-win').classList.remove('hidden');
+  document.getElementById('battle-win-msg').textContent = msg;
+  const btn = document.getElementById('battle-throw');
+  btn.textContent = btnLabel;
+  btn.disabled = !btnEnabled;
+  btn.onclick = () => { wakeAudio(); onBtn(); };
+  setNav([btn]);
+  beep(523, 0.12, 0.12);
+  setTimeout(() => beep(659, 0.12, 0.12), 130);
+  setTimeout(() => beep(784, 0.18, 0.2), 260);
+}
+
+function throwMasterAtMewtwo() {
+  if (masterBalls <= 0) return;
+  masterBalls--;
+  updateHud();
+  saveGame();
+  document.getElementById('battle-throw').disabled = true;
+  // Show the Master Ball thrown + wiggle, then resolve the catch.
+  battleCapture(true, caught);  // caught() handles roamer removal + dex completion
+}
+
+function throwBallAtBird(birdId) {
+  if (balls <= 0) return;
+  balls--;
+  updateHud();
+  saveGame();
+  currentPoke = POKEMON_DATA.find(p => p.id === birdId);
+  currentLegend = null;
+  document.getElementById('battle-throw').disabled = true;
+  battleCapture(false, caught);  // adds to dex, awards the Trio Badge on the 3rd
+}
+
+// A boss/Rocket you didn't beat — show a "fled" result; the lair stays so you can retry.
+function bossFlee(who, title, message) {
+  document.getElementById('result-stars').classList.add('hidden');
+  document.getElementById('result-icon').innerHTML = '<span style="font-size:64px">💨</span>';
+  document.getElementById('result-title').textContent   = title;
+  document.getElementById('result-name').textContent    = who.name || '';
+  document.getElementById('result-message').textContent = message;
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active fled';
+  showScreen('result');
+  playFledSound();
+}
+
+// ═══════════════════════════════════════════════════
+// SHOP
+// ═══════════════════════════════════════════════════
+function openShop() {
+  gameState = 'shop';
+  clearTimeout(spawnTimerId);
+  document.getElementById('shop-coin-count').textContent = coins;
+  document.getElementById('shop-ball-count').textContent = balls;
+  const sm = document.getElementById('shop-master-count');
+  if (sm) sm.textContent = masterBalls;
+  refreshShopButtons();
+  showScreen('shop');
+}
+
+function closeShop() {
+  showScreen('world');
+  scheduleSpawn();
+}
+
+function refreshShopButtons() {
+  document.querySelectorAll('.shop-buy-btn').forEach(btn => {
+    btn.disabled = coins < parseInt(btn.dataset.cost);
+  });
+}
+
+function buyBalls(qty, cost) {
+  if (coins < cost) return;
+  coins -= cost;
+  balls += qty;
+  updateHud();
+  saveGame();
+  document.getElementById('shop-coin-count').textContent = coins;
+  document.getElementById('shop-ball-count').textContent = balls;
+  refreshShopButtons();
+  beep(660, 0.1, 0.08);
+  setTimeout(() => beep(880, 0.12, 0.15), 100);
+}
+
+function buyMaster(cost) {
+  if (coins < cost) return;
+  coins -= cost;
+  masterBalls++;
+  updateHud();
+  saveGame();
+  document.getElementById('shop-coin-count').textContent = coins;
+  const sm = document.getElementById('shop-master-count');
+  if (sm) sm.textContent = masterBalls;
+  refreshShopButtons();
+  beep(700, 0.12, 0.1);
+  setTimeout(() => beep(950, 0.14, 0.16), 110);
 }
 
 // ═══════════════════════════════════════════════════
 // POKÉDEX
 // ═══════════════════════════════════════════════════
+// The dex grid shows one filter at a time, chosen from a full-page card picker.
+// mode: all | caught | missing | legendary | swift | type (type uses .type)
+let dexFilter = { mode: 'all', type: null };
+const LEGEND_IDS = new Set([144, 145, 146, 150, 151]);   // birds + Mewtwo + Mew
+const TYPE_EMOJI = {
+  Grass: '🌿', Fire: '🔥', Water: '💧', Bug: '🐛', Flying: '🕊️', Normal: '⭐',
+  Electric: '⚡', Fairy: '✨', Ghost: '👻', Psychic: '🔮', Fighting: '🥊',
+  Poison: '☠️', Ground: '🌍', Rock: '🪨', Ice: '❄️', Dragon: '🐲',
+};
+const DEX_TYPE_ORDER = ['Fire', 'Water', 'Grass', 'Electric', 'Ground', 'Rock', 'Ice',
+  'Flying', 'Poison', 'Psychic', 'Bug', 'Normal', 'Fighting', 'Ghost', 'Dragon', 'Fairy'];
+// A short, human label for the current filter (shown on the grid's Filter button).
+function dexFilterLabel() {
+  const f = dexFilter;
+  if (f.mode === 'type') return (TYPE_EMOJI[f.type] || '') + ' ' + f.type;
+  return { all: 'All', caught: 'Caught', missing: 'Missing', legendary: '🌟 Legendary', swift: '💨 Speedsters' }[f.mode] || 'All';
+}
+// Does a species pass the active filter?
+function dexFilterPass(poke) {
+  const f = dexFilter, caught = caughtIds.has(poke.id);
+  if (f.mode === 'caught' && !caught) return false;
+  if (f.mode === 'missing' && caught) return false;
+  if (f.mode === 'legendary' && !LEGEND_IDS.has(poke.id)) return false;
+  if (f.mode === 'swift' && !SWIFT_BUDDIES.has(poke.id)) return false;
+  if (f.mode === 'type' && poke.type !== f.type) return false;
+  return true;
+}
+
+// Where to look for a not-yet-caught species (first home zone, or its legendary status).
+function dexLocationHint(poke) {
+  if (poke.legend) return '✨ Legendary';
+  if (poke.zones && poke.zones.length) {
+    const c = SPAWN_COND[poke.id];
+    const tag = c ? (c.night ? (c.night === 'only' ? ' · 🌙 night only' : ' · 🌙 more at night') : '') +
+                    (c.rain ? (c.rain === 'only' ? ' · 🌧️ rain only' : ' · 🌧️ more in rain') : '') : '';
+    return '📍 ' + poke.zones.map(z => ZONE_INFO[z] ? ZONE_INFO[z].name : '?').join(' / ') + tag;
+  }
+  const evo = STONE_EVOS.find(r => r.to === poke.id);
+  if (evo) {
+    const base = POKEMON_DATA.find(p => p.id === evo.from);
+    return `${STONES[evo.stone].emoji} Evolve ${base ? base.name : '?'}`;
+  }
+  return '✨ Rare';
+}
+
 function openPokedex() {
-  renderPokedexGrid();
+  clearTimeout(spawnTimerId);
+  showDexView('home');
   document.getElementById('pokedex-detail').classList.add('hidden');
-  document.getElementById('pokedex-grid').classList.remove('hidden');
   showScreen('pokedex');
+}
+
+// The Pokédex is the game's hub: a card menu (home) that opens the species grid,
+// the buddy picker, the quest/progress log, and (via cards) badges/notes/help.
+let dexView = 'home';
+function showDexView(view) {
+  dexView = view;
+  ['pokedex-home', 'pokedex-buddies', 'pokedex-filter-page', 'pokedex-grid', 'pokedex-quest'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('pokedex-filters').classList.toggle('hidden', view !== 'grid');
+  const title = document.getElementById('pokedex-title');
+  const counter = document.getElementById('pokedex-counter');
+  if (counter) counter.classList.toggle('hidden', view !== 'grid');
+  if (view === 'filter') {
+    document.getElementById('pokedex-filter-page').classList.remove('hidden');
+    if (title) title.textContent = 'FILTER';
+    renderDexFilterPage();
+  } else if (view === 'quest') {
+    document.getElementById('pokedex-quest').classList.remove('hidden');
+    if (title) title.textContent = 'PROGRESS';
+    renderQuestPage();
+  } else if (view === 'buddies') {
+    document.getElementById('pokedex-buddies').classList.remove('hidden');
+    if (title) title.textContent = 'BUDDIES';
+    renderBuddies();
+  } else if (view === 'grid') {
+    document.getElementById('pokedex-grid').classList.remove('hidden');
+    if (title) title.textContent = 'ALL LUKÉYMON';
+    refreshDexFilters();
+    renderPokedexGrid();
+  } else {
+    document.getElementById('pokedex-home').classList.remove('hidden');
+    if (title) title.textContent = 'POKÉDEX';
+    renderDexHome();
+  }
+}
+// Back from the dex: a sub-view returns to the card menu; the menu closes the dex.
+function dexBack() { if (dexView === 'home') closePokedex(); else showDexView('home'); }
+function backToDexHome() { showDexView('home'); showScreen('pokedex'); }
+
+// The hub card menu.
+function renderDexHome() {
+  const home = document.getElementById('pokedex-home');
+  const buddy = buddyPoke();
+  const tipN = knownTips.size, tipT = allTips().length;
+  const cards = [
+    { view: 'buddies', icon: buddy ? `<img class="dex-card-sprite" src="${buddy.sprite}" alt="">` : '🚶',
+      label: 'Buddies', sub: buddy ? buddy.name : 'Walking solo' },
+    { view: 'grid', icon: '🔰', label: 'All Lukéymon', sub: `${caughtIds.size}/${POKEMON_DATA.length} befriended` },
+    { act: 'badges', icon: '🎖️', label: 'Badges', sub: `${collected.size}/${COLLECTIBLES.length} found` },
+    { act: 'notes', icon: '📝', label: 'Field Notes', sub: `${tipN}/${tipT} learned` },
+    { view: 'quest', icon: '🏆', label: 'Progress', sub: 'Everything to chase' },
+    { act: 'help', icon: '⚔️', label: 'Type Chart', sub: 'What beats what' },
+  ];
+  home.innerHTML = cards.map(c =>
+    `<button class="dex-menu-card" data-${c.view ? 'view="' + c.view : 'act="' + c.act}">` +
+    `<span class="dex-menu-ic">${c.icon}</span>` +
+    `<span class="dex-menu-lbl">${c.label}</span><span class="dex-menu-sub">${c.sub}</span></button>`
+  ).join('');
+  home.querySelectorAll('.dex-menu-card').forEach(el => el.addEventListener('click', () => {
+    if (el.dataset.view) showDexView(el.dataset.view);
+    else if (el.dataset.act === 'badges') openBadgeCase();
+    else if (el.dataset.act === 'notes') openNotes();
+    else if (el.dataset.act === 'help') openHelp('dex');
+  }));
+}
+
+// ─── Quest Log: one page with EVERYTHING there is to chase ────────────
+function renderQuestPage() {
+  const P = id => POKEMON_DATA.find(p => p.id === id) || { name: '?', emoji: '?' };
+  const pct = (n, t) => t ? Math.round(100 * n / t) : 0;
+  const bar = (n, t) => `<div class="q-bar"><div class="q-bar-fill" style="width:${pct(n, t)}%"></div></div>`;
+  const row = (icon, label, done, sub) =>
+    `<div class="q-row ${done ? 'q-done' : 'q-todo'}"><span class="q-tick">${done ? '✓' : '○'}</span>` +
+    `<span class="q-ic">${icon}</span><span class="q-lbl">${label}${sub ? `<span class="q-sub">${sub}</span>` : ''}</span></div>`;
+  const section = (icon, title, n, t, body) =>
+    `<div class="q-section"><div class="q-head"><span class="q-htitle">${icon} ${title}</span>` +
+    `<span class="q-count">${n}/${t}</span></div>${bar(n, t)}<div class="q-body">${body}</div></div>`;
+
+  // ── Pokédex ──
+  const dexN = caughtIds.size, dexT = POKEMON_DATA.length;
+
+  // ── Legendary Lukeymon ──
+  const legendIds = [144, 145, 146, 151, 150];
+  const legN = legendIds.filter(id => caughtIds.has(id)).length;
+  const legBody = legendIds.map(id => {
+    const p = P(id), got = caughtIds.has(id);
+    const sub = id === 150 ? 'the apex — appears once all others are caught'
+            : id === 151 ? 'the mythical one'
+            : 'a legendary bird';
+    return row(p.emoji, got ? p.name : (seenIds.has(id) ? p.name : '???'), got, sub);
+  }).join('');
+
+  // ── Badges ──
+  const badgeN = COLLECTIBLES.filter(b => collected.has(b.id)).length;
+  const badgeBody = COLLECTIBLES.map(b => {
+    const got = collected.has(b.id);
+    const where = b.auto ? b.hint : (b.zone != null && ZONE_INFO[b.zone] ? 'Hidden in ' + ZONE_INFO[b.zone].name : '');
+    const ic = `<img class="q-badge" src="${collectibleBadgeSrc(b)}" alt="">`;
+    return row(ic, b.name, got, got ? '' : where);
+  }).join('');
+
+  // ── Evolution Stones ──
+  const stoneN = STONE_FINDS.filter(s => foundStones.has(s.id)).length;
+  const stoneBody = STONE_FINDS.map(s => {
+    const got = foundStones.has(s.id), info = STONES[s.stone];
+    const ic = `<img class="q-badge" src="${stoneSrc(s.stone)}" alt="">`;
+    return row(ic, info.name, got, got ? 'in your bag — reusable' : (ZONE_INFO[s.zone] ? 'Hidden in ' + ZONE_INFO[s.zone].name : ''));
+  }).join('');
+
+  // ── Areas explored ──
+  const areaZones = ZONE_INFO.filter(z => z.name);
+  const areaN = areaZones.filter(z => visited.has(z.id)).length, areaT = areaZones.length;
+  const seenAreas = areaZones.filter(z => visited.has(z.id)).map(z => `<span class="q-chip">${z.icon || ''} ${z.name}</span>`).join('');
+  const areaBody = seenAreas + (areaN < areaT ? `<span class="q-chip q-locked">＋${areaT - areaN} undiscovered</span>` : '');
+
+  // ── Characters met ──
+  const npcN = NPCS.filter(n => metNPCs.has(n.name)).length, npcT = NPCS.length;
+  const npcBody = NPCS.map(n => row(n.emoji, metNPCs.has(n.name) ? n.name : '???', metNPCs.has(n.name), '')).join('');
+
+  // ── Field notes & barriers ──
+  const tipN = knownTips.size, tipT = allTips().length;
+  const barrierKeys = Object.keys(BARRIERS);
+  const barrN = barrierKeys.filter(k => unlockedBarriers.has(k)).length, barrT = barrierKeys.length;
+  const badgeIc = k => `<img class="q-badge" src="art/typeicon/${BARRIERS[k].needsType}.png?v=${ART_V}" alt="" onerror="this.replaceWith(document.createTextNode('${BARRIERS[k].sign}'))">`;
+  const barrBody = barrierKeys.map(k => row(badgeIc(k), BARRIER_LABEL[k] || k, unlockedBarriers.has(k),
+    unlockedBarriers.has(k) ? '' : 'needs a ' + BARRIERS[k].needsType + ' buddy')).join('');
+
+  // ── Achievements (milestones) ──
+  const birds = [144, 145, 146].every(id => caughtIds.has(id));
+  const ach = [
+    ['🥾', 'First Friend', 'Befriend your first Lukeymon', dexN >= 1],
+    ['🏆', 'Champion', 'Earn all 4 land badges', wonGame],
+    ['🎖️', 'Badge Collector', 'Find every badge', badgeN === COLLECTIBLES.length],
+    ['💎', 'Stone Seeker', 'Find every evolution stone', stoneN === STONE_FINDS.length],
+    ['🦅', 'Bird Tamer', 'Befriend all three legendary birds', birds],
+    ['🌸', 'Mythical Meeting', 'Befriend Mew', caughtIds.has(151)],
+    ['🧬', 'Apex Bond', 'Befriend Mewtwo', caughtIds.has(150)],
+    ['🗺️', 'Explorer', 'Set foot in every area', areaN === areaT],
+    ['📖', 'Lorekeeper', 'Discover every field note', tipN === tipT],
+    (metNPCs.has('Dad')
+      ? ['💙', 'Homecoming', 'You found the secret cove and came home', true]
+      : ['❓', '? ? ?', 'A hidden ending awaits the truest of champions...', false]),
+    ['🌟', 'Lukeymon Master', 'Befriend all 151', dexN === dexT],
+  ];
+  const achN = ach.filter(a => a[3]).length;
+  const achBody = ach.map(a => row(a[0], a[1], a[3], a[2])).join('');
+
+  // ── Overall ──
+  const fracs = [dexN / dexT, badgeN / COLLECTIBLES.length, stoneN / STONE_FINDS.length,
+                 areaN / areaT, npcN / npcT, tipN / Math.max(1, tipT), barrN / barrT, achN / ach.length];
+  const overall = Math.round(100 * fracs.reduce((a, b) => a + b, 0) / fracs.length);
+
+  const perfect = islandComplete();
+  document.getElementById('pokedex-quest').innerHTML =
+    `<div class="q-overall${perfect ? ' q-perfect' : ''}"><div class="q-overall-num">${overall}%</div>` +
+    `<div class="q-overall-lbl">${perfect ? '🏝️ PERFECT ISLAND! 🌟' : 'ISLAND COMPLETION'}</div>${bar(overall, 100)}` +
+    (perfect ? `<div class="q-note" style="color:#f8d860;margin-top:6px">You found absolutely everything. True Island Master! 💙</div>` : '') + `</div>` +
+    section('🔰', 'Pokédex', dexN, dexT, `<div class="q-note">Open the All / Caught / Missing tabs above to track every species.</div>`) +
+    section('👑', 'Legendary Lukeymon', legN, legendIds.length, legBody) +
+    section('🎖️', 'Badges', badgeN, COLLECTIBLES.length, badgeBody) +
+    section('💎', 'Evolution Stones', stoneN, STONE_FINDS.length, stoneBody) +
+    section('🗺️', 'Areas Explored', areaN, areaT, `<div class="q-chips">${areaBody}</div>`) +
+    section('👥', 'Characters Met', npcN, npcT, npcBody) +
+    section('🚧', 'Barriers Cleared', barrN, barrT, barrBody) +
+    section('📖', 'Field Notes', tipN, tipT, `<div class="q-note">Tips you've discovered out in the world.</div>`) +
+    section('🏅', 'Achievements', achN, ach.length, achBody);
 }
 
 function closePokedex() {
   showScreen('world');
+  scheduleSpawn();
+}
+
+// ─── Hidden cheat: tap a not-yet-caught species 10× in a row to befriend it ──
+let _dexTap = { id: null, n: 0 };
+function dexCheatTap(poke, card) {
+  if (_dexTap.id !== poke.id) _dexTap = { id: poke.id, n: 0 };   // a different card resets the streak
+  _dexTap.n++;
+  card.style.transition = 'transform .08s';
+  card.style.transform = 'scale(0.92)';
+  setTimeout(() => { card.style.transform = ''; }, 80);
+  beep(260 + _dexTap.n * 45, 0.04, 0.05);                        // pitch climbs with each tap
+  if (_dexTap.n >= 10) { _dexTap = { id: null, n: 0 }; dexCheatCatch(poke); }
+}
+function dexCheatCatch(poke) {
+  seenIds.add(poke.id);
+  caughtIds.add(poke.id);
+  refreshRoamers();                 // if it was a legendary roamer, take it out of the world
+  saveGame();
+  updateHud();
+  playCatchJingle();
+  renderPokedexGrid();              // redraw so the card flips to "caught"
+  showDetail(poke);                 // pop straight into its page, like a real catch
 }
 
 function renderPokedexGrid() {
   const grid = document.getElementById('pokedex-grid');
   grid.innerHTML = '';
   document.getElementById('dex-count').textContent = caughtIds.size;
+  document.getElementById('dex-total').textContent = POKEMON_DATA.length;
 
+  let shown = 0;
   POKEMON_DATA.forEach(poke => {
-    const card = document.createElement('div');
     const caught = caughtIds.has(poke.id);
-    card.className = 'dex-card' + (caught ? ' caught' : ' dex-card-unknown');
+    const seen   = !caught && seenIds.has(poke.id);   // encountered but not yet caught
+
+    // Apply the active filter.
+    if (!dexFilterPass(poke)) return;
+    shown++;
+
+    const card = document.createElement('div');
+    card.className = 'dex-card' + (caught ? ' caught' : seen ? ' seen' : ' dex-card-unknown');
+    card.dataset.pid = poke.id;
 
     const emojiDiv = document.createElement('div');
     emojiDiv.className = 'dex-card-emoji';
-    emojiDiv.textContent = poke.emoji;
+    if (caught || seen) {
+      const img = pokeImg(poke, 40);
+      if (seen) img.classList.add('dex-silhouette');   // dark silhouette for "seen"
+      emojiDiv.appendChild(img);
+    } else {
+      emojiDiv.textContent = '?';
+    }
+
+    const numDiv = document.createElement('div');
+    numDiv.className = 'dex-card-num';
+    numDiv.textContent = `#${String(poke.id).padStart(3, '0')}`;
 
     const nameDiv = document.createElement('div');
     nameDiv.className = 'dex-card-name';
-    nameDiv.textContent = caught ? poke.name : '?????????';
+    nameDiv.textContent = caught ? poke.name : seen ? poke.name : '?????????';
 
+    card.appendChild(numDiv);
     card.appendChild(emojiDiv);
     card.appendChild(nameDiv);
 
+    // Type badge — once you've at least seen it.
+    if (caught || seen) {
+      const typeBadge = document.createElement('div');
+      typeBadge.className = 'dex-card-type';
+      typeBadge.textContent = poke.type;
+      typeBadge.style.background = typeColor(poke.type);
+      card.appendChild(typeBadge);
+    }
+
+    // Buddy indicator — a heart in the top-right corner of the buddy's card.
+    if (activePet === poke.id) {
+      const buddyTag = document.createElement('div');
+      buddyTag.className = 'dex-card-buddy';
+      buddyTag.textContent = '❤️';
+      buddyTag.title = 'Your buddy';
+      card.appendChild(buddyTag);
+    }
+
+    // Ready-to-evolve indicator — a sparkle in the top-left corner of the card.
+    if (caught && evoReadyNow(poke.id)) {
+      const evoTag = document.createElement('div');
+      evoTag.className = 'dex-card-evo';
+      evoTag.textContent = '✨';
+      evoTag.title = 'Ready to evolve!';
+      card.appendChild(evoTag);
+    }
+
+    // Help the player find what they're missing.
+    if (!caught) {
+      const hint = document.createElement('div');
+      hint.className = 'dex-card-hint';
+      hint.textContent = dexLocationHint(poke);
+      card.appendChild(hint);
+    }
+
     if (caught) {
       card.addEventListener('click', () => showDetail(poke));
+    } else {
+      card.addEventListener('click', () => dexCheatTap(poke, card));   // tap 10× in a row to befriend it
     }
     grid.appendChild(card);
   });
+
+  if (!shown) {
+    const empty = document.createElement('div');
+    empty.className = 'dex-empty';
+    empty.textContent = 'Nothing here yet — go explore!';
+    grid.appendChild(empty);
+  }
 }
 
 function showDetail(poke) {
-  document.getElementById('pokedex-grid').classList.add('hidden');
+  const grid = document.getElementById('pokedex-grid');
+  if (!grid.classList.contains('hidden')) dexScroll = grid.scrollTop;  // remember place
+  grid.classList.add('hidden');
   const detail = document.getElementById('pokedex-detail');
   detail.classList.remove('hidden');
 
-  document.getElementById('detail-emoji').textContent  = poke.emoji;
+  setPokeDisplay(document.getElementById('detail-emoji'), poke, 96);
   document.getElementById('detail-name').textContent   = poke.name;
   document.getElementById('detail-number').textContent = `#${String(poke.id).padStart(3, '0')}`;
   document.getElementById('detail-type').textContent   = poke.type;
   document.getElementById('detail-type').style.background = typeColor(poke.type);
+
+  document.getElementById('detail-category').textContent =
+    poke.category ? `${poke.category} Pokémon` : '';
+  document.getElementById('detail-height').textContent =
+    poke.height != null ? `${poke.height.toFixed(1)} m`  : '—';
+  document.getElementById('detail-weight').textContent =
+    poke.weight != null ? `${poke.weight.toFixed(1)} kg` : '—';
+
   document.getElementById('detail-desc').textContent   = poke.description;
+
+  setActionIcon(document.getElementById('detail-befriend-icon'), poke.actionEmoji, '💚');
+  document.getElementById('detail-befriend-text').textContent = poke.befriendTip || '';
+
+  document.getElementById('detail-habitat').textContent = dexLocationHint(poke);
+
+  detailPoke = poke;
+  const buddyBtn = document.getElementById('detail-buddy');
+  const isBuddy = activePet === poke.id;
+  buddyBtn.textContent = '❤️';
+  buddyBtn.title = isBuddy ? 'Your buddy — tap to dismiss' : 'Make this my buddy';
+  buddyBtn.classList.toggle('lit', isBuddy);
+
+  // Evolution: a button per Stone you own that this Pokémon can use; otherwise a
+  // hint of which Stone it's waiting for.
+  const evoWrap = document.getElementById('detail-evolve');
+  evoWrap.innerHTML = '';
+  const nav = [buddyBtn];
+  const got = id => POKEMON_DATA.find(p => p.id === id) && !caughtIds.has(id);
+  const stoneIc = key => `<img class="evo-stone" src="${stoneSrc(key)}" alt=""> `;
+  const mkBtn = (label, fn, stoneKey) => {
+    const b = document.createElement('button');
+    b.className = 'pixel-btn small green';
+    if (stoneKey) b.innerHTML = stoneIc(stoneKey) + label; else b.textContent = label;
+    b.addEventListener('click', fn); evoWrap.appendChild(b); nav.push(b);
+  };
+  const mkHint = (txt, stoneKey) => {
+    const h = document.createElement('div'); h.className = 'detail-evo-hint';
+    if (stoneKey) h.innerHTML = stoneIc(stoneKey) + txt; else h.textContent = txt;
+    evoWrap.appendChild(h);
+  };
+
+  // Stone evolutions
+  evolutionsFor(poke.id).filter(r => got(r.to)).forEach(r => {
+    const t = POKEMON_DATA.find(p => p.id === r.to);
+    if ((stones[r.stone] || 0) > 0) mkBtn(`Evolve → ${t.name}`, () => evolveWithStone(poke, r), r.stone);
+    else mkHint(`Needs a ${STONES[r.stone].name}`, r.stone);
+  });
+  // Buddy / battle / dance evolutions
+  evosFor(poke.id).filter(r => got(r.to)).forEach(r => {
+    const t = POKEMON_DATA.find(p => p.id === r.to);
+    const where = r.zone != null ? ` in ${ZONE_INFO[r.zone].name}` : '';
+    if (r.method === 'dance') { mkHint(`🔗 ${t.name}: Dance Party with another trainer${where}`); return; }
+    if (evoReady(r) && !evoHere(r)) mkHint(`✨ Ready — evolve it${where}`);
+    else if (evoReady(r)) mkBtn(`✨ Evolve → ${t.name}`, () => evolveByProgress(poke, r));
+    else if (r.method === 'buddy') mkHint(`🐾 Bond ${evoProgress(r)}/${r.cost} steps → ${t.name}${where}`);
+    else mkHint(`🥊 Battles ${evoProgress(r)}/${r.cost} → ${t.name}${where}`);
+  });
+
+  nav.push(document.getElementById('detail-back'));
+  setNav(nav, { onBack: closeDetail });
+}
+
+// Toggle the open Pokémon as the player's buddy.
+function toggleBuddy() {
+  if (!detailPoke) return;
+  setBuddy(activePet === detailPoke.id ? null : detailPoke.id);
+  beep(523, 0.08, 0.08);
+  showDetail(detailPoke);   // refresh the button label
+}
+
+// ─── Buddies hub: current buddy, special abilities, favourites, and your team ──
+function renderBuddies() {
+  const el = document.getElementById('pokedex-buddies');
+  const team = POKEMON_DATA.filter(p => caughtIds.has(p.id));
+  const cur = buddyPoke();
+  const abRow = p => {
+    const a = buddyAbilities(p);
+    return a.length ? `<span class="buddy-ab">${a.map(x => `<span title="${x.lbl}">${x.ic}</span>`).join('')}</span>` : '';
+  };
+  const tile = (p, big) => {
+    if (!p) return `<button class="buddy-tile solo${activePet == null ? ' on' : ''}" data-id="none"><span class="buddy-emoji">🚶</span><span class="buddy-nm">Solo</span></button>`;
+    return `<button class="buddy-tile${big ? ' big' : ''}${activePet === p.id ? ' on' : ''}" data-id="${p.id}">` +
+      `<img class="buddy-sprite" src="${p.sprite}" alt="">${abRow(p)}<span class="buddy-nm">${p.name}</span></button>`;
+  };
+  if (!team.length) {
+    el.innerHTML = `<div class="buddy-empty">Befriend a Lukéymon first — then come back to choose who follows you around!</div>`;
+    return;
+  }
+  const recent = team.slice().sort((a, b) => (buddyUses[b.id] || 0) - (buddyUses[a.id] || 0)).slice(0, 6);
+  const usedAny = recent.some(p => buddyUses[p.id]);
+  // Specialists: buddies with a standout (star) power — the hard-to-discover keys.
+  const specialists = team.filter(p => buddyAbilities(p).some(a => a.kind === 'star'));
+  const specTile = p => `<button class="buddy-spec${activePet === p.id ? ' on' : ''}" data-id="${p.id}">` +
+    `<img class="buddy-sprite" src="${p.sprite}" alt=""><span class="buddy-spec-txt"><b>${p.name}</b>` +
+    buddyAbilities(p).filter(a => a.kind === 'star').map(a => `<span>${a.ic} ${a.lbl}</span>`).join('') +
+    `</span></button>`;
+  el.innerHTML =
+    `<div class="buddy-now">${cur ? `<img class="buddy-now-sprite" src="${cur.sprite}" alt="">` : '🚶'}` +
+      `<div class="buddy-now-txt"><b>${cur ? cur.name : 'Walking solo'}</b><span>${cur ? 'is following you' : 'tap a friend below to walk together'}</span></div></div>` +
+    `<div class="buddy-hint">Tap any Lukéymon to make it your buddy. The icons show its powers — 🌊 surf · 🔦 cave-light · 🚧 clear paths · 💨 dash · 🧩 puzzle key.</div>` +
+    (specialists.length ? `<div class="buddy-sec">🧩 Specialists — handy for puzzles & speed</div><div class="buddy-spec-list">${specialists.map(specTile).join('')}</div>` : '') +
+    (usedAny ? `<div class="buddy-sec">⭐ Favourites</div><div class="buddy-row">${recent.map(p => tile(p, true)).join('')}</div>` : '') +
+    `<div class="buddy-sec">Your team (${team.length})</div><div class="buddy-grid">${tile(null)}${team.map(p => tile(p)).join('')}</div>`;
+  el.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => {
+    setBuddy(b.dataset.id === 'none' ? null : +b.dataset.id);
+    beep(523, 0.06, 0.08);
+    renderBuddies();
+  }));
 }
 
 function closeDetail() {
   document.getElementById('pokedex-detail').classList.add('hidden');
-  document.getElementById('pokedex-grid').classList.remove('hidden');
+  const grid = document.getElementById('pokedex-grid');
+  grid.classList.remove('hidden');
   renderPokedexGrid();
+  // Re-focus the card we were just viewing, then restore the exact scroll
+  // position last so navShow's scrollIntoView doesn't yank us to the top.
+  const cards = Array.from(document.querySelectorAll('#pokedex-grid .dex-card.caught'));
+  const idx = detailPoke ? cards.findIndex(c => +c.dataset.pid === detailPoke.id) : -1;
+  setNav(cards, { cols: 3, onBack: closeDetail, index: Math.max(0, idx) });
+  grid.scrollTop = dexScroll;        // stay where we were, don't jump to top
+}
+
+// ═══════════════════════════════════════════════════
+// WORLD MAP
+// ═══════════════════════════════════════════════════
+// BFS from the start zone over exits whose barrier is currently unlocked.
+function reachableZones() {
+  const seen = new Set([0]);
+  const queue = [0];
+  while (queue.length) {
+    const z = queue.shift();
+    for (const e of EXITS) {
+      if (e.from !== z || !isBarrierUnlocked(e.barrier)) continue;
+      const sgi = seamGateInfo(e.from, e.to);             // seam-gate blocks the route both ways
+      if (sgi && !seamGateOpen(sgi.key, sgi.g)) continue;
+      if (!seen.has(e.to)) { seen.add(e.to); queue.push(e.to); }
+    }
+  }
+  return seen;
+}
+
+let atlasMode = true;    // world-map view: true = true-shape atlas (default), false = icon grid
+let visited = new Set([0]);   // zones the player has actually entered (fog of war)
+let atlasPanX = 0, atlasPanY = 0, _atlasInit = false;
+const ATLAS_WIN_W = 64, ATLAS_WIN_H = 58;   // pan-window size in world tiles (≈2× zoom)
+let _atlasBounds = null;
+
+function openMap() {
+  clearTimeout(spawnTimerId);
+  _atlasInit = false;            // re-centre the atlas on the current zone each open
+  renderMap();
+  showScreen('map');
+}
+
+// D-pad / arrows scroll the atlas (clamped to the world bounds).
+function atlasPan(dir) {
+  if (!_atlasBounds) return;
+  const step = 8;
+  if (dir === 'left')  atlasPanX -= step;
+  if (dir === 'right') atlasPanX += step;
+  if (dir === 'up')    atlasPanY -= step;
+  if (dir === 'down')  atlasPanY += step;
+  clampAtlasPan();
+  const svg = document.getElementById('map-atlas');
+  if (svg) svg.setAttribute('viewBox', `${atlasPanX} ${atlasPanY} ${ATLAS_WIN_W} ${ATLAS_WIN_H}`);
+}
+function clampAtlasPan() {
+  const b = _atlasBounds, pad = 4;
+  const wW = (b.maxX - b.minX) + 2 * pad, wH = (b.maxY - b.minY) + 2 * pad;
+  const loX = b.minX - pad, loY = b.minY - pad;
+  atlasPanX = wW <= ATLAS_WIN_W ? loX - (ATLAS_WIN_W - wW) / 2 : Math.max(loX, Math.min(atlasPanX, loX + wW - ATLAS_WIN_W));
+  atlasPanY = wH <= ATLAS_WIN_H ? loY - (ATLAS_WIN_H - wH) / 2 : Math.max(loY, Math.min(atlasPanY, loY + wH - ATLAS_WIN_H));
+}
+
+// Experimental "atlas" view: draw every surface zone as its real rectangle
+// (sized by cols×rows at its planar wx/wy), with low-res terrain detail, doorways
+// at the actual seams, and fog of war over places you haven't reached. Scroll with
+// the d-pad. Tile palette (matches the in-game tiles):
+const ATLAS_TC = { 0:'#cdb06a',1:'#4fa83f',2:'#1f5a24',3:'#2f6fd0',4:'#e2cf86',5:'#8b8b97',
+                   6:'#c83a78',7:'#d8431a',8:'#bfe3f2',9:'#7a7a86',10:'#3a3744',11:'#181520',
+                   12:'#c0432f',16:'#e8403a',17:'#7a5230' };
+function doorSeg(z, dir, pos) {
+  const a = Math.min(...pos), b = Math.max(...pos) + 1;
+  if (dir === 'north') return [z.wx + a, z.wy, z.wx + b, z.wy];
+  if (dir === 'south') return [z.wx + a, z.wy + z.rows, z.wx + b, z.wy + z.rows];
+  if (dir === 'west')  return [z.wx, z.wy + a, z.wx, z.wy + b];
+  return [z.wx + z.cols, z.wy + a, z.wx + z.cols, z.wy + b];   // east
+}
+function renderAtlas(open) {
+  const svg = document.getElementById('map-atlas');
+  if (!svg) return;
+  const surf = ZONE_INFO.filter(z => z.mapCol != null && z.wx != null);
+  _atlasBounds = {
+    minX: Math.min(...surf.map(z => z.wx)), maxX: Math.max(...surf.map(z => z.wx + z.cols)),
+    minY: Math.min(...surf.map(z => z.wy)), maxY: Math.max(...surf.map(z => z.wy + z.rows)),
+  };
+  // Discovered = visited zones plus their immediate neighbours (you glimpse the next area).
+  const disc = new Set(visited);
+  EXITS.forEach(e => { if (visited.has(e.from)) disc.add(e.to); if (visited.has(e.to)) disc.add(e.from); });
+
+  let zoneSvg = '', doorSvg = '', gateSvg = '';
+  surf.forEach(z => {
+    const seen = visited.has(z.id), known = disc.has(z.id), here = z.id === currentZone;
+    const [cx, cy] = [z.wx + z.cols / 2, z.wy + z.rows / 2];
+    const travel = (visited.has(z.id) && !here && zoneLanding(z.id)) ? ' data-travel="1"' : '';
+    zoneSvg += `<g class="atlas-zone" data-zone="${z.id}"${travel}>`;
+    if (!known) {                                   // unexplored → fog
+      zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="#191922" opacity="0.85"/>`;
+      zoneSvg += `<text x="${cx}" y="${cy + 1.4}" text-anchor="middle" font-size="4" fill="#3a3a4a">?</text></g>`;
+      return;
+    }
+    // biome base, then the real terrain detail painted ON TOP of it
+    zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="${ATLAS_TC[z.base] || '#5a6a7a'}"/>`;
+    if (seen) {                                     // real terrain detail (feature tiles)
+      const m = MAPS[z.id];
+      for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
+        const t = m[r][c];
+        if (t === z.base || t === 0) continue;       // base + path show through
+        zoneSvg += `<rect x="${z.wx + c}" y="${z.wy + r}" width="1.04" height="1.04" fill="${ATLAS_TC[t] || '#888'}"/>`;
+      }
+    } else {                                         // known-but-unvisited → dim
+      zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" fill="#0a0a12" opacity="0.55"/>`;
+    }
+    // Highlight only the current zone; no outline on the others.
+    if (here) zoneSvg += `<rect x="${z.wx}" y="${z.wy}" width="${z.cols}" height="${z.rows}" rx="1.5" fill="none" stroke="#f8d030" stroke-width="1.3"/>`;
+    // a small icon tucked in the corner so it doesn't cover the terrain
+    const icon = open.has(z.id) ? (z.icon || '') : '🔒';
+    zoneSvg += `<text x="${z.wx + 1.8}" y="${z.wy + 3.2}" text-anchor="middle" font-size="3">${icon}</text>`;
+    if (seen && Math.min(z.cols, z.rows) >= 9) zoneSvg += `<text x="${cx}" y="${z.wy + z.rows - 1.3}" text-anchor="middle" font-size="2.2" fill="#fff" stroke="#000" stroke-width="0.18" paint-order="stroke">${z.name}</text>`;
+    if (here) zoneSvg += `<text x="${z.wx + z.cols - 1.8}" y="${z.wy + 3.4}" text-anchor="middle" font-size="3.2" fill="#f8d030">📍</text>`;
+    zoneSvg += `</g>`;
+  });
+
+  // Doorways at the real seams (drawn once per connection, only where you can see).
+  const drawn = new Set();
+  EXITS.forEach(e => {
+    const a = ZONE_INFO[e.from], b = ZONE_INFO[e.to];
+    if (!a || !b || a.mapCol == null || b.mapCol == null) return;
+    if (!disc.has(e.from) && !disc.has(e.to)) return;
+    const key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to);
+    if (drawn.has(key)) return; drawn.add(key);
+    const gate = EXITS.find(x => ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
+    const passable = isBarrierUnlocked(gate ? gate.barrier : null);
+    const [x1, y1, x2, y2] = doorSeg(a, e.dir, e.pos);
+    doorSvg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${passable ? '#f8e030' : '#d85050'}" stroke-width="1.4" stroke-linecap="round"/>`;
+    if (gate && !passable) { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2; gateSvg += `<image x="${mx - 2.6}" y="${my - 2.6}" width="5.2" height="5.2" href="art/typeicon/${BARRIERS[gate.barrier].needsType}.png?v=${ART_V}"/>`; }
+  });
+
+  // Secret hint: once Mewtwo is yours, a pulsing marker appears at the very top
+  // of the west coast — go up there to find the hidden cove.
+  let hintSvg = '';
+  if (caughtIds.has(150)) {
+    const cz = ZONE_INFO[20];
+    if (cz && cz.wx != null) {
+      const hx = cz.wx + 17.5, hy = cz.wy + 0.5;
+      hintSvg = `<g><circle cx="${hx}" cy="${hy}" r="2.5" fill="rgba(248,216,96,.25)" stroke="#f8d860" stroke-width="0.5">` +
+        `<animate attributeName="r" values="2;4.5;2" dur="1.5s" repeatCount="indefinite"/>` +
+        `<animate attributeName="opacity" values="1;.25;1" dur="1.5s" repeatCount="indefinite"/></circle>` +
+        `<text x="${hx}" y="${hy + 1.5}" text-anchor="middle" font-size="4">✨</text></g>`;
+    }
+  }
+  // Island shoreline: a jaggy sand (and occasional cliff-stone) fringe drawn in
+  // the OCEAN just outside every zone edge that faces open water and isn't already
+  // beach/water — so the landmass reads as an island instead of hard rectangles.
+  let fringeSvg = '';
+  const rects = surf.map(z => [z.wx, z.wy, z.wx + z.cols, z.wy + z.rows]);
+  const covered = (x, y) => { for (const r of rects) if (x >= r[0] && x < r[2] && y >= r[1] && y < r[3]) return true; return false; };
+  const fr = (x, y) => { let h = (Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663)) >>> 0; return (h % 997) / 997; };
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  surf.forEach(z => {
+    const m = MAPS[z.id]; if (!m) return;
+    for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
+      if (r > 0 && r < z.rows - 1 && c > 0 && c < z.cols - 1) continue;   // perimeter only
+      const t = m[r][c]; if (t === 3 || t === 4) continue;                // already sand/water → natural
+      const wx = z.wx + c, wy = z.wy + r;
+      for (const [dx, dy] of DIRS) {
+        if (covered(wx + dx, wy + dy)) continue;                          // neighbour is land → no shore
+        const rv = fr(wx * 3 + dx, wy * 3 + dy);
+        const depth = 2 + (rv < 0.45 ? 0 : rv < 0.80 ? 1 : 2);            // solid 2-cell beach + jaggy outer (2..4)
+        for (let d = 1; d <= depth; d++) {
+          const fx = wx + dx * d, fy = wy + dy * d;
+          if (covered(fx, fy)) break;
+          const col = (d === 1 && fr(wx, wy) < 0.16) ? '#8d8678' : '#e2cf86';  // a little cliff at the land edge, sand beyond
+          fringeSvg += `<rect x="${fx}" y="${fy}" width="1.05" height="1.05" fill="${col}"/>`;
+        }
+      }
+    }
+  });
+  // Hand-painted shore overrides (from paint.html) drawn on top of the auto-beach:
+  // "x,y" → tile id (sand/cliff/grass to add, water to erase back to ocean).
+  if (typeof WORLD !== 'undefined' && WORLD.shore) {
+    for (const k in WORLD.shore) {
+      const ci = k.indexOf(','); const x = +k.slice(0, ci), y = +k.slice(ci + 1);
+      fringeSvg += `<rect x="${x}" y="${y}" width="1.05" height="1.05" fill="${ATLAS_TC[WORLD.shore[k]] || '#e2cf86'}"/>`;
+    }
+  }
+  svg.innerHTML = fringeSvg + zoneSvg + doorSvg + gateSvg + hintSvg;
+  if (atlasMode) { const o = document.getElementById('map-objective'); if (o) o.textContent = '🧭 D-pad to scroll · tap a zone to fast-travel'; }
+  if (!_atlasInit) {   // centre the pan window on the current zone the first time
+    const z = ZONE_INFO[currentZone];
+    if (z && z.wx != null) { atlasPanX = z.wx + z.cols / 2 - ATLAS_WIN_W / 2; atlasPanY = z.wy + z.rows / 2 - ATLAS_WIN_H / 2; }
+    clampAtlasPan(); _atlasInit = true;
+  }
+  svg.setAttribute('viewBox', `${atlasPanX} ${atlasPanY} ${ATLAS_WIN_W} ${ATLAS_WIN_H}`);
+}
+
+function closeMap() {
+  showScreen('world');
+  scheduleSpawn();
+}
+
+// The tile you arrive on when entering a zone (an edge entry, or a portal target).
+function zoneLanding(zone) {
+  const e = EXITS.find(x => x.to === zone);
+  if (e) return [e.entryX, e.entryY];
+  const p = PORTALS.find(x => x.to === zone);
+  if (p) return [p.tx, p.ty];
+  return null;
+}
+
+function fastTravel(zone) {
+  if (zone === currentZone) return;
+  if (!visited.has(zone)) return;        // only to places you've actually walked to
+  const land = zoneLanding(zone);
+  if (!land) return;
+  const [x, y] = land;
+  warpTo(zone, x, y);            // handles save, HUD, spawn, message, sound
+  showScreen('world');
+}
+
+// ─── Pokédex filters ─────────────────────────────────
+function refreshDexFilters() {
+  const btn = document.getElementById('dexf-open');
+  if (btn) btn.innerHTML = `<span class="dexf-open-ic">🔎</span> ${dexFilterLabel()}`;
+}
+
+// The full-page filter picker: a card for each useful way to slice the dex.
+function renderDexFilterPage() {
+  const page = document.getElementById('pokedex-filter-page');
+  const countMode = f => POKEMON_DATA.filter(p => {
+    const save = dexFilter; dexFilter = f; const ok = dexFilterPass(p); dexFilter = save; return ok;
+  }).length;
+  const caughtIn = f => POKEMON_DATA.filter(p => {
+    const save = dexFilter; dexFilter = f; const ok = dexFilterPass(p); dexFilter = save;
+    return ok && caughtIds.has(p.id);
+  }).length;
+  const card = (f, icon, label, color) => {
+    const total = countMode(f), got = caughtIn(f);
+    const active = dexFilter.mode === f.mode && (dexFilter.type || null) === (f.type || null);
+    return `<button class="dex-filter-card${active ? ' active' : ''}" data-mode="${f.mode}" data-type="${f.type || ''}"` +
+      (color ? ` style="border-color:${color}"` : '') +
+      `><span class="dfc-ic"${color ? ` style="background:${color}"` : ''}>${icon}</span>` +
+      `<span class="dfc-lbl">${label}</span><span class="dfc-ct">${got}/${total}</span></button>`;
+  };
+  const section = (title, body) => `<div class="dex-filter-sec">${title}</div><div class="dex-filter-grid">${body}</div>`;
+  page.innerHTML =
+    section('Show', [
+      card({ mode: 'all' }, '🔰', 'All'),
+      card({ mode: 'caught' }, '❤️', 'Befriended'),
+      card({ mode: 'missing' }, '❔', 'Still missing'),
+      card({ mode: 'legendary' }, '🌟', 'Legendary'),
+      card({ mode: 'swift' }, '💨', 'Speedsters'),
+    ].join('')) +
+    section('By type', DEX_TYPE_ORDER
+      .filter(t => POKEMON_DATA.some(p => p.type === t))
+      .map(t => card({ mode: 'type', type: t }, TYPE_EMOJI[t] || '◆', t, typeColor(t))).join(''));
+  page.querySelectorAll('.dex-filter-card').forEach(el => el.addEventListener('click', () => {
+    setDexFilter({ mode: el.dataset.mode, type: el.dataset.type || null });
+    beep(523, 0.05, 0.07);
+    showDexView('grid');
+  }));
+}
+
+// ─── Settings ────────────────────────────────────────
+function updateSoundRow() {
+  const r = document.getElementById('set-sound');
+  if (r) r.textContent = muted ? '🔇 Sound: OFF' : '🔊 Sound: ON';
+}
+function openSettings() {
+  updateSoundRow();
+  const v = document.getElementById('version');
+  const sv = document.getElementById('set-version');
+  if (sv && v) sv.textContent = v.textContent;
+  showScreen('settings');
+}
+function closeSettings() { showScreen('title'); }
+
+// ─── Guide / type-chart screen ───────────────────────
+let helpReturn = 'map';
+// ── Controls overlay ─────────────────────────────────
+// A button-map you can pop up ANY time with Start (or 'C' on a keyboard). It's an
+// overlay, not a screen swap, so it works from the world, menus, battles, anywhere.
+let controlsOpen = false;
+function openControls() {
+  if (controlsOpen) return;
+  controlsOpen = true;
+  document.getElementById('controls-overlay').classList.remove('hidden');
+  beep(523, 0.05, 0.07);
+}
+function closeControls() {
+  if (!controlsOpen) return;
+  controlsOpen = false;
+  document.getElementById('controls-overlay').classList.add('hidden');
+  beep(392, 0.05, 0.07);
+}
+function toggleControls() { controlsOpen ? closeControls() : openControls(); }
+
+function openHelp(from) {
+  helpReturn = from || 'map';
+  renderHelp();
+  showScreen('help');
+}
+function closeHelp() {
+  if (helpReturn === 'settings') { showScreen('settings'); return; }
+  backToDexHome();
+}
+function renderHelp() {
+  const box = document.getElementById('help-types');
+  if (!box || box.childElementCount) return;   // build once
+  // Order types by how common they are in the roster, skipping any with no counter.
+  const order = ['Fire','Water','Grass','Electric','Ground','Rock','Ice','Flying',
+                 'Poison','Psychic','Bug','Normal','Fighting','Ghost','Dragon','Fairy'];
+  order.forEach(t => {
+    const counters = BEATEN_BY[t];
+    if (!counters) return;
+    const row = document.createElement('div');
+    row.className = 'help-type-row';
+    const tag = document.createElement('span');
+    tag.className = 'help-type-tag';
+    tag.textContent = t;
+    tag.style.background = typeColor(t);
+    const arrow = document.createElement('span');
+    arrow.className = 'help-type-arrow';
+    arrow.textContent = '→';
+    const list = document.createElement('span');
+    list.className = 'help-type-counters';
+    counters.forEach(c => {
+      const chip = document.createElement('span');
+      chip.className = 'help-type-chip';
+      chip.textContent = c;
+      chip.style.background = typeColor(c);
+      list.appendChild(chip);
+    });
+    row.append(tag, arrow, list);
+    box.appendChild(row);
+  });
+}
+
+function renderMap() {
+  const open = reachableZones();
+  document.getElementById('map-open-count').textContent = open.size;
+  document.getElementById('map-total').textContent = Object.keys(ZONE_MAP).length;
+
+
+  // Dynamic grid bounds so the world map scales as the world grows.
+  const _cols = Object.values(ZONE_MAP).map(p => p.col), _rows = Object.values(ZONE_MAP).map(p => p.row);
+  const minC = Math.min(..._cols), maxC = Math.max(..._cols), minR = Math.min(..._rows), maxR = Math.max(..._rows);
+  const nC = maxC - minC + 1, nR = maxR - minR + 1;
+  const _ml = document.getElementById('map-lines'); if (_ml) _ml.setAttribute('viewBox', `0 0 ${nC * 100} ${nR * 100}`);
+  const cx = id => (ZONE_MAP[id].col - minC + 0.5) * 100;
+  const cy = id => (ZONE_MAP[id].row - minR + 0.5) * 100;
+  const useRoutes = (minC === 1 && maxC === 3 && minR === 1 && maxR === 4);
+
+  // Draw each connection once. A link is "open" when its barrier is unlocked.
+  const drawn = new Set();
+  let svg = '';
+  EXITS.forEach(e => {
+    const key = Math.min(e.from, e.to) + '-' + Math.max(e.from, e.to);
+    if (drawn.has(key)) return;
+    drawn.add(key);
+    const gate = EXITS.find(x =>
+      ((x.from === e.from && x.to === e.to) || (x.from === e.to && x.to === e.from)) && x.barrier);
+    const barrier = gate ? gate.barrier : null;
+    const sgi = seamGateInfo(e.from, e.to);
+    const seamOpen = !sgi || seamGateOpen(sgi.key, sgi.g);
+    const passable = isBarrierUnlocked(barrier) && seamOpen;
+    const x1 = cx(e.from), y1 = cy(e.from), x2 = cx(e.to), y2 = cy(e.to);
+
+    // Build the path: straight by default, or via waypoints for routed edges.
+    let wp = useRoutes ? EDGE_ROUTES[key] : null;
+    if (wp && Math.hypot(wp[wp.length - 1][0] - x1, wp[wp.length - 1][1] - y1)
+           < Math.hypot(wp[0][0] - x1, wp[0][1] - y1)) {
+      wp = wp.slice().reverse(); // orient waypoints to start nearest (x1,y1)
+    }
+    const pts = [[x1, y1], ...(wp || []), [x2, y2]];
+    svg += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" class="${passable ? 'link-open' : 'link-locked'}" />`;
+
+    if (!passable && (barrier || !seamOpen)) {
+      // Label at the path midpoint (the apex of the arc for routed edges).
+      const lx = wp ? wp.reduce((s, p) => s + p[0], 0) / wp.length : (x1 + x2) / 2;
+      const ly = wp ? wp.reduce((s, p) => s + p[1], 0) / wp.length : (y1 + y2) / 2;
+      const sg = sgi && sgi.g;
+      if (barrier) {
+        svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${BARRIERS[barrier].needsType}.png?v=${ART_V}"/>`;
+      } else if (sg && sg.type != null) {
+        svg += `<image x="${lx - 10}" y="${ly - 9}" width="20" height="20" href="art/typeicon/${sg.type}.png?v=${ART_V}"/>`;
+      } else {
+        svg += `<text x="${lx}" y="${ly + 6}" text-anchor="middle" font-size="16">🔒</text>`;
+      }
+    }
+  });
+  document.getElementById('map-lines').innerHTML = svg;
+
+  // Place the zone tiles.
+  const zones = document.getElementById('map-zones');
+  zones.innerHTML = '';
+  ZONE_INFO.forEach(z => {
+    const pos = ZONE_MAP[z.id];
+    if (!pos) return;
+    const isOpen = open.has(z.id);
+    const here   = z.id === currentZone;
+
+    const tile = document.createElement('div');
+    tile.className = 'map-zone' + (isOpen ? ' open' : ' locked') + (here ? ' here' : '');
+    tile.style.left   = ((pos.col - minC) * (100 / nC)) + '%';
+    tile.style.top    = ((pos.row - minR) * (100 / nR)) + '%';
+    tile.style.width  = (100 / nC) + '%';
+    tile.style.height = (100 / nR) + '%';
+
+    const icon = document.createElement('div');
+    icon.className = 'map-zone-icon';
+    icon.textContent = isOpen ? pos.icon : '🔒';
+
+    const name = document.createElement('div');
+    name.className = 'map-zone-name';
+    name.textContent = z.name;
+
+    tile.appendChild(icon);
+    tile.appendChild(name);
+
+    // Fast-travel: tap an open zone you're not standing in to warp there.
+    if (isOpen && !here && zoneLanding(z.id)) {
+      tile.classList.add('travelable');
+      tile.addEventListener('click', () => fastTravel(z.id));
+    }
+
+    if (here) {
+      const you = document.createElement('div');
+      you.className = 'map-zone-tag you';
+      you.textContent = '📍 YOU';
+      tile.appendChild(you);
+    } else if (!isOpen) {
+      const gate = EXITS.find(e => e.to === z.id && e.barrier);
+      if (gate) {
+        const req = document.createElement('div');
+        req.className = 'map-zone-tag req';
+        req.innerHTML = `<img class="map-req-badge" src="art/typeicon/${BARRIERS[gate.barrier].needsType}.png?v=${ART_V}" alt=""> ${BARRIERS[gate.barrier].needsType}`;
+        tile.appendChild(req);
+      }
+    }
+    zones.appendChild(tile);
+  });
+
+  // Next-objective line.
+  const obj = document.getElementById('map-objective');
+  if (obj) {
+    const landDone = LAND_BADGES.filter(id => collected.has(id)).length;
+    const wildLeft = POKEMON_DATA.filter(p => !p.legend && !p.boss && !caughtIds.has(p.id)).length;
+    if (!wonGame)                                  obj.textContent = `🎯 Earn the 4 Gym Badges  (${landDone}/4)`;
+    else if (caughtIds.size >= POKEMON_DATA.length) obj.textContent = '🏆 You’ve done it all — Champion & Master!';
+    else if (wildLeft === 0)                       obj.textContent = '🌟 Only the legends remain — hunt the birds, Mew & Mewtwo!';
+    else                                           obj.textContent = `🎯 Complete the Pokédex  (${caughtIds.size}/${POKEMON_DATA.length})`;
+  }
+
+  // Experimental true-shape atlas overlay (CSS shows it when atlas mode is on).
+  document.getElementById('map-board').classList.toggle('atlas-on', atlasMode);
+  renderAtlas(open);
+}
+
+// ─── Badge Case ──────────────────────────────────────
+function openBadgeCase() {
+  renderBadgeCase();
+  showScreen('badges');
+}
+function closeBadgeCase() {
+  backToDexHome();
+}
+function renderBadgeCase() {
+  document.getElementById('badges-count').textContent = collected.size;
+  document.getElementById('badges-total').textContent = COLLECTIBLES.length;
+  const grid = document.getElementById('badges-grid');
+  grid.innerHTML = '';
+  COLLECTIBLES.forEach(c => {
+    const have = collected.has(c.id);
+    const card = document.createElement('div');
+    card.className = 'badge-card' + (have ? ' have' : '');
+
+    const icon = document.createElement('div');
+    icon.className = 'badge-card-icon';
+    if (have) icon.innerHTML = `<img class="badge-card-img" src="${collectibleBadgeSrc(c)}" alt="">`;
+    else icon.textContent = '🔒';
+
+    const name = document.createElement('div');
+    name.className = 'badge-card-name';
+    name.textContent = have ? c.name : '???';
+
+    const loc = document.createElement('div');
+    loc.className = 'badge-card-loc';
+    loc.textContent = c.auto ? (have ? 'Earned!' : c.hint)
+                             : (have ? 'Found in ' : '📍 ') + ZONE_INFO[c.zone].name;
+
+    card.append(icon, name, loc);
+    grid.appendChild(card);
+  });
+}
+
+// ─── Field Notes (tips notepad) ──────────────────────
+// Record a tip the first time the player runs into the relevant situation.
+function learnTip(id) {
+  if (knownTips.has(id)) return;
+  knownTips.add(id);
+  notesUnread = true;
+  saveGame();
+  markNotesNew();
+  beep(660, 0.05, 0.06, 'sine');
+  setTimeout(() => beep(880, 0.06, 0.09, 'sine'), 70);
+}
+// Flag the map + notepad buttons so the player notices a new note.
+function markNotesNew() {
+  ['map-btn', 'pokedex-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('has-new', notesUnread);
+  });
+}
+function openNotes() {
+  notesUnread = false;
+  markNotesNew();
+  renderNotes();
+  showScreen('notes');
+}
+function closeNotes() {
+  backToDexHome();
+}
+function renderNotes() {
+  const tips = allTips();
+  const known = tips.filter(t => knownTips.has(t.id));
+  document.getElementById('notes-count').textContent = known.length;
+  document.getElementById('notes-total').textContent = tips.length;
+
+  const body = document.getElementById('notes-body');
+  body.innerHTML = '';
+
+  if (!known.length) {
+    const empty = document.createElement('div');
+    empty.className = 'notes-empty';
+    empty.textContent = 'No notes yet — explore and the tips you find will be jotted down here.';
+    body.appendChild(empty);
+    return;
+  }
+
+  TIP_CATEGORIES.forEach(cat => {
+    const inCat = tips.filter(t => t.cat === cat);
+    const got   = inCat.filter(t => knownTips.has(t.id));
+    if (!inCat.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'notes-cat';
+    head.innerHTML = `<span>${cat}</span><span class="notes-cat-count">${got.length}/${inCat.length}</span>`;
+    body.appendChild(head);
+
+    inCat.forEach(t => {
+      const have = knownTips.has(t.id);
+      const card = document.createElement('div');
+      card.className = 'note-card' + (have ? '' : ' locked');
+      if (have) {
+        card.innerHTML =
+          `<div class="note-icon">${t.icon}</div>` +
+          `<div class="note-text"><div class="note-title">${t.title}</div>` +
+          `<div class="note-body">${t.text}</div></div>`;
+      } else {
+        card.innerHTML =
+          `<div class="note-icon">🔒</div>` +
+          `<div class="note-text"><div class="note-title">???</div>` +
+          `<div class="note-body">Keep exploring to discover this tip.</div></div>`;
+      }
+      body.appendChild(card);
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════
 // COMPLETE SCREEN
 // ═══════════════════════════════════════════════════
 function showComplete() {
-  const row = POKEMON_DATA.map(p => p.emoji).join(' ');
-  document.getElementById('complete-row').textContent = row;
+  document.getElementById('complete-sub').textContent =
+    `All ${POKEMON_DATA.length} Lukeymon caught!`;
+  const rowEl = document.getElementById('complete-row');
+  rowEl.innerHTML = '';
+  POKEMON_DATA.forEach(p => {
+    const wrap = document.createElement('span');
+    wrap.style.display = 'inline-block';
+    wrap.style.margin  = '2px';
+    wrap.appendChild(pokeImg(p, 28));
+    rowEl.appendChild(wrap);
+  });
   showScreen('complete');
+  runParade(POKEMON_DATA);   // rapid roll-call of every Lukeymon, then the trophy
+}
+
+// Celebratory roll-call: each Lukeymon flies in big, holds, then zooms out as the
+// next arrives — a fast montage of the whole dex. Tap to skip to the trophy.
+function runParade(list) {
+  const screen = document.getElementById('complete-screen');
+  const old = document.getElementById('parade-stage');
+  if (old) old.remove();
+
+  const stage = document.createElement('div');
+  stage.id = 'parade-stage';
+  const skip = document.createElement('div');
+  skip.className = 'parade-skip';
+  skip.textContent = 'tap to skip ▸';
+  stage.appendChild(skip);
+  screen.appendChild(stage);
+  screen.classList.add('parading');
+
+  const STEP = 100;            // ms between entries — "rapid"
+  let i = 0, done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    stage.remove();
+    screen.classList.remove('parading');
+  }
+  stage.addEventListener('click', finish);
+
+  function next() {
+    if (done) return;
+    if (i >= list.length) { setTimeout(finish, 450); return; }
+    const p = list[i++];
+    const card = document.createElement('div');
+    card.className = 'parade-poke';
+    card.appendChild(pokeImg(p, 116));
+    const nm = document.createElement('div');
+    nm.className = 'parade-name';
+    nm.textContent = p.name;
+    card.appendChild(nm);
+    stage.appendChild(card);
+    beep(360 + (i * 17) % 520, 0.05, 0.06);
+
+    if (card.animate) {
+      const a = card.animate([
+        { transform: 'translateY(38px) scale(0.3)',  opacity: 0, offset: 0,    easing: 'cubic-bezier(.2,.8,.2,1)' },
+        { transform: 'translateY(0) scale(1)',        opacity: 1, offset: 0.4 },
+        { transform: 'translateY(0) scale(1)',        opacity: 1, offset: 0.62, easing: 'ease-in' },
+        { transform: 'translateY(-34px) scale(1.55)', opacity: 0, offset: 1 },
+      ], { duration: STEP * 2.4, fill: 'forwards' });
+      a.onfinish = () => card.remove();
+    } else {
+      setTimeout(() => card.remove(), STEP * 2);
+    }
+    setTimeout(next, STEP);
+  }
+  next();
 }
 
 // ═══════════════════════════════════════════════════
 // SCREEN MANAGEMENT
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// D-PAD / A-B MENU NAVIGATION
+//   D-pad moves a focus cursor, A activates it, B goes back.
+//   (World movement stays continuous via keys[]; A/B are shortcuts there.)
+// ═══════════════════════════════════════════════════
+let nav = { items: [], index: 0, cols: 1, onBack: null };
+
+function navClear() {
+  nav.items.forEach(el => el && el.classList && el.classList.remove('nav-focus'));
+}
+function navShow() {
+  navClear();
+  const el = nav.items[nav.index];
+  if (el) {
+    el.classList.add('nav-focus');
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+function setNav(items, opts = {}) {
+  navClear();
+  nav.items  = (items || []).filter(el => el && !(el.classList && el.classList.contains('hidden')));
+  nav.cols   = opts.cols || 1;
+  nav.onBack = opts.onBack || null;
+  nav.index  = Math.min(opts.index || 0, Math.max(0, nav.items.length - 1));
+  navShow();
+}
+function navMove(dir) {
+  const n = nav.items.length;
+  if (!n) return;
+  const c = nav.cols;
+  let i = nav.index;
+  if      (dir === 'left')  i = (i - 1 + n) % n;
+  else if (dir === 'right') i = (i + 1) % n;
+  else if (dir === 'up')    i = ((i - c) % n + n) % n;
+  else if (dir === 'down')  i = (i + c) % n;
+  nav.index = i;
+  navShow();
+  beep(340, 0.03, 0.05);
+}
+function navActivate() {
+  const el = nav.items[nav.index];
+  if (el && !el.disabled) el.click();
+}
+function navBack() { if (nav.onBack) nav.onBack(); }
+
+// Route a button press (from D-pad, A/B, or keyboard) to the current screen.
+let _uiLast = '', _uiLastT = 0;
+function uiPress(action) {
+  if (!action) return;
+  if (controlsOpen) { if (action === 'a' || action === 'b') closeControls(); return; }   // overlay captures input
+  const now = Date.now();
+  if (action === _uiLast && now - _uiLastT < 30) return;   // kill synthetic touch+pointer dupes
+  _uiLast = action; _uiLastT = now;
+
+  if (gameState === 'world') {           // movement handled by keys[] in the loop
+    if      (action === 'a') openPokedex();
+    else if (action === 'b') openMap();
+    return;
+  }
+  // Atlas view: d-pad scrolls the map instead of moving a cursor.
+  if (gameState === 'map' && atlasMode && (action === 'up' || action === 'down' || action === 'left' || action === 'right')) {
+    atlasPan(action); return;
+  }
+  if (action === 'a')      navActivate();
+  else if (action === 'b') navBack();
+  else                     navMove(action);
+}
+
+// Build the focus ring for a screen (called by showScreen, after it has rendered).
+function setupNav(id) {
+  const $   = s => document.getElementById(s);
+  const all = s => Array.from(document.querySelectorAll(s));
+  switch (id) {
+    case 'title':     setNav([$('play-btn'), $('title-settings')]); break;
+    case 'settings':  setNav([$('set-sound'), $('set-guide'), $('settings-back')], { onBack: closeSettings }); break;
+    case 'slot':      setNav(all('#slot-list .slot-info, #slot-list .slot-erase'), { onBack: () => showScreen('title') }); break;
+    case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
+    case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;
+    case 'pokedex':
+      if (dexView === 'home')        setNav(all('#pokedex-home .dex-menu-card'), { cols: 2, onBack: dexBack });
+      else if (dexView === 'filter') setNav(all('#pokedex-filter-page .dex-filter-card'), { cols: 3, onBack: dexBack });
+      else if (dexView === 'buddies') setNav(all('#pokedex-buddies [data-id]'), { cols: 4, onBack: dexBack });
+      else                           setNav([document.getElementById('dexf-open'), ...all('#pokedex-grid .dex-card.caught')], { cols: 3, onBack: dexBack });
+      break;
+    case 'map':       setNav([...all('#map-zones .map-zone.travelable'), $('map-back')], { onBack: closeMap }); break;
+    case 'help':      setNav([$('help-back')], { onBack: closeHelp }); break;
+    case 'badges':    setNav([$('badges-back')], { onBack: closeBadgeCase }); break;
+    case 'notes':     setNav([$('notes-back')], { onBack: closeNotes }); break;
+    case 'shop':      setNav([...all('#shop-screen .shop-buy-btn'), $('shop-close')], { onBack: closeShop }); break;
+    case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
+    case 'gift':      setNav([$('gift-continue')], { onBack: continueGift }); break;
+    case 'result':    setNav([$('result-continue')], { onBack: () => $('result-continue').click() }); break;
+    case 'complete':  setNav([$('complete-restart')], { onBack: () => $('complete-restart').click() }); break;
+    case 'champion':  setNav([$('champion-continue')], { onBack: () => $('champion-continue').click() }); break;
+    case 'encounter': setNav(all('#enc-buttons .action-btn'), { cols: 3 }); break;
+    case 'battle':    break;   // set per-round by nextBattleRound / showBattleWin / rocketIntro
+    default:          setNav([]); break;   // world & misc: no cursor
+  }
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(id + '-screen');
   if (el) el.classList.add('active');
   if (id !== 'encounter') gameState = id;
+  setupNav(id);
+  setMusic(trackForScreen(id));
 }
 
-function showMessage(text) {
+function showMessage(html) {
   const box = document.getElementById('message-box');
-  document.getElementById('message-text').textContent = text;
+  document.getElementById('message-text').innerHTML = html;
   box.classList.remove('hidden');
   clearTimeout(showMessage._t);
   showMessage._t = setTimeout(() => box.classList.add('hidden'), 3000);
@@ -526,15 +6983,123 @@ function showMessage(text) {
 
 function updateHud() {
   document.getElementById('caught-count').textContent = caughtIds.size;
+  document.getElementById('total-count').textContent  = POKEMON_DATA.length;
+  document.getElementById('ball-count').textContent   = balls;
+  document.getElementById('coin-count').textContent   = coins;
+  // Master balls only shown once you own one.
+  const mh = document.getElementById('hud-master');
+  if (mh) {
+    mh.classList.toggle('hidden', masterBalls <= 0);
+    document.getElementById('master-count').textContent = masterBalls;
+  }
+  const zoneEl = document.getElementById('zone-name');
+  if (zoneEl) zoneEl.textContent = ZONE_INFO[currentZone].name;
+
+  // Once Mewtwo is caught, badge the map button until you've found the cove.
+  const mb = document.getElementById('map-btn');
+  if (mb) mb.classList.toggle('map-hint', caughtIds.has(150) && !visited.has(21));
+
+  // Evolution stones (only shown once you own some).
+  const hs = document.getElementById('hud-stones');
+  if (hs) {
+    const owned = Object.keys(STONES).filter(k => (stones[k] || 0) > 0);  // reusable → show icons, no counts
+    hs.innerHTML = owned.map(k => `<img class="hud-stone" src="${stoneSrc(k)}" alt="" title="${STONES[k].name}">`).join('');
+    hs.classList.toggle('hidden', owned.length === 0);
+  }
+
+  // Current buddy chip (sprite + type), tap to cycle.
+  const buddy = POKEMON_DATA.find(p => p.id === activePet);
+  const bi = document.getElementById('hud-buddy-icon');
+  const bt = document.getElementById('hud-buddy-type');
+  if (bi) {
+    bi.innerHTML = '';
+    if (buddy) bi.appendChild(pokeImg(buddy, 18));
+    else bi.textContent = '➕';
+  }
+  if (bt) {
+    if (buddy) {
+      bt.textContent = buddy.type.slice(0, 3).toUpperCase();
+      bt.style.background = typeColor(buddy.type);
+      bt.classList.remove('hidden');
+    } else {
+      bt.classList.add('hidden');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════
 // GAME FLOW
 // ═══════════════════════════════════════════════════
+// ── Save slots ───────────────────────────────────────
+let currentSlot = 1;
+let saveName    = '';
+let pendingNewSlot = 1;
+function slotKey(n) { return SAVE_KEY + '_s' + n; }
+
+// Move a pre-slots single save into slot 1 the first time (preserve progress).
+function migrateLegacy() {
+  try {
+    const legacy = localStorage.getItem(SAVE_KEY);
+    if (legacy && !localStorage.getItem(slotKey(1))) {
+      const data = JSON.parse(legacy);
+      const obj = Array.isArray(data) ? { caught: data } : data;
+      obj.name = obj.name || 'SAVE 1';
+      localStorage.setItem(slotKey(1), JSON.stringify(obj));
+    }
+    localStorage.removeItem(SAVE_KEY);
+  } catch (_) {}
+}
+
+// Peek a slot for the select screen.
+function slotMeta(n) {
+  try {
+    const raw = localStorage.getItem(slotKey(n));
+    if (!raw) return { exists: false };
+    const d = JSON.parse(raw);
+    return {
+      exists: true,
+      name:   d.name || `SAVE ${n}`,
+      caught: (d.caught || []).length,
+      badges: (d.collected || []).length,
+    };
+  } catch (_) { return { exists: false }; }
+}
+
 function startNewGame() {
   caughtIds.clear();
-  playerX = 10; playerY = 7; playerDir = 'down';
-  saveCaught();
+  seenIds.clear();
+  unlockedBarriers.clear();
+  clearedSeams.clear();
+  collected.clear();
+  metNPCs.clear();
+  gotBirthdayCake = false;
+  knownTips.clear();
+  notesUnread = false;
+  rocketDefeated.clear();
+  wonGame = false;
+  perfectDone = false; pendingPerfect = false;
+  pendingChampion = false;
+  balls = 12;
+  masterBalls = 0;
+  coins = 0;
+  loadedRoamers = null;
+  initRoamers();
+  clearWild();
+  clearTimeout(spawnTimerId);
+  currentZone = 9;             // start inside your home
+  playerX = 5; playerY = 6; playerDir = 'down';
+  fromPx.x = 5 * TILE_SIZE;
+  fromPx.y = 6 * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec = null;
+  activePet = null;
+  buddyUses = {};
+  petX = 5; petY = 6;
+  petFromPx.x = 5 * TILE_SIZE; petFromPx.y = 6 * TILE_SIZE;
+  petMoveAnimTs = -9999;
+  surfNoted = false;
+  slipNoted = false;
+  saveGame();
   updateHud();
   enterWorld();
 }
@@ -543,46 +7108,347 @@ function enterWorld() {
   gameState = 'world';
   showScreen('world');
   updateHud();
+  scheduleSpawn();
 }
 
 // ═══════════════════════════════════════════════════
 // SAVE / LOAD
 // ═══════════════════════════════════════════════════
-function saveCaught() {
+function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify([...caughtIds]));
+    localStorage.setItem(slotKey(currentSlot), JSON.stringify({
+      name:      saveName,
+      caught:    [...caughtIds],
+      seen:      [...seenIds],
+      barriers:  [...unlockedBarriers],
+      clearedSeams: [...clearedSeams],
+      collected: [...collected],
+      metNPCs:   [...metNPCs],
+      gotBirthdayCake,
+      knownTips: [...knownTips],
+      rocketDefeated: [...rocketDefeated],
+      wonGame,
+      perfectDone,
+      roamers:   roamers.map(r => ({ legend: r.legend, zone: r.zone, x: r.x, y: r.y })),
+      zone:      currentZone,
+      x:         playerX,
+      y:         playerY,
+      activePet,
+      buddyUses,
+      balls,
+      masterBalls,
+      coins,
+      lastHeal,
+      stones,
+      foundStones: [...foundStones],
+      bondSteps,
+      battleUses,
+      evoNotified: [...evoNotified],
+      visited: [...visited],
+    }));
   } catch (_) {}
+  maybePerfect();   // did that last thing complete the whole island?
 }
 
-function loadSave() {
+// Load slot n into the live game state. Returns true if data was present.
+function loadSlot(n) {
+  currentSlot = n;
+  let had = false;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey(n));
     if (raw) {
-      const ids = JSON.parse(raw);
-      caughtIds = new Set(ids);
+      had = true;
+      const data = JSON.parse(raw);
+      saveName         = data.name || `SAVE ${n}`;
+      caughtIds        = new Set(data.caught || []);
+      seenIds          = new Set([...(data.seen || []), ...caughtIds]);   // caught ⇒ seen
+      unlockedBarriers = new Set(data.barriers || []);
+      clearedSeams = new Set(data.clearedSeams || []);
+      collected        = new Set(data.collected || []);
+      metNPCs          = new Set(data.metNPCs || []);
+      gotBirthdayCake  = !!data.gotBirthdayCake;
+      knownTips        = new Set(data.knownTips || []);
+      rocketDefeated   = new Set(data.rocketDefeated || []);
+      // Legacy saves that already had all 4 land badges count as won (don't re-fire).
+      wonGame          = !!data.wonGame || landBadgesDone();
+      perfectDone      = !!data.perfectDone;
+      pendingChampion  = false; pendingPerfect = false;
+      loadedRoamers    = data.roamers || null;
+      currentZone    = data.zone  ?? 0;
+      playerX        = data.x    ?? 10;
+      playerY        = data.y    ?? 7;
+      balls = data.balls ?? 12;
+      masterBalls = data.masterBalls ?? 0;
+      coins = data.coins ?? 0;
+      lastHeal = data.lastHeal || '';
+      stones = data.stones || {};
+      foundStones = new Set(data.foundStones || []);
+      bondSteps = data.bondSteps || {};
+      battleUses = data.battleUses || {};
+      evoNotified.clear(); (data.evoNotified || []).forEach(k => evoNotified.add(k));
+      visited = new Set([0, ...(data.visited || []), data.zone ?? 0]);
+      activePet = data.activePet ?? null;
+      buddyUses = data.buddyUses || {};
+      // Preload the buddy's sprite so it doesn't flash as its emoji for the first
+      // frames after loading (drawPet falls back to the emoji until the image
+      // is decoded — that brief swap looked like the buddy "changing" on login).
+      if (activePet != null && typeof canvasSprite === 'function') {
+        const bp = POKEMON_DATA.find(p => p.id === activePet);
+        if (bp) canvasSprite(bp);
+      }
+      if (currentZone < 0 || currentZone >= ZONE_INFO.length) currentZone = 0;
+      [playerX, playerY] = nearestWalkable(currentZone, playerX, playerY);
+      fromPx.x   = playerX * TILE_SIZE;
+      fromPx.y   = playerY * TILE_SIZE;
+      moveAnimTs = -9999;
+      bumpVec    = null;
+      petX = playerX; petY = playerY;
+      petFromPx.x = petX * TILE_SIZE; petFromPx.y = petY * TILE_SIZE;
+      petMoveAnimTs = -9999;
+      surfNoted = false;
+      slipNoted = false;
+      notesUnread = false;
     }
   } catch (_) {}
-
+  initRoamers();
   updateHud();
+  return had;
+}
 
-  if (caughtIds.size > 0) {
-    document.getElementById('continue-btn').classList.remove('hidden');
-    document.getElementById('start-btn').textContent = '▶ NEW GAME';
+// ── Slot select / naming UI ──────────────────────────
+function openSlots() {
+  renderSlots();
+  showScreen('slot');
+}
+
+function renderSlots() {
+  const list = document.getElementById('slot-list');
+  list.innerHTML = '';
+  for (let n = 1; n <= 3; n++) {
+    const m = slotMeta(n);
+    const card = document.createElement('div');
+    card.className = 'slot-card' + (m.exists ? ' used' : ' empty');
+
+    const info = document.createElement('div');
+    info.className = 'slot-info';
+    if (m.exists) {
+      info.innerHTML = `<div class="slot-name">${m.name}</div>` +
+        `<div class="slot-prog">🎒 ${m.caught}/${POKEMON_DATA.length} &nbsp; 🏅 ${m.badges}/${COLLECTIBLES.length}</div>`;
+    } else {
+      info.innerHTML = `<div class="slot-name">SLOT ${n}</div><div class="slot-prog">— empty —</div>`;
+    }
+    info.addEventListener('click', () => selectSlot(n));
+    card.appendChild(info);
+
+    if (m.exists) {
+      const er = document.createElement('button');
+      er.className = 'slot-erase';
+      er.textContent = '⌫';
+      er.title = 'Erase (press twice)';
+      bindErase(er, n);
+      card.appendChild(er);
+    }
+    list.appendChild(card);
   }
+}
+
+function selectSlot(n) {
+  wakeAudio();
+  if (slotMeta(n).exists) {
+    loadSlot(n);
+    enterWorld();
+  } else {
+    pendingNewSlot = n;
+    const inp = document.getElementById('name-input');
+    inp.value = '';
+    showScreen('name');
+    startTyper(document.getElementById('prof-greeting'),
+      "Welcome to the island, new trainer!<br>I'm Professor Birch. And you are…?", true);
+    setTimeout(() => inp.focus(), 50);
+  }
+}
+
+function confirmName() {
+  const raw = document.getElementById('name-input').value.trim().toUpperCase();
+  saveName = (raw || `TRAINER`).slice(0, 10);
+  currentSlot = pendingNewSlot;
+  // The professor sees you off before your adventure begins.
+  const nm = saveName.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const introHtml =
+    `Wonderful to meet you, <b>${nm}</b>!<br><br>` +
+    `A whole island of Lukeymon is waiting. Befriend them with kindness, ` +
+    `earn the four Gym Badges, and who knows what legends you'll uncover…<br><br>` +
+    `Good luck, ${nm}! Your adventure starts at home. 🌟`;
+  showScreen('intro');
+  startTyper(document.getElementById('intro-text'), introHtml, true);   // professor types it out
+  beep(523, 0.1, 0.1); setTimeout(() => beep(659, 0.1, 0.12), 130); setTimeout(() => beep(784, 0.16, 0.2), 270);
+}
+
+function beginAdventure() {
+  startNewGame();          // writes a fresh save and spawns you inside your home
+}
+
+// Erase a slot only on a deliberate ~1.2s hold (buried so it can't happen by accident).
+// Erase a slot on a deliberate double-press: first press arms it (shows "OK?"),
+// the second within 3s wipes it. Works the same for a mouse click or the
+// controller's Ⓐ, so it's reachable without a press-and-hold gesture.
+function bindErase(btn, n) {
+  let armed = false, t = null;
+  const reset = () => { armed = false; btn.classList.remove('erase-armed'); btn.textContent = '⌫'; if (t) { clearTimeout(t); t = null; } };
+  btn.addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (armed) {
+      reset();
+      localStorage.removeItem(slotKey(n));
+      beep(140, 0.2, 0.3, 'square');
+      renderSlots(); setupNav('slot');
+    } else {
+      armed = true; btn.classList.add('erase-armed'); btn.textContent = 'OK?';
+      beep(300, 0.05, 0.07);
+      t = setTimeout(reset, 3000);
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════
 // AUDIO (Web Audio API chiptune)
 // ═══════════════════════════════════════════════════
 function wakeAudio() {
-  if (audioCtx) return;
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
+    if (!audioUnlocked) {
+      // iOS/WebKit: actually play a 1-sample silent buffer *inside the gesture*
+      // to fully unlock the context (resume() alone is not enough on iOS).
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+      audioUnlocked = true;
+    }
+    if (!muted && !musicTimer && curMusic) restartMusic();   // (re)start loop once audio is live
   } catch (_) {}
 }
 
+function updateMuteBtn() {
+  const b = document.getElementById('mute-btn');
+  if (b) b.innerHTML = `<img class="ui-icon" src="art/ui/${muted ? 'sound_off' : 'sound'}.png?v=${ART_V}" alt="${muted ? 'muted' : 'sound'}">`;
+}
+function toggleMute() {
+  muted = !muted;
+  try { localStorage.setItem('lukeymon_muted', muted ? '1' : '0'); } catch (_) {}
+  updateMuteBtn();
+  if (muted) { stopMusic(); }
+  else { wakeAudio(); restartMusic(); beep(660, 0.08, 0.08); }   // resume + confirm blip
+}
+
+// (Buddy switching is now Pokédex-only — open a Lukéymon and tap the ❤️.
+// The old cycleBuddy() quick-swap was removed because its Shift/Select
+// shortcuts swapped the buddy by accident.)
+
+// ═══════════════════════════════════════════════════
+// BACKGROUND MUSIC  (simple hand-written chiptune loops)
+// ═══════════════════════════════════════════════════
+const NOTE = (() => {
+  const m = { '-': 0, '': 0 };
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  for (let oct = 2; oct <= 6; oct++)
+    for (let n = 0; n < 12; n++)
+      m[names[n] + oct] = 440 * Math.pow(2, ((oct + 1) * 12 + n - 69) / 12);
+  return m;
+})();
+
+const MUSIC = {
+  title: {
+    tempo: 112,
+    melody: ['G4','-','C5','-','E5','-','D5','C5','E5','-','G5','-','A5','-','G5','-',
+             'F5','-','A5','-','G5','-','E5','-','D5','-','C5','-','E5','-','-','-'],
+    bass:   ['C3','-','-','-','F3','-','-','-','G3','-','-','-','C3','-','-','-'],
+  },
+  world: {
+    tempo: 132,
+    melody: ['C5','E5','G5','E5','F5','A5','G5','-','E5','G5','C6','B5','A5','G5','E5','-',
+             'D5','F5','A5','F5','G5','B5','A5','-','C6','B5','A5','G5','F5','D5','C5','-'],
+    bass:   ['C3','-','G3','-','F3','-','G3','-','C3','-','G3','-','A3','-','E3','-',
+             'D3','-','A3','-','G3','-','D3','-','F3','-','G3','-','C3','-','G3','-'],
+  },
+  battle: {
+    tempo: 168,
+    melody: ['A4','C5','E5','A5','E5','C5','A4','-','G4','B4','D5','G5','D5','B4','G4','-',
+             'F4','A4','C5','F5','E5','C5','A4','-','E5','D5','C5','B4','A4','-','E4','-'],
+    bass:   ['A2','A3','A2','A3','G2','G3','G2','G3','F2','F3','F2','F3','E2','E3','E2','E3'],
+  },
+};
+
+let curMusic = null;        // desired track name (survives mute)
+let musicTimer = null;
+let musicStep = 0;
+
+function musicNote(freq, dur, type, vol) {
+  if (!audioCtx || muted || !freq) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch (_) {}
+}
+
+// Brief full-screen flash — used as a "battle start" sting.
+function flashScreen(color) {
+  const sa = document.getElementById('screen-area');
+  if (!sa) return;
+  const f = document.createElement('div');
+  f.className = 'screen-flash';
+  if (color) f.style.background = color;
+  sa.appendChild(f);
+  setTimeout(() => f.remove(), 340);
+}
+
+function stopMusic() { clearTimeout(musicTimer); musicTimer = null; }
+
+function restartMusic() {
+  stopMusic();
+  musicStep = 0;
+  if (!curMusic || !audioCtx || muted) return;
+  musicTick();
+}
+
+function musicTick() {
+  const tr = MUSIC[curMusic];
+  if (!tr) return;
+  const stepMs = 60000 / tr.tempo / 2;          // eighth-note grid
+  const mf = NOTE[tr.melody[musicStep % tr.melody.length]];
+  const bf = NOTE[tr.bass[musicStep % tr.bass.length]];
+  musicNote(mf, stepMs / 1000 * 0.85, 'square',   0.045);
+  musicNote(bf, stepMs / 1000 * 0.95, 'triangle', 0.05);
+  musicStep++;
+  musicTimer = setTimeout(musicTick, stepMs);
+}
+
+function trackForScreen(id) {
+  if (id === 'title' || id === 'slot' || id === 'name' || id === 'intro') return 'title';
+  if (id === 'encounter' || id === 'battle')               return 'battle';
+  if (id === 'result' || id === 'complete' || id === 'champion' || id === 'gift') return null; // let jingles ring
+  return 'world';
+}
+function setMusic(track) {
+  if (curMusic === track) return;
+  curMusic = track;
+  restartMusic();
+}
+
 function beep(freq, vol, dur, type = 'square') {
-  if (!audioCtx) return;
+  if (!audioCtx || muted) return;
   try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -608,10 +7474,146 @@ function playCatchJingle() {
   melody.forEach((f, i) => setTimeout(() => beep(f, 0.15, 0.18), i * 140));
 }
 
+// A grand fanfare for earning a badge — longer than a catch, with a flourish.
+function playBadgeJingle() {
+  const melody = [523, 659, 784, 1047, 880, 1047, 1319];
+  melody.forEach((f, i) => setTimeout(() => beep(f, 0.14, 0.2), i * 130));
+  setTimeout(() => beep(1568, 0.32, 0.32), melody.length * 130 + 60);
+}
+
+// ═══════════════════════════════════════════════════
+// BADGE CELEBRATION  (reuses the catch result screen)
+// ═══════════════════════════════════════════════════
+function celebrateBadge(item) {
+  clearWild();
+  clearTimeout(spawnTimerId);
+
+  document.getElementById('result-stars').classList.remove('hidden');
+  document.getElementById('result-icon').innerHTML =
+    `<img src="${collectibleBadgeSrc(item)}" alt="" style="height:96px;image-rendering:pixelated;display:inline-block;animation:trophypop .5s ease-out both">`;
+  document.getElementById('result-title').textContent   = '🏅 BADGE GET!';
+  document.getElementById('result-name').textContent    = item.name;
+  document.getElementById('result-message').textContent =
+    `Badge ${collected.size} of ${COLLECTIBLES.length} collected!`;
+
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active success';
+  showScreen('result');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// Picked up a hidden Stone — same celebratory result screen as a badge.
+function celebrateStone(s) {
+  clearWild();
+  clearTimeout(spawnTimerId);
+  const st = STONES[s.stone];
+  document.getElementById('result-stars').classList.remove('hidden');
+  document.getElementById('result-icon').innerHTML =
+    `<img src="${stoneSrc(s.stone)}" alt="" style="height:104px;image-rendering:pixelated;display:inline-block;animation:trophypop .5s ease-out both">`;
+  document.getElementById('result-title').textContent   = '💎 STONE FOUND!';
+  document.getElementById('result-name').textContent    = st.name;
+  document.getElementById('result-message').textContent =
+    'Yours to keep! Show it to a Pokémon on its Pokédex page to evolve it.';
+  const rs = document.getElementById('result-screen');
+  rs.className = 'screen active success';
+  showScreen('result');
+  playBadgeJingle();
+  badgeConfetti();
+}
+
+// The shared evolution moment — the evolved form joins the dex (the base is kept),
+// with confetti + jingle on the detail page, then the evolved form is revealed.
+function performEvolution(target) {
+  if (!target || caughtIds.has(target.id)) return;
+  seenIds.add(target.id);
+  caughtIds.add(target.id);
+  saveGame();
+  updateHud();
+  playBadgeJingle();
+  beep(523, 0.1, 0.1);
+  setTimeout(() => beep(659, 0.1, 0.12), 120);
+  setTimeout(() => beep(784, 0.16, 0.2), 260);
+  badgeConfetti(document.getElementById('pokedex-detail'));
+  showDetail(target);
+}
+// Stones are reusable, so we don't consume them — having one is enough.
+function evolveWithStone(poke, rule) {
+  if ((stones[rule.stone] || 0) <= 0) return;
+  performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
+}
+// Buddy / battle evolutions — only fire once the progress threshold is met.
+function evolveByProgress(poke, rule) {
+  if (!evoReady(rule) || !evoHere(rule)) return;
+  performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
+}
+// Dance Party (multiplayer): every dance-method Pokémon you own evolves at once.
+// Called from net.js; the base is kept, the evolved form joins the dex. Returns the
+// list of {from, to} names so the dance screen can show what happened.
+function danceEvolve() {
+  const done = [];
+  for (const r of EVOS) {
+    if (r.method !== 'dance' || !caughtIds.has(r.from) || caughtIds.has(r.to) || !evoHere(r)) continue;
+    const t = POKEMON_DATA.find(p => p.id === r.to), f = POKEMON_DATA.find(p => p.id === r.from);
+    if (!t) continue;
+    seenIds.add(t.id); caughtIds.add(t.id);
+    done.push({ from: f ? f.name : '?', to: t.name });
+  }
+  if (done.length) { saveGame(); updateHud(); if (typeof playBadgeJingle === 'function') playBadgeJingle(); }
+  return done;
+}
+
+// A burst of celebratory emoji that fly outward from the centre and fade.
+function badgeConfetti(screen) {
+  screen = screen || document.getElementById('result-screen');
+  const pieces = ['✨', '🎉', '⭐', '🏅', '🎊', '💫'];
+  for (let i = 0; i < 20; i++) {
+    const s = document.createElement('span');
+    s.className = 'confetti-piece';
+    s.textContent = pieces[i % pieces.length];
+    const ang = Math.random() * Math.PI * 2, dist = 55 + Math.random() * 95;
+    s.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    s.style.setProperty('--dy', Math.sin(ang) * dist - 20 + 'px');
+    s.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+    s.style.animationDelay = (Math.random() * 0.15) + 's';
+    s.style.fontSize = (12 + Math.random() * 10) + 'px';
+    screen.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  }
+}
+
 function playFledSound() {
   beep(440, 0.12, 0.12);
   setTimeout(() => beep(330, 0.10, 0.12), 140);
   setTimeout(() => beep(220, 0.10, 0.25), 280);
+}
+
+// ═══════════════════════════════════════════════════
+// SPRITE HELPER — image with emoji fallback
+// ═══════════════════════════════════════════════════
+
+// Returns an <img> element; if the file 404s it swaps itself for an emoji span.
+function pokeImg(poke, sizePx) {
+  const img = new Image();
+  img.src    = poke.sprite;
+  img.alt    = poke.name;
+  img.width  = sizePx;
+  img.height = sizePx;
+  img.className = 'poke-sprite';
+  img.onerror = () => {
+    const span = document.createElement('span');
+    span.textContent  = poke.emoji;
+    span.style.fontSize = Math.round(sizePx * 0.75) + 'px';
+    span.style.lineHeight = '1';
+    img.replaceWith(span);
+  };
+  return img;
+}
+
+// Replace all children of el with a fresh sprite/emoji for poke.
+function setPokeDisplay(el, poke, sizePx) {
+  el.innerHTML = '';
+  el.appendChild(pokeImg(poke, sizePx));
 }
 
 // ═══════════════════════════════════════════════════
@@ -624,6 +7626,169 @@ function typeColor(type) {
     Flying:   '#5870b0', Normal:  '#505058',
     Electric: '#907000', Fairy:   '#9050a0',
     Ghost:    '#4030a0', Psychic: '#a02060',
+    Fighting: '#a03028', Poison:  '#803090',
+    Ground:   '#9a7028', Rock:    '#807838',
+    Ice:      '#3888a8', Dragon:  '#5028c0',
   };
   return map[type] || '#404050';
+}
+
+// ═══════════════════════════════════════════════════
+// DEBUG MENU  (toggle with the ` backtick key)
+// ═══════════════════════════════════════════════════
+let dbgPanel = null;
+
+function setupDebugMenu() {
+  const p = document.createElement('div');
+  p.id = 'debug-panel';
+  Object.assign(p.style, {
+    position: 'fixed', top: '0', left: '0', zIndex: '99999',
+    width: '184px', maxHeight: '100vh', overflowY: 'auto',
+    background: 'rgba(8,10,18,0.94)', color: '#cfe', padding: '6px 8px',
+    font: '10px/1.5 monospace', border: '1px solid #345', display: 'none',
+    boxShadow: '2px 2px 12px rgba(0,0,0,.6)',
+  });
+
+  const status = document.createElement('pre');
+  status.id = 'debug-status';
+  Object.assign(status.style, { margin: '0 0 6px', color: '#7fd', whiteSpace: 'pre-wrap', fontSize: '9px' });
+  p.appendChild(status);
+
+  const section = label => {
+    const h = document.createElement('div');
+    h.textContent = label;
+    Object.assign(h.style, { color: '#fa6', marginTop: '6px', fontWeight: 'bold' });
+    p.appendChild(h);
+  };
+  const btn = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    Object.assign(b.style, {
+      display: 'inline-block', margin: '2px 2px 0 0', padding: '2px 5px',
+      font: '9px monospace', background: '#1d2b40', color: '#dfe',
+      border: '1px solid #46688c', borderRadius: '3px', cursor: 'pointer',
+    });
+    b.addEventListener('click', () => { fn(); dbgRefresh(); });
+    p.appendChild(b);
+  };
+
+  section('ITEMS');
+  btn('+10 Balls',   () => { balls += 10; });
+  btn('+5 Master',   () => { masterBalls += 5; });
+  btn('+100 Coins',  () => { coins += 100; });
+  btn('All Stones',  () => { Object.keys(STONES).forEach(k => stones[k] = (stones[k] || 0) + 1); });
+  btn('Fill evo progress', () => { caughtIds.forEach(id => { bondSteps[id] = 99; battleUses[id] = 99; }); });
+
+  section('CATCH');
+  btn('Catch ALL',        () => { POKEMON_DATA.forEach(p => caughtIds.add(p.id)); awardTrioBadge(); refreshRoamers(); });
+  btn('All but Mewtwo',   () => { POKEMON_DATA.forEach(p => { if (p.legend !== 'mewtwo') caughtIds.add(p.id); }); awardTrioBadge(); refreshRoamers(); });
+  btn('3 Birds',          () => { [144,145,146].forEach(id => caughtIds.add(id)); awardTrioBadge(); refreshRoamers(); });
+  btn('Clear caught',     () => { caughtIds.clear(); refreshRoamers(); });
+
+  section('BARRIERS');
+  btn('Unlock all', () => { Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k)); Object.keys(SEAM_GATES).forEach(k => clearedSeams.add(k)); });
+  btn('Lock all',   () => { unlockedBarriers.clear(); clearedSeams.clear(); });
+
+  section('BADGES');
+  btn('Grant all', () => { COLLECTIBLES.forEach(c => collected.add(c.id)); });
+  btn('Clear',     () => { collected.clear(); });
+
+  section('LEGENDARIES (here)');
+  btn('Summon Mew',    () => dbgSummon('mew'));
+  btn('Summon Mewtwo', () => dbgSummon('mewtwo'));
+  btn('Relocate all',  () => { roamers.forEach(relocateRoamer); });
+
+  section('TELEPORT');
+  ZONE_INFO.forEach(z => btn(z.name, () => dbgTeleport(z.id)));
+
+  section('WEATHER (here)');
+  // Toggle buttons that show their own on/off state — handy on phone.
+  const toggleBtn = (label, get, set) => {
+    const b = document.createElement('button');
+    Object.assign(b.style, {
+      display: 'inline-block', margin: '2px 2px 0 0', padding: '2px 5px',
+      font: '9px monospace', background: '#1d2b40', color: '#dfe',
+      border: '1px solid #46688c', borderRadius: '3px', cursor: 'pointer',
+    });
+    const sync = () => { b.textContent = label + ': ' + (get() ? 'ON' : 'off'); b.style.background = get() ? '#2a5a3a' : '#1d2b40'; };
+    b.addEventListener('click', () => { set(!get()); sync(); });
+    sync();
+    p.appendChild(b);
+  };
+  toggleBtn('🔁 Day/Night cycle', () => nightCycle, v => { nightCycle = v; });
+  toggleBtn('🌙 Force night', () => nightMode, v => { nightMode = v; });
+  toggleBtn('🌧️ Force rain',  () => rainMode,  v => { rainMode  = v; });
+
+  section('MISC');
+  btn('Clear NPC visits', () => { metNPCs.clear(); });
+  btn('Copy map JSON', () => dbgCopyMaps());
+
+  section('SAVE');
+  btn('Save',  () => saveGame());
+  btn('RESET slot', () => { startNewGame(); });
+  btn('Close',  () => toggleDebug());
+
+  document.body.appendChild(p);
+  dbgPanel = p;
+  // No visible toggle — the menu is opened with the secret code: A B B A Select Start
+  // (keyboard: X Z Z X Shift Enter). See kamiInput / DEBUG_CODE.
+}
+
+function toggleDebug() {
+  if (!dbgPanel) return;
+  dbgPanel.style.display = (dbgPanel.style.display === 'none') ? 'block' : 'none';
+  dbgRefresh();
+}
+
+function dbgRefresh() {
+  saveGame();
+  updateHud();
+  if (gameState === 'map')    renderMap();
+  if (gameState === 'badges') renderBadgeCase();
+  if (gameState === 'pokedex') renderPokedexGrid();
+  const s = document.getElementById('debug-status');
+  if (s) {
+    s.textContent =
+      `zone ${currentZone} (${ZONE_INFO[currentZone].name})  @${playerX},${playerY}\n` +
+      `state:${gameState}\n` +
+      `dex ${caughtIds.size}/${POKEMON_DATA.length}  badges ${collected.size}/${COLLECTIBLES.length}\n` +
+      `balls ${balls}  master ${masterBalls}  coins ${coins}\n` +
+      `barriers ${unlockedBarriers.size}/${Object.keys(BARRIERS).length}\n` +
+      `roamers: ${roamers.map(r => r.legend + '@' + ZONE_INFO[r.zone].name).join(', ') || 'none'}`;
+  }
+}
+
+// Drop a legendary right next to the player (works regardless of progress).
+function dbgSummon(legend) {
+  roamers = roamers.filter(r => r.legend !== legend);
+  const poke = POKEMON_DATA.find(p => p.legend === legend);
+  caughtIds.delete(poke.id);
+  const [x, y] = nearestOpenTile(currentZone, playerX + 1, playerY);
+  roamers.push({ legend, pokeId: poke.id, zone: currentZone, x, y });
+}
+
+// Dump the current maps as JSON (paste into editor.html → Import to seed it).
+function dbgCopyMaps() {
+  let s = '{\n';
+  for (let z = 0; z < MAPS.length; z++) {
+    s += `  "${z}": [\n` + MAPS[z].map(r => '    [' + r.join(',') + ']').join(',\n') +
+         '\n  ]' + (z < MAPS.length - 1 ? ',' : '') + '\n';
+  }
+  s += '}';
+  if (navigator.clipboard) navigator.clipboard.writeText(s).catch(() => {});
+  showMessage('🗺️ Current map JSON copied — paste into the editor');
+}
+
+function dbgTeleport(zone) {
+  currentZone = zone;
+  const { cols, rows } = ZONE_INFO[zone];
+  [playerX, playerY] = nearestWalkable(zone, Math.floor(cols / 2), Math.floor(rows / 2));
+  fromPx.x = playerX * TILE_SIZE;
+  fromPx.y = playerY * TILE_SIZE;
+  moveAnimTs = -9999;
+  bumpVec = null;
+  clearWild();
+  gameState = 'world';
+  showScreen('world');
+  scheduleSpawn();
 }

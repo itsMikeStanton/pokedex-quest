@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lukeymon World Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #15151f; color: #d8d8e8; font: 13px/1.5 system-ui, sans-serif; }
+  header { background: #1d1d2e; padding: 8px 12px; border-bottom: 2px solid #303048; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 { font-size: 15px; color: #f8d030; letter-spacing: 1px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { background: #2a2a40; border: 1px solid #404060; color: #b8b8d0; padding: 4px 9px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  .tab.active { background: #f8d030; color: #1a1a28; border-color: #f8d030; font-weight: 600; }
+  .tab.add { background: #204020; border-color: #408040; color: #a0e0a0; }
+  main { display: flex; gap: 12px; padding: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+  .col.left { width: 210px; } .col.right { width: 340px; }
+  .panel { background: #1d1d2e; border: 1px solid #303048; border-radius: 7px; padding: 10px; }
+  .panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8888a8; margin-bottom: 8px; }
+  .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .swatch { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: 2px solid #303048; border-radius: 5px; cursor: pointer; font-size: 11px; }
+  .swatch.sel { border-color: #f8d030; box-shadow: 0 0 0 1px #f8d030; }
+  .swatch .chip { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.4); }
+  .swatch .k { margin-left: auto; opacity: .5; font-size: 10px; }
+  .tools, .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button.btn { background: #2a2a40; border: 1px solid #404060; color: #d8d8e8; padding: 5px 9px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  button.btn:hover { background: #34344e; }
+  button.btn.on { background: #3858c8; border-color: #6080e8; color: #fff; }
+  button.btn.warn { background: #5a2020; border-color: #a04040; }
+  button.btn.go { background: #205020; border-color: #408040; }
+  input, select { background: #0c0c14; color: #d8e8d8; border: 1px solid #404060; border-radius: 4px; padding: 3px 5px; font: 12px monospace; }
+  input.sm { width: 42px; } input.pos { width: 84px; }
+  label { font-size: 11px; color: #98a8c8; }
+  .canvas-wrap { flex: 1; min-width: 280px; overflow: auto; background: #0c0c14; border: 1px solid #303048; border-radius: 7px; max-height: 80vh; }
+  canvas { display: block; image-rendering: pixelated; }
+  textarea { width: 100%; height: 150px; background: #0c0c14; color: #a8d8a8; border: 1px solid #303048; border-radius: 5px; font: 11px/1.4 monospace; padding: 8px; resize: vertical; }
+  .hint { font-size: 11px; color: #7888a8; }
+  .status { font-size: 11px; color: #a0d8a0; }
+  .legend { font-size: 11px; color: #98a8c8; line-height: 1.7; }
+  .legend b { color: #f8d030; }
+  .exit-row { border: 1px solid #303048; border-radius: 5px; padding: 6px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .exit-row .row { gap: 4px; }
+  .field { display: flex; flex-direction: column; gap: 2px; }
+  .field label { font-size: 9px; }
+  kbd { background: #2a2a40; border: 1px solid #404060; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+  /* Keep every form control inside the fixed-width sidebars (no horizontal overflow) */
+  .col.left, .col.right, .panel { max-width: 100%; min-width: 0; }
+  input, select { max-width: 100%; min-width: 0; }
+  .field { min-width: 0; }
+  .field > select, .field > input.pos { width: 100%; }
+  .field .row { width: 100%; min-width: 0; }
+  .field .row select { flex: 1 1 0; }              /* dir/zone & gate pickers share the row & shrink */
+  .field .row select:last-of-type { flex: 2 1 0; } /* the zone/type select gets the larger share */
+  .row { min-width: 0; }
+  .row > select { flex: 0 1 auto; }                /* zone/barrier selects may shrink, never overflow */
+  /* Décor / prop item grids: cells shrink to the column so the last column never clips */
+  #decor-palette .swatch, #prop-palette .swatch { min-width: 0; padding: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌍 LUKEYMON WORLD EDITOR</h1>
+  <button class="btn" id="mode-btn" style="background:#243a5a;border-color:#406088">🗺 Atlas</button>
+  <div class="tabs" id="tabs"></div>
+  <span class="status" id="zone-status"></span>
+</header>
+
+<main>
+  <div class="col left">
+    <div class="panel">
+      <h2>Tiles</h2>
+      <div class="palette" id="palette"></div>
+    </div>
+    <div class="panel">
+      <h2>Tools</h2>
+      <div class="tools">
+        <button class="btn on" id="t-paint">✏️ Paint</button>
+        <button class="btn" id="t-fill">🪣 Fill</button>
+        <button class="btn" id="t-pick">💉 Pick</button>
+      </div>
+      <div class="row" style="margin-top:8px"><span class="hint">Brush</span>
+        <button class="btn" data-brush="1">1</button>
+        <button class="btn on" data-brush="2">2</button>
+        <button class="btn" data-brush="3">3</button>
+      </div>
+      <div class="row" style="margin-top:8px"><span class="hint">Zoom</span>
+        <button class="btn" id="zoom-out">−</button><button class="btn" id="zoom-in">+</button>
+        <label style="margin-left:6px"><input type="checkbox" id="ov" checked> overlays</label>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Décor (furniture)</h2>
+      <div class="tools">
+        <button class="btn" id="t-decor">🛋️ Place</button>
+        <button class="btn" id="t-derase">🧹 Erase</button>
+        <label style="margin-left:6px"><input type="checkbox" id="dc-solid"> solid</label>
+      </div>
+      <div class="row" style="margin-top:6px"><span class="hint" id="dc-sel">Pick a prop below, then Place on the map.</span></div>
+      <div id="decor-cats"></div>
+      <div class="palette" id="decor-palette" style="max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:4px"></div>
+    </div>
+    <div class="panel">
+      <h2>Characters (NPCs)</h2>
+      <div class="tools">
+        <button class="btn" id="t-npc">🧑 Move</button>
+        <span class="hint" id="npc-sel" style="margin-left:6px">Pick an NPC below or on the map, then click/drag to place it.</span>
+      </div>
+      <p class="hint" style="margin-top:4px">Bold = in this zone. Dialogue &amp; gifts stay in code (edit via strings.html).</p>
+      <div id="npc-list" style="max-height:240px;overflow:auto;margin-top:4px;display:grid;gap:2px"></div>
+    </div>
+    <div class="panel">
+      <h2>Light props (night glow)</h2>
+      <div class="tools">
+        <button class="btn" id="t-prop">💡 Place</button>
+        <button class="btn" id="t-perase">🧹 Erase</button>
+        <span class="hint" id="pr-sel" style="margin-left:6px">Pick a prop, then click the map. (Always solid.)</span>
+      </div>
+      <div class="palette" id="prop-palette" style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:4px"></div>
+    </div>
+    <div class="panel">
+      <h2>World file</h2>
+      <div class="tools">
+        <button class="btn go" id="copy-json">📋 Copy world.js</button>
+        <button class="btn" id="dl">💾 Download</button>
+      </div>
+      <div class="tools" style="margin-top:6px">
+        <button class="btn" id="reset-game">↻ Reload from game</button>
+      </div>
+      <p class="hint" style="margin-top:6px">Autosaves to this browser. Paste the export into <b>world.js</b>.</p>
+    </div>
+  </div>
+
+  <div class="canvas-wrap" id="cwrap"><canvas id="grid"></canvas></div>
+
+  <div class="col right">
+    <div class="panel">
+      <h2>Zone settings</h2>
+      <div class="row"><label>Name</label><input id="z-name" style="flex:1"></div>
+      <div class="row" style="margin-top:5px"><label>Base</label><select id="z-base"></select></div>
+      <div class="row" style="margin-top:5px">
+        <label>Size</label><input class="sm" id="z-cols"> × <input class="sm" id="z-rows">
+        <button class="btn go" id="z-resize">Resize</button>
+      </div>
+      <div class="row" style="margin-top:5px">
+        <label>Map pos</label><input class="sm" id="z-mc" placeholder="col"> <input class="sm" id="z-mr" placeholder="row">
+        <input class="sm" id="z-icon" placeholder="icon" style="width:34px">
+      </div>
+      <div class="row" style="margin-top:5px">
+        <label style="flex:1"><input type="checkbox" id="z-cave"> Cave zone <span class="hint">(off the world map · rock walls · dim)</span></label>
+      </div>
+      <div class="tools" style="margin-top:8px">
+        <button class="btn" id="z-reset">Re-wall + carve exits</button>
+        <button class="btn warn" id="z-del">Delete zone</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Exits from this zone</h2>
+      <div id="exit-list"></div>
+      <button class="btn go" id="exit-add">＋ Add exit</button>
+      <p class="legend" style="margin-top:8px">
+        <b>◻ yellow</b> exit opening · <b>◻ cyan</b> arrival here · <b>◻ lime</b> player start (zone 0).<br>
+        Each connection needs a matching <i>return</i> exit in the other zone — use ↩.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Cave portals from this zone</h2>
+      <div id="portal-list"></div>
+      <button class="btn go" id="portal-add">＋ Add portal</button>
+      <p class="legend" style="margin-top:8px">
+        Step onto a <b>Cave Door</b> tile at <b>(fx,fy)</b> → warp to <b>(tx,ty)</b> in the target zone.<br>
+        <b>◻ magenta</b> door leaving here · <b>◻ orange</b> arrival here. Pair two portals for a round trip.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Import</h2>
+      <textarea id="in" placeholder="Paste a world.js / WORLD object…"></textarea>
+      <button class="btn" id="import-json" style="margin-top:6px">⬆ Load</button>
+    </div>
+  </div>
+</main>
+
+<section id="atlas" style="display:none; padding:12px;">
+  <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+    <div class="canvas-wrap" id="atlas-wrap" style="flex:1; min-width:340px; max-height:82vh;">
+      <canvas id="atlas-canvas"></canvas>
+    </div>
+    <div class="col right">
+      <div class="panel">
+        <h2>Atlas — build real geometry</h2>
+        <p class="legend">
+          <b>Drag</b> a zone to position it on the true world grid. <b>Click a seam</b>
+          (green edge where two zones touch) to add/remove an aligned passage.
+        </p>
+        <div class="row" style="margin-top:8px">
+          <label>New passage barrier</label>
+          <select id="atlas-barrier"></select>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>Door width</label><input class="sm" id="atlas-width" value="3">
+          <button class="btn" id="atlas-zoomout">−</button><button class="btn" id="atlas-zoomin">+</button>
+        </div>
+        <p class="hint" style="margin-top:6px">Overlaps are outlined red. Connections drawn as lines.</p>
+      </div>
+      <div class="panel">
+        <h2>Consistency</h2>
+        <div id="atlas-report" class="legend"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="world.js?v=3.22.20"></script>
+<script src="decor.js?v=3.22.20"></script>
+<script>
+const TILES = [
+  { id:0, name:'Path',  color:'#d0b068' }, { id:1, name:'Grass', color:'#38b038' },
+  { id:2, name:'Tree',  color:'#1f4a1f' }, { id:3, name:'Water', color:'#2868d8' },
+  { id:4, name:'Sand',  color:'#e8c870' }, { id:5, name:'City',  color:'#909098' },
+  { id:6, name:'Shop',  color:'#d02060' }, { id:7, name:'Lava',  color:'#d83810' },
+  { id:8, name:'Ice',   color:'#b8d8f0' }, { id:9, name:'Boulder', color:'#6a6a74' },
+  { id:10, name:'Cave', color:'#34313f' }, { id:11, name:'Cave Door', color:'#15131f' },
+  { id:12, name:'House',  color:'#c0432f' }, { id:13, name:'Floor', color:'#caa472' },
+  { id:14, name:'Wall',   color:'#8a6a4a' }, { id:15, name:'Door',  color:'#5a8acb' },
+  { id:16, name:'Hospital', color:'#e8403a' }, { id:17, name:'Gym', color:'#7a5230' },
+];
+const COLOR = {}; TILES.forEach(t => COLOR[t.id] = t.color);
+const TREE = 2, CAVE = 10, CAVE_DOOR = 11, BOULDER = 9;
+const BARRIERS = ['', 'log', 'rock', 'fence', 'lava', 'vine', 'frost', 'sand', 'psychic', 'lullaby'];
+const BARRIER_ELEM = { log:'Fire', rock:'Water', fence:'Electric', lava:'Water', vine:'Grass', frost:'Fire', sand:'Ground', psychic:'Mewtwo only', lullaby:'Jigglypuff only' };
+// Seam-gate requirement types (for the gate picker on exits & portals).
+const SEAM_TYPES = ['Fire','Water','Grass','Electric','Ground','Rock','Ice','Flying','Poison','Psychic','Bug','Normal','Fighting','Ghost','Dragon','Fairy'];
+const BARRIER_SIGN = { log:'🔥', rock:'💧', fence:'⚡', lava:'💧', vine:'🌿', frost:'🔥', sand:'🌍' };
+const DIRS = ['north', 'south', 'east', 'west'];
+const LS_KEY = 'lukeymon_world_v1';
+
+let world, zi = 0, sel = 1, tool = 'paint', brush = 2, cell = 20, overlays = true, painting = false;
+let decorSel = null, decorSolid = false;       // selected décor prop + whether placed props block movement
+let propSel = null;                            // selected outdoor light prop key (streetlight / firepit)
+const PROP_KEYS = ['streetlight', 'firepit', 'boulder', 'cave_entrance', 'pier', 'beach_umbrella', 'beach_chair', 'powerplant', 'generator', 'genpod', 'fence', 'blue_house', 'birthday_cake', 'bigcake']; // props, art in art/prop/
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function loadWorld() {
+  try { const s = localStorage.getItem(LS_KEY); if (s) { world = JSON.parse(s); if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; if (!world.seamGates) world.seamGates = clone(WORLD.seamGates || {}); ensureNpcs(); ensureProps(); return; } } catch (_) {}
+  world = clone(WORLD);
+  if (!world.portals) world.portals = [];
+  if (!world.decor) world.decor = {};
+  if (!world.seamGates) world.seamGates = {};
+  ensureNpcs(); ensureProps();
+}
+// Seed NPC positions from the game's world.js if an older autosave lacks them.
+function ensureNpcs() {
+  if (Array.isArray(world.npcs) && world.npcs.length) return;
+  world.npcs = (typeof WORLD !== 'undefined' && Array.isArray(WORLD.npcs)) ? clone(WORLD.npcs) : [];
+}
+// Seed light props from the game's world.js if an older autosave lacks them.
+function ensureProps() {
+  if (Array.isArray(world.props)) return;
+  world.props = (typeof WORLD !== 'undefined' && Array.isArray(WORLD.props)) ? clone(WORLD.props) : [];
+}
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(world)); }
+function zone() { return world.zones[zi]; }
+function gridOf(z) { return world.maps[z.id]; }
+
+// ── grid helpers ────────────────────────────────────────────────
+function freshGrid(z) {
+  const g = Array.from({ length: z.rows }, () => new Array(z.cols).fill(z.base));
+  rewall(z, g); return g;
+}
+function rewall(z, g) {
+  const wall = z.base === CAVE ? BOULDER : TREE;   // caves are walled with rock
+  for (let c = 0; c < z.cols; c++) { g[0][c] = wall; g[z.rows-1][c] = wall; }
+  for (let r = 0; r < z.rows; r++) { g[r][0] = wall; g[r][z.cols-1] = wall; }
+  world.exits.filter(e => e.from === z.id).forEach(e => e.pos.forEach(p => carve(z, g, e.dir, p)));
+}
+function carve(z, g, dir, p) {
+  if (p < 0) return;
+  if (dir === 'south' && p < z.cols) g[z.rows-1][p] = z.base;
+  else if (dir === 'north' && p < z.cols) g[0][p] = z.base;
+  else if (dir === 'west' && p < z.rows) g[p][0] = z.base;
+  else if (dir === 'east' && p < z.rows) g[p][z.cols-1] = z.base;
+}
+
+// ── overlay lookups ─────────────────────────────────────────────
+function openingCells() {
+  const z = zone(), m = new Map();
+  world.exits.filter(e => e.from === z.id).forEach(e => e.pos.forEach(p => {
+    let x, y;
+    if (e.dir === 'south') { x = p; y = z.rows-1; }
+    else if (e.dir === 'north') { x = p; y = 0; }
+    else if (e.dir === 'west') { x = 0; y = p; }
+    else { x = z.cols-1; y = p; }
+    m.set(x + ',' + y, e.barrier);
+  }));
+  return m;
+}
+function entryCells() {
+  const z = zone(), s = new Set();
+  world.exits.filter(e => e.to === z.id).forEach(e => s.add(e.entryX + ',' + e.entryY));
+  return s;
+}
+
+// ── render ──────────────────────────────────────────────────────
+const canvas = document.getElementById('grid'), ctx = canvas.getContext('2d');
+function render() {
+  const z = zone(), g = gridOf(z);
+  canvas.width = z.cols * cell; canvas.height = z.rows * cell;
+  for (let r = 0; r < z.rows; r++) for (let c = 0; c < z.cols; c++) {
+    const t = g[r][c];
+    ctx.fillStyle = COLOR[t] ?? '#000'; ctx.fillRect(c*cell, r*cell, cell, cell);
+    if (t === TREE) { ctx.fillStyle = '#0f3010'; ctx.beginPath(); ctx.arc(c*cell+cell/2, r*cell+cell/2, cell*0.32, 0, 7); ctx.fill(); }
+    else if (t === 6) { ctx.fillStyle='#fff'; ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏪', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === 9) { ctx.fillStyle='#9a9aa6'; ctx.beginPath(); ctx.arc(c*cell+cell*0.4, r*cell+cell*0.4, cell*0.18, 0, 7); ctx.fill(); }
+    else if (t === CAVE_DOOR) { ctx.font=(cell*0.66)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🕳️', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === CAVE) { ctx.fillStyle='#52505e'; ctx.fillRect(c*cell+cell*0.3, r*cell+cell*0.55, 2, 2); ctx.fillRect(c*cell+cell*0.6, r*cell+cell*0.3, 2, 2); }
+    else if (t === 16) { ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🏥', c*cell+cell/2, r*cell+cell/2); }
+    else if (t === 17) { ctx.font=(cell*0.7)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🥊', c*cell+cell/2, r*cell+cell/2); }
+    ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(c*cell+.5, r*cell+.5, cell, cell);
+  }
+  drawDecor(z);
+  drawProps(z);
+  if (overlays) {
+    ctx.lineWidth = 2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=(cell*0.5)+'px serif';
+    openingCells().forEach((b, key) => { const [x,y] = key.split(',').map(Number);
+      ctx.strokeStyle='#f8e030'; ctx.strokeRect(x*cell+1, y*cell+1, cell-2, cell-2);
+      if (b) ctx.fillText(BARRIER_SIGN[b]||'?', x*cell+cell/2, y*cell+cell/2); });
+    entryCells().forEach(key => { const [x,y] = key.split(',').map(Number);
+      ctx.strokeStyle='#30d0e0'; ctx.strokeRect(x*cell+2, y*cell+2, cell-4, cell-4); });
+    // portals: magenta = a door leaving this zone, orange dashed = an arrival in this zone
+    (world.portals||[]).forEach(p => {
+      if (p.from === z.id) { ctx.strokeStyle='#e060ff'; ctx.lineWidth=2; ctx.strokeRect(p.fx*cell+1, p.fy*cell+1, cell-2, cell-2); }
+      if (p.to === z.id)   { ctx.save(); ctx.setLineDash([4,3]); ctx.strokeStyle='#ffa030'; ctx.strokeRect(p.tx*cell+3, p.ty*cell+3, cell-6, cell-6); ctx.restore(); }
+    });
+    if (z.id === 0) { ctx.strokeStyle='#60f060'; ctx.strokeRect(10*cell+2, 7*cell+2, cell-4, cell-4); }
+  }
+  // NPCs standing in this zone
+  (world.npcs || []).forEach(n => {
+    if (n.zone !== z.id) return;
+    const cx = n.x*cell + cell/2, cy = n.y*cell + cell/2;
+    if (n.id === npcSel) { ctx.fillStyle = 'rgba(255,226,77,.35)'; ctx.fillRect(n.x*cell, n.y*cell, cell, cell);
+                           ctx.strokeStyle = '#ffe24d'; ctx.lineWidth = 2; ctx.strokeRect(n.x*cell+1, n.y*cell+1, cell-2, cell-2); }
+    ctx.font = (cell*0.66)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(n.emoji || '🧑', cx, cy);
+  });
+  document.getElementById('zone-status').textContent = `${z.name}  ${z.cols}×${z.rows}  ·  id ${z.id}`;
+}
+
+// ── painting ────────────────────────────────────────────────────
+function cellAt(ev) {
+  const r = canvas.getBoundingClientRect(), z = zone();
+  const x = Math.floor((ev.clientX - r.left) / cell), y = Math.floor((ev.clientY - r.top) / cell);
+  return (x<0||y<0||x>=z.cols||y>=z.rows) ? null : { x, y };
+}
+function applyAt(x, y) {
+  const z = zone(), g = gridOf(z);
+  if (tool === 'decor')  { placeDecor(x, y); return; }
+  if (tool === 'derase') { eraseDecor(x, y); return; }
+  if (tool === 'prop')   { placeProp(x, y); return; }
+  if (tool === 'perase') { eraseProp(x, y); return; }
+  if (tool === 'pick') { sel = g[y][x]; renderPalette(); return; }
+  if (tool === 'fill') { flood(x, y, g[y][x], sel); return; }
+  const off = Math.floor(brush/2);
+  for (let dy=0; dy<brush; dy++) for (let dx=0; dx<brush; dx++) {
+    const nx=x-off+dx, ny=y-off+dy;
+    if (nx>=0&&ny>=0&&nx<z.cols&&ny<z.rows) g[ny][nx] = sel;
+  }
+}
+function flood(x, y, from, to) {
+  if (from === to) return;
+  const z = zone(), g = gridOf(z), st = [[x,y]];
+  while (st.length) { const [cx,cy] = st.pop();
+    if (cx<0||cy<0||cx>=z.cols||cy>=z.rows||g[cy][cx]!==from) continue;
+    g[cy][cx] = to; st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+}
+canvas.addEventListener('pointerdown', e => { const c=cellAt(e); if(!c) return;
+  if (tool==='npc') { npcDown(c.x,c.y); render(); return; }
+  painting=true; applyAt(c.x,c.y); render(); });
+canvas.addEventListener('pointermove', e => { const c=cellAt(e); if(!c) return;
+  if (tool==='npc' && npcDragging) { npcPlace(c.x,c.y); render(); return; }
+  if(!painting) return; applyAt(c.x,c.y); render(); });
+window.addEventListener('pointerup', () => {
+  if (npcDragging) { npcDragging=false; save(); renderNpcList(); }
+  if (painting) { painting=false; save(); } });
+
+// ── NPC placement layer ─────────────────────────────────────────
+let npcSel = null, npcDragging = false;
+function npcsArr() { return world.npcs || (world.npcs = []); }
+function npcById(id) { return npcsArr().find(n => n.id === id); }
+function npcAtCell(x, y) { const z = zone(); return npcsArr().find(n => n.zone === z.id && n.x === x && n.y === y); }
+function npcDown(x, y) {
+  const hit = npcAtCell(x, y);
+  if (hit) { npcSel = hit.id; npcDragging = true; }      // grab the one under the cursor
+  else if (npcSel) { npcPlace(x, y); }                   // drop the selected one here
+  renderNpcList();
+}
+function npcPlace(x, y) { const n = npcById(npcSel); if (n) { n.zone = zone().id; n.x = x; n.y = y; } }
+function renderNpcList() {
+  const el = document.getElementById('npc-list'); if (!el) return;
+  const z = zone();
+  el.innerHTML = '';
+  (world.npcs || []).slice().sort((a,b)=> (a.zone-b.zone) || (a.name||'').localeCompare(b.name||'')).forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'btn' + (n.id === npcSel ? ' on' : '');
+    b.style.cssText = 'text-align:left;width:100%;font-weight:' + (n.zone===z.id?'700':'400');
+    b.innerHTML = `${n.emoji||'🧑'} ${n.name||n.id} <span class="hint">· z${n.zone} (${n.x},${n.y})</span>`;
+    b.onclick = () => { npcSel = n.id; tool='npc'; document.getElementById('npc-sel').textContent = 'Selected: '+(n.name||n.id)+' — click the map to place'; syncTools(); renderNpcList(); };
+    el.appendChild(b);
+  });
+}
+document.getElementById('t-npc').onclick = () => { tool='npc'; syncTools(); };
+
+// ── décor (furniture) layer ─────────────────────────────────────
+const _edImg = {};
+function edImg(key) {
+  let i = _edImg[key];
+  if (!i) { i = new Image(); i.onload = render; i.src = 'art/interior/' + key + '.png'; _edImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+function decorList(z) { world.decor = world.decor || {}; return (world.decor[z.id] = world.decor[z.id] || []); }
+function drawDecor(z) {
+  decorList(z).forEach(d => {
+    const img = edImg(d.s), cx = d.x*cell + cell/2, by = (d.y+1)*cell;
+    if (img) {
+      const s = Math.min(cell/img.naturalWidth, cell/img.naturalHeight);
+      const w = img.naturalWidth*s, h = img.naturalHeight*s;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, cx - w/2, by - h, w, h);
+    } else { ctx.fillStyle = '#caa'; ctx.fillRect(d.x*cell+cell*0.3, d.y*cell+cell*0.3, cell*0.4, cell*0.4); }
+    if (d.solid) { ctx.strokeStyle='#ff5050'; ctx.lineWidth=1; ctx.strokeRect(d.x*cell+1.5, d.y*cell+1.5, cell-3, cell-3); }
+  });
+}
+function placeDecor(x, y) {
+  if (!decorSel) return;
+  const list = decorList(zone()), i = list.findIndex(d => d.x===x && d.y===y);
+  const obj = decorSolid ? {x,y,s:decorSel,solid:1} : {x,y,s:decorSel};
+  if (i>=0) list[i] = obj; else list.push(obj);
+}
+function eraseDecor(x, y) {
+  const list = decorList(zone()), i = list.findIndex(d => d.x===x && d.y===y);
+  if (i>=0) list.splice(i,1);
+}
+function renderDecorPalette() {
+  const cats = document.getElementById('decor-cats');
+  if (typeof DECOR_CATALOG === 'undefined') { cats.textContent = 'decor.js not loaded — run from a web server.'; return; }
+  const groups = DECOR_CATALOG.groups, labels = DECOR_CATALOG.labels;
+  if (!cats.dataset.init) {
+    cats.dataset.init = '1'; cats.className = 'tools'; cats.style.flexWrap='wrap'; cats.style.marginBottom='6px';
+    cats._cur = Object.keys(groups)[0];
+    Object.keys(groups).forEach((g, idx) => {
+      const b = document.createElement('button'); b.className='btn'+(idx?'':' on'); b.textContent = labels[g]||g;
+      b.onclick = () => { cats._cur = g; Array.from(cats.children).forEach(c=>c.classList.toggle('on', c===b)); fillDecorSwatches(g); };
+      cats.appendChild(b);
+    });
+  }
+  fillDecorSwatches(cats._cur);
+}
+function fillDecorSwatches(g) {
+  const pal = document.getElementById('decor-palette'); pal.innerHTML='';
+  (DECOR_CATALOG.groups[g]||[]).forEach(key => {
+    const b = document.createElement('div');
+    b.className = 'swatch' + (key===decorSel?' sel':'');
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:46px;background:#1a1a26';
+    b.title = key;
+    const im = document.createElement('img'); im.src='art/interior/'+key+'.png';
+    im.style.cssText='max-width:100%;max-height:42px;image-rendering:pixelated';
+    b.appendChild(im);
+    b.onclick = () => { decorSel = key; tool='decor'; document.getElementById('dc-sel').textContent='Selected: '+key; syncTools(); fillDecorSwatches(g); };
+    pal.appendChild(b);
+  });
+}
+document.getElementById('t-decor').onclick  = () => { tool='decor'; syncTools(); };
+document.getElementById('t-derase').onclick = () => { tool='derase'; syncTools(); };
+document.getElementById('dc-solid').onchange = e => { decorSolid = e.target.checked; };
+
+// ── Outdoor light props (streetlight / fire pit) ────────────────
+const _propEdImg = {};
+function propEdImg(key) {
+  let i = _propEdImg[key];
+  if (!i) { i = new Image(); i.onload = render; i.src = 'art/prop/' + key + '.png'; _propEdImg[key] = i; }
+  return (i.complete && i.naturalWidth) ? i : null;
+}
+function propsArr() { return world.props || (world.props = []); }
+function drawProps(z) {
+  propsArr().forEach(p => {
+    if (p.zone !== z.id) return;
+    const img = propEdImg(p.s), cx = p.x*cell + cell/2, by = (p.y+1)*cell;
+    if (img) {
+      const h = cell*1.6, w = img.naturalWidth*(h/img.naturalHeight);   // a touch taller than a tile
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, cx - w/2, by - h, w, h);
+    } else { ctx.fillStyle = '#ffd86a'; ctx.beginPath(); ctx.arc(cx, by-cell*0.5, cell*0.2, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = '#ff5050'; ctx.lineWidth = 1; ctx.strokeRect(p.x*cell+1.5, p.y*cell+1.5, cell-3, cell-3);  // always solid
+  });
+}
+function placeProp(x, y) {
+  if (!propSel) return;
+  const list = propsArr(), z = zone().id, i = list.findIndex(p => p.zone===z && p.x===x && p.y===y);
+  const obj = { zone: z, x, y, s: propSel };
+  if (i>=0) list[i] = obj; else list.push(obj);
+}
+function eraseProp(x, y) {
+  const list = propsArr(), z = zone().id, i = list.findIndex(p => p.zone===z && p.x===x && p.y===y);
+  if (i>=0) list.splice(i,1);
+}
+function renderPropPalette() {
+  const pal = document.getElementById('prop-palette'); if (!pal) return; pal.innerHTML='';
+  PROP_KEYS.forEach(key => {
+    const b = document.createElement('div');
+    b.className = 'swatch' + (key===propSel?' sel':'');
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;height:54px;background:#1a1a26';
+    b.title = key;
+    const im = document.createElement('img'); im.src = 'art/prop/'+key+'.png';
+    im.style.cssText = 'max-width:100%;max-height:50px;image-rendering:pixelated';
+    b.appendChild(im);
+    b.onclick = () => { propSel = key; tool='prop'; document.getElementById('pr-sel').textContent='Selected: '+key+' — click the map'; syncTools(); renderPropPalette(); };
+    pal.appendChild(b);
+  });
+}
+document.getElementById('t-prop').onclick   = () => { tool='prop'; syncTools(); };
+document.getElementById('t-perase').onclick = () => { tool='perase'; syncTools(); };
+
+// ── UI: tabs, palette, tools ────────────────────────────────────
+function renderTabs() {
+  const el = document.getElementById('tabs'); el.innerHTML = '';
+  world.zones.forEach((z, i) => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (i===zi ? ' active' : '');
+    b.textContent = z.name;
+    b.onclick = () => { zi = i; refresh(); };
+    el.appendChild(b);
+  });
+  const add = document.createElement('button');
+  add.className = 'tab add'; add.textContent = '＋ Zone';
+  add.onclick = addZone; el.appendChild(add);
+  const addC = document.createElement('button');
+  addC.className = 'tab add'; addC.textContent = '＋ Cave';
+  addC.onclick = addCaveZone; el.appendChild(addC);
+}
+function renderPalette() {
+  const el = document.getElementById('palette'); el.innerHTML = '';
+  TILES.forEach(t => {
+    const b = document.createElement('div');
+    b.className = 'swatch' + (t.id===sel ? ' sel' : '');
+    b.innerHTML = `<span class="chip" style="background:${t.color}"></span>${t.name}<span class="k">${t.id}</span>`;
+    b.onclick = () => { sel = t.id; tool='paint'; syncTools(); renderPalette(); };
+    el.appendChild(b);
+  });
+}
+function syncTools() {
+  ['paint','fill','pick','decor','derase','npc','prop','perase'].forEach(t => { const el=document.getElementById('t-'+t); if (el) el.classList.toggle('on', tool===t); });
+}
+document.getElementById('t-paint').onclick = () => { tool='paint'; syncTools(); };
+document.getElementById('t-fill').onclick  = () => { tool='fill'; syncTools(); };
+document.getElementById('t-pick').onclick  = () => { tool='pick'; syncTools(); };
+document.querySelectorAll('[data-brush]').forEach(b => b.onclick = () => {
+  brush = +b.dataset.brush; document.querySelectorAll('[data-brush]').forEach(x => x.classList.toggle('on', x===b));
+});
+document.getElementById('zoom-in').onclick  = () => { cell=Math.min(40,cell+4); render(); };
+document.getElementById('zoom-out').onclick = () => { cell=Math.max(8,cell-4); render(); };
+document.getElementById('ov').onchange = e => { overlays=e.target.checked; render(); };
+
+// ── Zone settings panel ─────────────────────────────────────────
+function renderZonePanel() {
+  const z = zone();
+  document.getElementById('z-name').value = z.name;
+  document.getElementById('z-cols').value = z.cols;
+  document.getElementById('z-rows').value = z.rows;
+  document.getElementById('z-mc').value = z.mapCol ?? '';
+  document.getElementById('z-mr').value = z.mapRow ?? '';
+  document.getElementById('z-icon').value = z.icon ?? '';
+  const bsel = document.getElementById('z-base'); bsel.innerHTML = '';
+  TILES.forEach(t => { const o = document.createElement('option'); o.value=t.id; o.textContent=t.name; bsel.appendChild(o); });
+  bsel.value = z.base;
+  document.getElementById('z-cave').checked = !!z.cave;
+}
+document.getElementById('z-name').oninput = e => { zone().name = e.target.value; renderTabs(); save(); };
+document.getElementById('z-base').onchange = e => { zone().base = +e.target.value; save(); };
+document.getElementById('z-cave').onchange = e => { if (e.target.checked) zone().cave = true; else delete zone().cave; save(); refresh(); };
+document.getElementById('z-mc').oninput = e => { zone().mapCol = e.target.value===''?null:+e.target.value; save(); };
+document.getElementById('z-mr').oninput = e => { zone().mapRow = e.target.value===''?null:+e.target.value; save(); };
+document.getElementById('z-icon').oninput = e => { zone().icon = e.target.value; save(); };
+document.getElementById('z-resize').onclick = () => {
+  const z = zone();
+  const nc = Math.max(6, Math.min(60, +document.getElementById('z-cols').value|0));
+  const nr = Math.max(6, Math.min(60, +document.getElementById('z-rows').value|0));
+  const old = gridOf(z);
+  const g = Array.from({ length: nr }, (_, r) => Array.from({ length: nc }, (_, c) =>
+    (r < z.rows && c < z.cols) ? old[r][c] : z.base));
+  z.cols = nc; z.rows = nr; world.maps[z.id] = g; rewall(z, g);
+  save(); refresh();
+};
+document.getElementById('z-reset').onclick = () => {
+  if (confirm('Re-wall borders and re-carve exits for this zone? (interior kept)')) { rewall(zone(), gridOf(zone())); save(); render(); }
+};
+document.getElementById('z-del').onclick = deleteZone;
+
+function addZone() {
+  const id = world.zones.length;
+  const z = { id, name: 'Zone ' + id, cols: 20, rows: 14, base: 0, mapCol: null, mapRow: null, icon: '🗺️' };
+  world.zones.push(z);
+  world.maps[id] = freshGrid(z);
+  zi = world.zones.length - 1;
+  save(); refresh();
+}
+function addCaveZone() {
+  const id = world.zones.length;
+  const z = { id, name: 'Cave ' + id, cols: 14, rows: 10, base: CAVE, wx: 120, wy: 120 + id * 12,
+              mapCol: null, mapRow: null, icon: '🕳️', cave: true };
+  world.zones.push(z);
+  const g = freshGrid(z);          // rock walls (boulder) + cave floor
+  g[2][Math.floor(z.cols / 2)] = CAVE_DOOR;   // a starter exit-mouth, edit as needed
+  world.maps[id] = g;
+  zi = world.zones.length - 1;
+  save(); refresh();
+}
+function deleteZone() {
+  if (zone().id === 0) { alert('Zone 0 is the player start and cannot be deleted.'); return; }
+  if (!confirm('Delete "' + zone().name + '"? Exits to/from it are removed and zones renumbered.')) return;
+  const del = zone().id;
+  world.zones.splice(zi, 1);
+  world.exits = world.exits.filter(e => e.from !== del && e.to !== del);
+  delete world.maps[del];
+  // renumber zones to keep id === index, remap exits + maps keys
+  world.portals = (world.portals || []).filter(p => p.from !== del && p.to !== del);
+  const remap = {}; world.zones.forEach((z, i) => { remap[z.id] = i; });
+  const newMaps = {};
+  world.zones.forEach((z, i) => { newMaps[i] = world.maps[z.id]; z.id = i; });
+  world.maps = newMaps;
+  world.exits.forEach(e => { e.from = remap[e.from]; e.to = remap[e.to]; });
+  world.portals.forEach(p => { p.from = remap[p.from]; p.to = remap[p.to]; });
+  zi = Math.min(zi, world.zones.length - 1);
+  save(); refresh();
+}
+
+// ── Exits panel ─────────────────────────────────────────────────
+function renderExits() {
+  const wrap = document.getElementById('exit-list'); wrap.innerHTML = '';
+  const z = zone();
+  world.exits.forEach((e, idx) => {
+    if (e.from !== z.id) return;
+    const row = document.createElement('div'); row.className = 'exit-row';
+    const dirSel = sel2(DIRS.map(d => [d, d]), e.dir, v => { e.dir = v; save(); render(); renderExits(); });
+    const toSel = sel2(world.zones.map(zz => [zz.id, zz.name]), e.to, v => { e.to = +v; save(); render(); });
+    const barSel = sel2(BARRIERS.map(b => [b, b ? `${b} (${BARRIER_ELEM[b]})` : 'no barrier']), e.barrier || '', v => { e.barrier = v || null; save(); render(); });
+    const posIn = inp(e.pos.join(','), 'pos', v => { e.pos = v.split(',').map(s => +s.trim()).filter(n => !isNaN(n)); save(); render(); });
+    const exIn = inp(e.entryX, 'sm', v => { e.entryX = +v|0; save(); render(); });
+    const eyIn = inp(e.entryY, 'sm', v => { e.entryY = +v|0; save(); render(); });
+    row.append(
+      lblRow('edge → to', wrapEls(dirSel, span('→'), toSel)),
+      lblRow('openings (cells)', posIn),
+      lblRow('barrier', barSel),
+      gateEditor(e.from, e.to),
+      lblRow('arrival x,y in target', wrapEls(exIn, span(','), eyIn)),
+    );
+    const btns = document.createElement('div'); btns.className = 'row';
+    btns.append(
+      mkbtn('↩ add return', 'btn', () => addReturn(e)),
+      mkbtn('🗑', 'btn warn', () => { world.exits.splice(idx, 1); save(); render(); renderExits(); }),
+    );
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+}
+function addReturn(e) {
+  const opp = { north:'south', south:'north', east:'west', west:'east' }[e.dir];
+  // arrival back in THIS zone ≈ just inside the opening cell we left from
+  const z = zone(); const p0 = e.pos[Math.floor(e.pos.length/2)] ?? 1;
+  let ex, ey;
+  if (e.dir === 'south') { ex = p0; ey = z.rows - 2; }
+  else if (e.dir === 'north') { ex = p0; ey = 1; }
+  else if (e.dir === 'west') { ex = 1; ey = p0; }
+  else { ex = z.cols - 2; ey = p0; }
+  world.exits.push({ from: e.to, dir: opp, pos: e.pos.slice(), to: z.id, entryX: ex, entryY: ey, barrier: null });
+  save(); render();
+  alert('Return exit added in "' + world.zones[e.to].name + '". Switch to that zone to fine-tune it.');
+}
+document.getElementById('exit-add').onclick = () => {
+  const z = zone();
+  world.exits.push({ from: z.id, dir: 'south', pos: [Math.floor(z.cols/2)], to: (z.id+1)%world.zones.length, entryX: 1, entryY: 1, barrier: null });
+  save(); render(); renderExits();
+};
+
+// ── Cave portals panel ──────────────────────────────────────────
+function renderPortals() {
+  const wrap = document.getElementById('portal-list'); wrap.innerHTML = '';
+  const z = zone();
+  (world.portals || []).forEach((p, idx) => {
+    if (p.from !== z.id) return;
+    const row = document.createElement('div'); row.className = 'exit-row';
+    const fxIn = inp(p.fx, 'sm', v => { p.fx = +v|0; save(); render(); });
+    const fyIn = inp(p.fy, 'sm', v => { p.fy = +v|0; save(); render(); });
+    const toSel = sel2(world.zones.map(zz => [zz.id, zz.name]), p.to, v => { p.to = +v; save(); render(); });
+    const txIn = inp(p.tx, 'sm', v => { p.tx = +v|0; save(); render(); });
+    const tyIn = inp(p.ty, 'sm', v => { p.ty = +v|0; save(); render(); });
+    row.append(
+      lblRow('door tile (fx,fy)', wrapEls(fxIn, span(','), fyIn)),
+      lblRow('warp to zone', toSel),
+      gateEditor(p.from, p.to),
+      lblRow('arrival (tx,ty)', wrapEls(txIn, span(','), tyIn)),
+    );
+    const btns = document.createElement('div'); btns.className = 'row';
+    btns.append(
+      mkbtn('↩ add return', 'btn', () => addPortalReturn(p)),
+      mkbtn('🗑', 'btn warn', () => { world.portals.splice(idx, 1); save(); render(); renderPortals(); }),
+    );
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+}
+function addPortalReturn(p) {
+  // a return portal in the target zone, warping back beside this door
+  world.portals.push({ from: p.to, fx: p.tx, fy: Math.max(1, p.ty - 1), to: p.from, tx: p.fx, ty: p.fy + 1 });
+  save(); render();
+  alert('Return portal added in "' + world.zones[p.to].name + '". Place its Cave Door tile and fine-tune coords there.');
+}
+document.getElementById('portal-add').onclick = () => {
+  const z = zone();
+  if (!world.portals) world.portals = [];
+  const target = world.zones.find(zz => zz.cave) || z;
+  world.portals.push({ from: z.id, fx: 1, fy: 1, to: target.id, tx: 1, ty: 1 });
+  save(); render(); renderPortals();
+};
+
+// tiny DOM helpers
+function sel2(opts, val, on) { const s=document.createElement('select'); opts.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;s.appendChild(o);}); s.value=val; s.onchange=()=>on(s.value); return s; }
+function inp(val, cls, on) { const i=document.createElement('input'); i.className=cls; i.value=val; i.oninput=()=>on(i.value); return i; }
+function mkbtn(t, cls, on) { const b=document.createElement('button'); b.className=cls; b.textContent=t; b.onclick=on; return b; }
+function span(t) { const s=document.createElement('span'); s.textContent=t; s.style.opacity=.6; return s; }
+function wrapEls(...els) { const d=document.createElement('div'); d.className='row'; d.append(...els); return d; }
+function lblRow(label, el) { const f=document.createElement('div'); f.className='field'; const l=document.createElement('label'); l.textContent=label; f.append(l, el); return f; }
+
+// ── Seam-gate editor (shared by exits & cave portals) ───────────
+// A gate blocks the seam BOTH ways until unlocked once. Stored in
+// world.seamGates keyed "from>to"; the game reads either direction.
+function curSeamGate(from, to) {
+  const sg = world.seamGates || {};
+  const k = sg[from+'>'+to] ? from+'>'+to : sg[to+'>'+from] ? to+'>'+from : null;
+  return { key: k || (from+'>'+to), g: k ? sg[k] : null };
+}
+function writeSeamGate(key, g) {
+  if (!world.seamGates) world.seamGates = {};
+  if (!g) delete world.seamGates[key]; else world.seamGates[key] = g;
+  save();
+}
+function gateEditor(from, to) {
+  const { key, g } = curSeamGate(from, to);
+  const kind = g ? (g.friends!=null?'friends':g.type!=null?'type':'buddy') : 'none';
+  const kindSel = sel2([['none','— no gate —'],['friends','friend count'],['type','buddy type'],['buddy','specific buddy']], kind, v => {
+    if (v==='none') writeSeamGate(key, null);
+    else if (v==='friends') writeSeamGate(key, { friends: (g&&g.friends)||12 });
+    else if (v==='type') writeSeamGate(key, { type: (g&&g.type)||'Water' });
+    else if (v==='buddy') writeSeamGate(key, { buddyId: (g&&g.buddyId)||1 });
+    renderExits(); renderPortals();
+  });
+  const rowEl = wrapEls(kindSel);
+  if (kind==='friends') rowEl.append(inp(g.friends, 'sm', v => writeSeamGate(key, { friends: Math.max(0,+v|0) })), span('friends'));
+  else if (kind==='type') rowEl.append(sel2(SEAM_TYPES.map(t=>[t,t]), g.type, v => writeSeamGate(key, { type: v })));
+  else if (kind==='buddy') rowEl.append(inp(g.buddyId, 'sm', v => writeSeamGate(key, { buddyId: +v|0 })), span('species #'));
+  return lblRow('🔒 gate (both ways)', rowEl);
+}
+
+// ── export / import / reset ─────────────────────────────────────
+function exportText() {
+  let s = 'const WORLD = {\n  zones: [\n';
+  world.zones.forEach(z => s += '    ' + JSON.stringify(z) + ',\n');
+  s += '  ],\n  exits: [\n';
+  world.exits.forEach(e => s += '    ' + JSON.stringify(e) + ',\n');
+  s += '  ],\n  portals: [\n';
+  (world.portals || []).forEach(p => s += '    ' + JSON.stringify(p) + ',\n');
+  s += '  ],\n';
+  const sgk = Object.keys(world.seamGates || {});
+  if (sgk.length) {
+    s += '  seamGates: {\n';
+    sgk.forEach((k, i) => { s += `    ${JSON.stringify(k)}: ${JSON.stringify(world.seamGates[k])}` + (i < sgk.length-1 ? ',' : '') + '\n'; });
+    s += '  },\n';
+  }
+  s += '  maps: {\n';
+  world.zones.forEach((z, i, arr) => {
+    s += `    "${z.id}": [\n` + gridOf(z).map(r => '      [' + r.join(',') + ']').join(',\n') + '\n    ]' + (i<arr.length-1?',':'') + '\n';
+  });
+  s += '  },\n';
+  if ((world.props || []).length) {
+    s += '  props: [\n';
+    world.props.forEach((p, i) => { s += '    ' + JSON.stringify(p) + (i < world.props.length-1 ? ',' : '') + '\n'; });
+    s += '  ],\n';
+  }
+  if ((world.npcs || []).length) {
+    s += '  npcs: [\n';
+    world.npcs.forEach((n, i) => { s += '    ' + JSON.stringify(n) + (i < world.npcs.length-1 ? ',' : '') + '\n'; });
+    s += '  ],\n';
+  }
+  const dz = Object.keys(world.decor || {}).filter(k => (world.decor[k] || []).length);
+  if (dz.length) {
+    s += '  decor: {\n';
+    dz.forEach((k, i) => { s += `    "${k}": [` + world.decor[k].map(d => JSON.stringify(d)).join(', ') + ']' + (i < dz.length-1 ? ',' : '') + '\n'; });
+    s += '  },\n';
+  }
+  const sk = Object.keys(world.shore || {});
+  if (sk.length) s += '  shore: {' + sk.map(k => JSON.stringify(k) + ':' + world.shore[k]).join(', ') + '},\n';
+  s += '};\n';
+  return s;
+}
+document.getElementById('copy-json').onclick = () => { navigator.clipboard.writeText(exportText()); flash('copy-json','Copied!'); };
+document.getElementById('dl').onclick = () => {
+  const blob = new Blob([exportText()], { type:'text/javascript' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'world.js'; a.click();
+};
+document.getElementById('reset-game').onclick = () => {
+  if (confirm('Discard editor changes and reload from the game’s world.js?')) { world = clone(WORLD); zi = 0; save(); refresh(); }
+};
+document.getElementById('import-json').onclick = () => {
+  let t = document.getElementById('in').value; const i = t.indexOf('{'), j = t.lastIndexOf('}');
+  if (i<0||j<i) return alert('No object found.');
+  try { const w = JSON.parse(t.slice(i, j+1)); if (!w.zones||!w.exits||!w.maps) throw new Error('missing zones/exits/maps');
+    world = w; if (!world.portals) world.portals = []; if (!world.decor) world.decor = {}; if (!world.seamGates) world.seamGates = {}; ensureNpcs(); zi = 0; save(); refresh(); alert('Loaded ' + w.zones.length + ' zones.');
+  } catch (err) { alert('Parse error: ' + err.message); }
+};
+function flash(id, msg) { const b=document.getElementById(id); const o=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=o, 900); }
+
+// keyboard
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key >= '0' && e.key <= '9') { sel=+e.key; tool='paint'; syncTools(); renderPalette(); }
+  if (e.key === '[') { zi=(zi+world.zones.length-1)%world.zones.length; refresh(); }
+  if (e.key === ']') { zi=(zi+1)%world.zones.length; refresh(); }
+  if (e.key === 'f') { tool='fill'; syncTools(); }
+  if (e.key === 'b') { tool='paint'; syncTools(); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ATLAS — true world geometry: place zones, find seams, make passages
+// ═══════════════════════════════════════════════════════════════
+let atlasMode = false, aScale = 5, aDrag = null;
+const aCanvas = document.getElementById('atlas-canvas'), aCtx = aCanvas.getContext('2d');
+
+// Give every zone a world position (wx,wy) if it lacks one — packed in rows.
+function ensureCoords() {
+  let cx = 0, cy = 0, rowH = 0; const MAXW = 90, PAD = 2;
+  world.zones.forEach(z => {
+    if (z.interior) return;                 // building rooms aren't on the geographic atlas
+    if (z.wx == null || z.wy == null) {
+      if (cx + z.cols > MAXW) { cx = 0; cy += rowH + PAD; rowH = 0; }
+      z.wx = cx; z.wy = cy; cx += z.cols + PAD; rowH = Math.max(rowH, z.rows);
+    }
+  });
+}
+const overlaps = (a, b) => a.wx < b.wx + b.cols && b.wx < a.wx + a.cols && a.wy < b.wy + b.rows && b.wy < a.wy + a.rows;
+
+// Shared-edge seam between two zones (touching, perpendicular ranges overlap).
+function seamBetween(a, b) {
+  if (a.wx + a.cols === b.wx || b.wx + b.cols === a.wx) {
+    const left = (a.wx + a.cols === b.wx) ? a : b, right = (left === a) ? b : a;
+    const lo = Math.max(a.wy, b.wy), hi = Math.min(a.wy + a.rows, b.wy + b.rows);
+    if (hi > lo) return { orient: 'v', left, right, lo, hi, at: right.wx };
+  }
+  if (a.wy + a.rows === b.wy || b.wy + b.rows === a.wy) {
+    const top = (a.wy + a.rows === b.wy) ? a : b, bot = (top === a) ? b : a;
+    const lo = Math.max(a.wx, b.wx), hi = Math.min(a.wx + a.cols, b.wx + b.cols);
+    if (hi > lo) return { orient: 'h', top, bot, lo, hi, at: bot.wy };
+  }
+  return null;
+}
+function allSeams() {
+  const out = [];
+  const zs = world.zones.filter(z => !z.cave && !z.interior);   // caves & rooms are portal-linked, not edge-adjacent
+  for (let i = 0; i < zs.length; i++)
+    for (let j = i + 1; j < zs.length; j++) {
+      const s = seamBetween(zs[i], zs[j]); if (s) out.push(s);
+    }
+  return out;
+}
+const passageExists = (a, b) => world.exits.some(e =>
+  (e.from === a.id && e.to === b.id) || (e.from === b.id && e.to === a.id));
+
+// Create an aligned exit pair across a seam (default narrow centred door).
+function makeDoorway(seam, barrier, width) {
+  if (seam.orient === 'v') {
+    const { left, right } = seam;
+    const lo = Math.max(seam.lo, left.wy + 1, right.wy + 1);
+    const hi = Math.min(seam.hi, left.wy + left.rows - 1, right.wy + right.rows - 1);
+    if (hi <= lo) return null;
+    const center = Math.floor((lo + hi) / 2), w = Math.min(width, hi - lo);
+    const start = Math.max(lo, center - Math.floor(w / 2));
+    const rows = []; for (let y = start; y < Math.min(hi, start + w); y++) rows.push(y);
+    const L = rows.map(y => y - left.wy), R = rows.map(y => y - right.wy);
+    const mL = L[Math.floor(L.length / 2)], mR = R[Math.floor(R.length / 2)];
+    return [
+      { from: left.id, dir: 'east', pos: L, to: right.id, entryX: 1, entryY: mR, barrier: barrier || null, seam: true },
+      { from: right.id, dir: 'west', pos: R, to: left.id, entryX: left.cols - 2, entryY: mL, barrier: null, seam: true },
+    ];
+  } else {
+    const { top, bot } = seam;
+    const lo = Math.max(seam.lo, top.wx + 1, bot.wx + 1);
+    const hi = Math.min(seam.hi, top.wx + top.cols - 1, bot.wx + bot.cols - 1);
+    if (hi <= lo) return null;
+    const center = Math.floor((lo + hi) / 2), w = Math.min(width, hi - lo);
+    const start = Math.max(lo, center - Math.floor(w / 2));
+    const cols = []; for (let x = start; x < Math.min(hi, start + w); x++) cols.push(x);
+    const Tc = cols.map(x => x - top.wx), Bc = cols.map(x => x - bot.wx);
+    const mT = Tc[Math.floor(Tc.length / 2)], mB = Bc[Math.floor(Bc.length / 2)];
+    return [
+      { from: top.id, dir: 'south', pos: Tc, to: bot.id, entryX: mB, entryY: 1, barrier: barrier || null, seam: true },
+      { from: bot.id, dir: 'north', pos: Bc, to: top.id, entryX: mT, entryY: top.rows - 2, barrier: null, seam: true },
+    ];
+  }
+}
+
+function worldBounds() {
+  let w = 1, h = 1;
+  world.zones.forEach(z => { if (z.cave || z.interior) return; w = Math.max(w, z.wx + z.cols); h = Math.max(h, z.wy + z.rows); });
+  return { w: w + 4, h: h + 4 };
+}
+function renderAtlas() {
+  const B = worldBounds();
+  aCanvas.width = B.w * aScale; aCanvas.height = B.h * aScale;
+  aCtx.fillStyle = '#0c0c14'; aCtx.fillRect(0, 0, aCanvas.width, aCanvas.height);
+  // grid
+  aCtx.strokeStyle = 'rgba(255,255,255,.04)'; aCtx.lineWidth = 1;
+  for (let x = 0; x <= B.w; x += 5) { aCtx.beginPath(); aCtx.moveTo(x*aScale,0); aCtx.lineTo(x*aScale,B.h*aScale); aCtx.stroke(); }
+  for (let y = 0; y <= B.h; y += 5) { aCtx.beginPath(); aCtx.moveTo(0,y*aScale); aCtx.lineTo(B.w*aScale,y*aScale); aCtx.stroke(); }
+  // connection lines (zone centre to zone centre)
+  aCtx.strokeStyle = '#3a8a4a'; aCtx.lineWidth = 2;
+  const drawn = new Set();
+  world.exits.forEach(e => {
+    const k = Math.min(e.from,e.to)+'-'+Math.max(e.from,e.to); if (drawn.has(k)) return; drawn.add(k);
+    const a = world.zones[e.from], b = world.zones[e.to]; if(!a||!b) return;
+    aCtx.beginPath();
+    aCtx.moveTo((a.wx+a.cols/2)*aScale,(a.wy+a.rows/2)*aScale);
+    aCtx.lineTo((b.wx+b.cols/2)*aScale,(b.wy+b.rows/2)*aScale); aCtx.stroke();
+  });
+  // zones (caves are portal-linked and not shown on the geographic atlas)
+  world.zones.forEach(z => {
+    if (z.cave || z.interior) return;
+    const x=z.wx*aScale, y=z.wy*aScale, w=z.cols*aScale, h=z.rows*aScale;
+    aCtx.fillStyle = (COLOR[z.base] || '#555') + 'cc'; aCtx.fillRect(x,y,w,h);
+    aCtx.strokeStyle = '#000'; aCtx.lineWidth = 1; aCtx.strokeRect(x+.5,y+.5,w,h);
+    aCtx.fillStyle = '#fff'; aCtx.font = '11px sans-serif'; aCtx.textAlign='center'; aCtx.textBaseline='middle';
+    aCtx.fillText(z.name, x+w/2, y+h/2);
+  });
+  // overlaps
+  aCtx.lineWidth = 2;
+  const ov = world.zones.filter(z => !z.cave && !z.interior);
+  for (let i=0;i<ov.length;i++) for (let j=i+1;j<ov.length;j++){
+    const a=ov[i],b=ov[j];
+    if (overlaps(a,b)) { aCtx.strokeStyle='#ff3040';
+      [a,b].forEach(z=>aCtx.strokeRect(z.wx*aScale+1,z.wy*aScale+1,z.cols*aScale-2,z.rows*aScale-2)); }
+  }
+  // seams
+  allSeams().forEach(s => {
+    aCtx.lineWidth = 3;
+    const has = passageExists(s.left||s.top, s.right||s.bot);
+    aCtx.strokeStyle = has ? '#f8d030' : '#40e0a0';
+    aCtx.beginPath();
+    if (s.orient==='v') { aCtx.moveTo(s.at*aScale, s.lo*aScale); aCtx.lineTo(s.at*aScale, s.hi*aScale); }
+    else { aCtx.moveTo(s.lo*aScale, s.at*aScale); aCtx.lineTo(s.hi*aScale, s.at*aScale); }
+    aCtx.stroke();
+  });
+  renderReport();
+}
+function renderReport() {
+  const el = document.getElementById('atlas-report'); const issues = [];
+  for (let i=0;i<world.zones.length;i++) for (let j=i+1;j<world.zones.length;j++)
+    if (overlaps(world.zones[i],world.zones[j])) issues.push(`⚠ <b>${world.zones[i].name}</b> overlaps <b>${world.zones[j].name}</b>`);
+  world.exits.forEach(e => {
+    const rev = world.exits.some(r => r.from===e.to && r.to===e.from);
+    if (!rev) issues.push(`↩ <b>${world.zones[e.from]?.name}</b>→${world.zones[e.to]?.name} has no return exit`);
+  });
+  el.innerHTML = issues.length ? issues.join('<br>') : '✅ No overlaps; every exit has a return.';
+}
+// atlas interaction
+function aCell(ev){ const r=aCanvas.getBoundingClientRect(); return { x:(ev.clientX-r.left)/aScale, y:(ev.clientY-r.top)/aScale }; }
+function zoneAtPoint(p){ for(let i=world.zones.length-1;i>=0;i--){const z=world.zones[i]; if(p.x>=z.wx&&p.x<z.wx+z.cols&&p.y>=z.wy&&p.y<z.wy+z.rows) return z;} return null; }
+function seamAtPoint(p){ const TOL=1.2; for(const s of allSeams()){ if(s.orient==='v'){ if(Math.abs(p.x-s.at)<TOL && p.y>=s.lo && p.y<=s.hi) return s; } else { if(Math.abs(p.y-s.at)<TOL && p.x>=s.lo && p.x<=s.hi) return s; } } return null; }
+aCanvas.addEventListener('pointerdown', e => {
+  const p = aCell(e); const seam = seamAtPoint(p);
+  if (seam) { toggleSeam(seam); return; }
+  const z = zoneAtPoint(p); if (z) aDrag = { z, ox: p.x - z.wx, oy: p.y - z.wy };
+});
+aCanvas.addEventListener('pointermove', e => {
+  if (!aDrag) return; const p = aCell(e);
+  aDrag.z.wx = Math.max(0, Math.round(p.x - aDrag.ox));
+  aDrag.z.wy = Math.max(0, Math.round(p.y - aDrag.oy));
+  renderAtlas();
+});
+window.addEventListener('pointerup', () => { if (aDrag) { aDrag = null; save(); } });
+function toggleSeam(seam) {
+  const A = seam.left || seam.top, Bz = seam.right || seam.bot;
+  if (passageExists(A, Bz)) {
+    if (!confirm('Remove the passage between these zones?')) return;
+    world.exits = world.exits.filter(e => !((e.from===A.id&&e.to===Bz.id)||(e.from===Bz.id&&e.to===A.id)));
+  } else {
+    const bar = document.getElementById('atlas-barrier').value || null;
+    const w = Math.max(1, +document.getElementById('atlas-width').value || 3);
+    const pair = makeDoorway(seam, bar, w);
+    if (!pair) { alert('Seam too short for a door here — make the overlap bigger or move zones.'); return; }
+    world.exits.push(...pair);
+    // re-carve both zones so the openings are walkable
+    rewall(A, gridOf(A)); rewall(Bz, gridOf(Bz));
+  }
+  save(); renderAtlas();
+}
+function setMode(atlas) {
+  atlasMode = atlas;
+  document.querySelector('main').style.display = atlas ? 'none' : '';
+  document.getElementById('atlas').style.display = atlas ? '' : '';
+  document.getElementById('mode-btn').textContent = atlas ? '🧱 Zones' : '🗺 Atlas';
+  if (atlas) { ensureCoords(); const bs=document.getElementById('atlas-barrier'); bs.innerHTML=''; BARRIERS.forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b?`${b} (${BARRIER_ELEM[b]})`:'no barrier';bs.appendChild(o);}); renderAtlas(); save(); }
+  else refresh();
+}
+document.getElementById('mode-btn').onclick = () => setMode(!atlasMode);
+document.getElementById('atlas-zoomin').onclick = () => { aScale=Math.min(14,aScale+1); renderAtlas(); };
+document.getElementById('atlas-zoomout').onclick = () => { aScale=Math.max(2,aScale-1); renderAtlas(); };
+
+// ── boot ────────────────────────────────────────────────────────
+function refresh() { renderTabs(); renderZonePanel(); renderExits(); renderPortals(); renderNpcList(); render(); }
+loadWorld(); ensureCoords(); renderPalette(); renderDecorPalette(); renderPropPalette(); syncTools(); refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✂️ Lukeymon Character Slicer</title>
+<style>
+  :root{--bg:#0c1422;--panel:#13203a;--line:#27406a;--ink:#dce8f8;--gold:#f8d860;}
+  *{box-sizing:border-box;} body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:var(--panel);border-bottom:2px solid var(--line);position:sticky;top:0;z-index:5;}
+  h1{font-size:15px;margin:0;color:var(--gold);}
+  label{font-size:12px;} input,button,select{font:inherit;}
+  input[type=number],input[type=text],select{background:#0c1830;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 7px;}
+  input[type=number]{width:58px;} input[type=text]{width:120px;}
+  .btn{background:#1d3257;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer;}
+  .btn:hover{background:#274270;} .btn.go{background:#2a7d4a;border-color:#3fae6a;} .btn.go:hover{background:#329a59;}
+  .btn.sel{background:#c8932a;color:#1a1206;border-color:var(--gold);}
+  .spacer{flex:1;}
+  main{display:flex;gap:12px;padding:12px;align-items:flex-start;flex-wrap:wrap;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;}
+  #controls{width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;}
+  .grp{display:flex;flex-direction:column;gap:6px;} .grp h3{margin:0;font-size:11px;color:#9fb6d4;text-transform:uppercase;letter-spacing:1px;}
+  .rowf{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  #stage{flex:1;min-width:320px;overflow:auto;max-height:82vh;}
+  #sheet{image-rendering:pixelated;display:block;cursor:crosshair;background:
+    repeating-conic-gradient(#1b2740 0% 25%, #243454 0% 50%) 50% / 16px 16px;}
+  #drop{border:2px dashed var(--line);border-radius:10px;padding:40px;text-align:center;color:#9fb6d4;}
+  .preview{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+  .pv{display:flex;flex-direction:column;align-items:center;gap:5px;}
+  .pv canvas{image-rendering:pixelated;background:
+    repeating-conic-gradient(#1b2740 0% 25%, #243454 0% 50%) 50% / 12px 12px;border:1px solid var(--line);}
+  .pv span{font-size:11px;color:#9fb6d4;}
+  .hint{font-size:12px;color:#9fb6d4;line-height:1.5;}
+  .sw{width:22px;height:22px;border-radius:4px;border:1px solid #0006;display:inline-block;vertical-align:middle;}
+  kbd{background:#0c1830;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>✂️ Character Slicer</h1>
+  <label>Name: <input id="key" type="text" value="professor" placeholder="art key"></label>
+  <label>Zoom <input id="zoom" type="range" min="1" max="10" value="4"></label>
+  <button class="btn" id="loadBtn">📂 Load sheet…</button>
+  <input id="file" type="file" accept="image/*" style="display:none">
+  <span class="spacer"></span>
+  <button class="btn go" id="dlWalk">⬇ walk/<span class="kn">key</span>.png</button>
+  <button class="btn go" id="dlPortrait">⬇ portrait/<span class="kn">key</span>.png</button>
+  <button class="btn go" id="dlNpc">⬇ npc/<span class="kn">key</span>.png</button>
+</header>
+
+<main>
+  <div id="controls" class="panel">
+    <div class="grp">
+      <h3>Grid</h3>
+      <div class="rowf"><label>cols <input id="cols" type="number" min="1" max="16" value="4"></label>
+                        <label>rows <input id="rows" type="number" min="1" max="16" value="4"></label></div>
+      <div class="rowf"><label>margin <input id="margin" type="number" min="0" value="0"></label>
+                        <label>gutter <input id="gutter" type="number" min="0" value="0"></label></div>
+      <div class="hint">Adjust until each pose sits inside one numbered cell.</div>
+    </div>
+    <div class="grp">
+      <h3>Background</h3>
+      <div class="rowf">
+        <button class="btn" id="sampleBtn">🎯 Click sheet to knock out a colour</button>
+        <span class="sw" id="bgSw" style="background:transparent"></span>
+      </div>
+      <div class="rowf"><label>tolerance <input id="tol" type="number" min="0" max="200" value="18"></label>
+        <button class="btn" id="clearBg">transparent already</button></div>
+    </div>
+    <div class="grp">
+      <h3>Walk frames (cell #)</h3>
+      <div class="rowf"><label>Down <input id="cDown" type="number" min="0" value="0"></label>
+                        <label>Up <input id="cUp" type="number" min="0" value="0"></label></div>
+      <div class="rowf"><label>Left <input id="cLeft" type="number" min="0" value="0"></label>
+                        <label>Right <input id="cRight" type="number" min="0" value="0"></label></div>
+      <label><input id="mirror" type="checkbox"> Right = mirror of Left (sheets with no right pose)</label>
+      <div class="hint">Pick the STANDING frame for each facing.</div>
+    </div>
+    <div class="grp">
+      <h3>Full sprite &amp; portrait</h3>
+      <div class="rowf"><label>NPC cell <input id="cNpc" type="number" min="0" value="0"></label>
+                        <label>portrait % <input id="portPct" type="number" min="20" max="100" value="70"></label></div>
+      <div class="hint">Portrait = top % of the full sprite (the head/shoulders).</div>
+    </div>
+  </div>
+
+  <div id="stage" class="panel">
+    <div id="drop">Drop a character sprite sheet here, or click <b>Load sheet…</b></div>
+    <canvas id="sheet" style="display:none"></canvas>
+  </div>
+
+  <div class="panel" style="min-width:240px">
+    <div class="hint" style="margin-bottom:8px">Live preview (auto-trimmed, feet aligned):</div>
+    <div class="preview">
+      <div class="pv"><canvas id="pvWalk"></canvas><span>walk strip (D·U·L·R)</span></div>
+      <div class="pv"><canvas id="pvNpc"></canvas><span>npc</span></div>
+      <div class="pv"><canvas id="pvPort"></canvas><span>portrait</span></div>
+    </div>
+    <p class="hint" style="margin-top:12px">Save the three files into <b>art/walk/</b>, <b>art/portrait/</b>, <b>art/npc/</b>
+      (named after the art key), then tell me to bump the art cache and they'll show up.<br>
+      The game slices the walk strip as height÷4 (Down, Up, Left, Right) — this tool builds it that way for you.</p>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let img = null, baseCanvas = null, workCanvas = null, bgColor = null;
+
+function gv(id){ return Math.max(0, parseInt($(id).value)||0); }
+function cells(){
+  const cols=Math.max(1,gv('cols')), rows=Math.max(1,gv('rows')), m=gv('margin'), g=gv('gutter');
+  const W=baseCanvas.width, H=baseCanvas.height;
+  const cw=(W-2*m-(cols-1)*g)/cols, ch=(H-2*m-(rows-1)*g)/rows;
+  const list=[];
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)
+    list.push({i:r*cols+c, x:Math.round(m+c*(cw+g)), y:Math.round(m+r*(ch+g)), w:Math.round(cw), h:Math.round(ch)});
+  return list;
+}
+function rebuildWork(){   // display copy only — bg is removed per-cell by flood-fill (below)
+  workCanvas = document.createElement('canvas'); workCanvas.width=baseCanvas.width; workCanvas.height=baseCanvas.height;
+  workCanvas.getContext('2d').drawImage(baseCanvas,0,0);
+}
+// Knock out the background ONLY where it connects to the cell's edges (a flood
+// fill), so dark pixels INSIDE the character (outlines, shadows, the neck) survive.
+function knockout(cv){
+  if(!bgColor) return cv;
+  const x=cv.getContext('2d'), w=cv.width, h=cv.height, tol=gv('tol');
+  const id=x.getImageData(0,0,w,h), d=id.data;
+  const near=i=>Math.abs(d[i]-bgColor[0])<=tol&&Math.abs(d[i+1]-bgColor[1])<=tol&&Math.abs(d[i+2]-bgColor[2])<=tol;
+  const seen=new Uint8Array(w*h), st=[];
+  const push=(px,py)=>{ if(px<0||py<0||px>=w||py>=h) return; const k=py*w+px; if(seen[k]) return; seen[k]=1; if(near(k*4)) st.push(k); };
+  for(let px=0;px<w;px++){ push(px,0); push(px,h-1); }
+  for(let py=0;py<h;py++){ push(0,py); push(w-1,py); }
+  while(st.length){ const k=st.pop(); d[k*4+3]=0; const px=k%w, py=(k/w)|0; push(px+1,py); push(px-1,py); push(px,py+1); push(px,py-1); }
+  x.putImageData(id,0,0); return cv;
+}
+// extract a cell, knock out the background, auto-trim → {canvas,w,h}
+function frame(idx){
+  const cl=cells(); const c=cl[idx]; if(!c) return null;
+  const t=document.createElement('canvas'); t.width=c.w; t.height=c.h;
+  t.getContext('2d').drawImage(workCanvas, c.x,c.y,c.w,c.h, 0,0,c.w,c.h);
+  knockout(t);
+  return trim(t);
+}
+function mirrorFrame(f){ if(!f) return null; const c=document.createElement('canvas'); c.width=f.canvas.width; c.height=f.canvas.height;
+  const x=c.getContext('2d'); x.imageSmoothingEnabled=false; x.translate(c.width,0); x.scale(-1,1); x.drawImage(f.canvas,0,0); return {canvas:c,w:f.w,h:f.h}; }
+function trim(cv){
+  const x=cv.getContext('2d'), w=cv.width, h=cv.height, d=x.getImageData(0,0,w,h).data;
+  let a=w,b=h,e=-1,f=-1;
+  for(let y=0;y<h;y++)for(let X=0;X<w;X++){ if(d[(y*w+X)*4+3]>12){ if(X<a)a=X;if(X>e)e=X;if(y<b)b=y;if(y>f)f=y; } }
+  if(e<0) return {canvas:cv,w,h,empty:true};
+  const tw=e-a+1, th=f-b+1, o=document.createElement('canvas'); o.width=tw; o.height=th;
+  o.getContext('2d').drawImage(cv, a,b,tw,th, 0,0,tw,th);
+  return {canvas:o,w:tw,h:th};
+}
+// build the 4-frame vertical walk strip, each frame bottom-centre on a uniform cell
+function buildWalk(){
+  const down=frame(gv('cDown')), up=frame(gv('cUp')), left=frame(gv('cLeft'));
+  const right = $('mirror').checked ? mirrorFrame(left) : frame(gv('cRight'));
+  const fs=[down,up,left,right];
+  if(fs.some(f=>!f)) return null;
+  const fw=Math.max(...fs.map(f=>f.w)), fh=Math.max(...fs.map(f=>f.h));
+  const out=document.createElement('canvas'); out.width=fw; out.height=fh*4;
+  const x=out.getContext('2d'); x.imageSmoothingEnabled=false;
+  fs.forEach((f,k)=>{ const dx=Math.round((fw-f.w)/2), dy=k*fh+(fh-f.h); x.drawImage(f.canvas,dx,dy); });
+  return out;
+}
+function buildNpc(){ const f=frame(gv('cNpc')); return f?f.canvas:null; }
+function buildPortrait(){
+  const f=frame(gv('cNpc')); if(!f) return null;
+  const ph=Math.max(1,Math.round(f.h*gv('portPct')/100));
+  const t=document.createElement('canvas'); t.width=f.w; t.height=ph;
+  t.getContext('2d').drawImage(f.canvas, 0,0,f.w,ph, 0,0,f.w,ph);
+  return trim(t).canvas;
+}
+function blit(id, cv, scale){ const c=$(id); if(!cv){c.width=c.height=1;return;} c.width=cv.width*scale; c.height=cv.height*scale;
+  const x=c.getContext('2d'); x.imageSmoothingEnabled=false; x.drawImage(cv,0,0,c.width,c.height); }
+
+function render(){
+  if(!baseCanvas) return;
+  rebuildWork();
+  const z=gv('zoom'); const c=$('sheet'); c.style.display='block'; $('drop').style.display='none';
+  c.width=baseCanvas.width*z; c.height=baseCanvas.height*z;
+  const x=c.getContext('2d'); x.imageSmoothingEnabled=false; x.drawImage(workCanvas,0,0,c.width,c.height);
+  // grid + numbers
+  x.strokeStyle='rgba(248,216,96,.8)'; x.lineWidth=1; x.font=`${Math.max(9,z*3)}px monospace`; x.textBaseline='top';
+  cells().forEach(cl=>{ x.strokeRect(cl.x*z+.5, cl.y*z+.5, cl.w*z, cl.h*z);
+    x.fillStyle='rgba(0,0,0,.6)'; x.fillRect(cl.x*z+1, cl.y*z+1, 16, 12);
+    x.fillStyle='#f8d860'; x.fillText(cl.i, cl.x*z+2, cl.y*z+2); });
+  // previews (scale to ~3x, cap)
+  const walk=buildWalk(); blit('pvWalk', walk, walk?Math.max(1,Math.min(4,Math.floor(120/walk.width))):1);
+  const npc=buildNpc();  blit('pvNpc',  npc,  npc?Math.max(1,Math.min(4,Math.floor(96/npc.width))):1);
+  const port=buildPortrait(); blit('pvPort', port, port?Math.max(1,Math.min(4,Math.floor(96/port.width))):1);
+}
+
+function loadImage(src){
+  img=new Image(); img.onload=()=>{ baseCanvas=document.createElement('canvas'); baseCanvas.width=img.naturalWidth; baseCanvas.height=img.naturalHeight;
+    baseCanvas.getContext('2d').drawImage(img,0,0); bgColor=null; $('bgSw').style.background='transparent';
+    // sensible defaults: guess square-ish cells
+    render(); };
+  img.src=src;
+}
+$('loadBtn').onclick=()=>$('file').click();
+$('file').onchange=e=>{ const f=e.target.files[0]; if(f){ const r=new FileReader(); r.onload=()=>loadImage(r.result); r.readAsDataURL(f);} };
+$('stage').addEventListener('dragover',e=>{e.preventDefault();});
+$('stage').addEventListener('drop',e=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f){ const r=new FileReader(); r.onload=()=>loadImage(r.result); r.readAsDataURL(f);} });
+
+let sampling=false;
+$('sampleBtn').onclick=()=>{ sampling=!sampling; $('sampleBtn').classList.toggle('sel',sampling); };
+$('clearBg').onclick=()=>{ bgColor=null; $('bgSw').style.background='transparent'; render(); };
+$('sheet').addEventListener('click',e=>{
+  if(!sampling||!baseCanvas) return;
+  const r=$('sheet').getBoundingClientRect(), z=gv('zoom');
+  const sx=Math.floor((e.clientX-r.left)/z), sy=Math.floor((e.clientY-r.top)/z);
+  const p=baseCanvas.getContext('2d').getImageData(sx,sy,1,1).data;
+  bgColor=[p[0],p[1],p[2]]; $('bgSw').style.background=`rgb(${p[0]},${p[1]},${p[2]})`;
+  sampling=false; $('sampleBtn').classList.remove('sel'); render();
+});
+['cols','rows','margin','gutter','tol','cDown','cUp','cLeft','cRight','cNpc','portPct','zoom']
+  .forEach(id=>$(id).addEventListener('input',render));
+$('mirror').addEventListener('change',render);
+function dl(cv,suffix){ if(!cv){alert('Nothing to export yet — load a sheet first.');return;} const a=document.createElement('a');
+  a.href=cv.toDataURL('image/png'); a.download=($('key').value||'character')+'.png'; a.click(); }
+$('dlWalk').onclick=()=>dl(buildWalk());
+$('dlPortrait').onclick=()=>dl(buildPortrait());
+$('dlNpc').onclick=()=>dl(buildNpc());
+// keep the button labels showing the current key
+$('key').addEventListener('input',()=>document.querySelectorAll('.kn').forEach(s=>s.textContent=$('key').value||'key'));
+document.querySelectorAll('.kn').forEach(s=>s.textContent=$('key').value);
+</script>
+</body>
+</html>

@@ -5,14 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Lukeymon</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <!-- Versioning: code files use ?v=<release> (bumped every release). Art uses a
+       separate ?v=32 (= ART_V in game.js), bumped ONLY when art changes, so code
+       releases don't force every player to re-download ~13 MB of art. -->
+  <link rel="stylesheet" href="style.css?v=3.22.23">
 </head>
 <body>
 
   <div id="device">
+    <button id="fullscreen-btn" title="Full screen">⛶</button>
     <div id="brand">LUKEYMON</div>
     <div id="screen-bezel">
       <div id="screen-area">
+
+        <!-- BOOT (Game Boy power-on) -->
+        <div id="boot-screen" class="screen active">
+          <div id="boot-logo">LUKETENDO<span id="boot-r">®</span></div>
+          <div id="boot-sub">GAME BOY</div>
+        </div>
 
         <!-- TITLE SCREEN -->
         <div id="title-screen" class="screen active">
@@ -20,26 +30,67 @@
             <span>L</span><span>U</span><span>K</span><span>E</span><span>Y</span><span>M</span><span>O</span><span>N</span>
           </div>
           <p class="title-tagline">Catch ʼem with kindness!</p>
-          <div class="title-deco">🌿&nbsp;&nbsp;🔥&nbsp;&nbsp;💧&nbsp;&nbsp;⚡&nbsp;&nbsp;👻</div>
-          <button id="start-btn" class="pixel-btn green">▶ NEW GAME</button>
-          <button id="continue-btn" class="pixel-btn blue hidden">▶ CONTINUE</button>
-          <p class="title-hint">Arrow keys or WASD to move</p>
+          <div class="title-scene">
+            <span class="title-ground"></span>
+            <img class="title-hero" src="art/player/side.png?v=32" alt="">
+            <img class="title-pika" src="sprites/025.png" alt="">
+            <span class="title-spark sp1">⚡</span>
+            <span class="title-spark sp2">⚡</span>
+            <span class="title-spark sp3">✨</span>
+          </div>
+          <button id="play-btn" class="pixel-btn green">▶ PLAY</button>
+          <button id="title-settings" class="pixel-btn small blue"><img class="ui-inline" src="art/ui/settings.png?v=32" alt=""> Settings</button>
+          <p class="title-hint">☰ Start (or C) — Controls · ✛ D-pad / WASD — move</p>
+        </div>
+
+        <!-- SAVE SLOT SELECT -->
+        <div id="slot-screen" class="screen">
+          <div id="slot-title">SELECT SAVE</div>
+          <div id="slot-list"></div>
+          <button id="slot-back" class="pixel-btn small red">◀ BACK</button>
+        </div>
+
+        <!-- NAME ENTRY (Professor's welcome) -->
+        <div id="name-screen" class="screen">
+          <img id="prof-portrait" class="prof-sprite" src="art/npc/professor.png" alt="Professor">
+          <div id="prof-greeting">Welcome to the island, new trainer!<br>I'm Professor Birch. And you are…?</div>
+          <input id="name-input" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="YOUR NAME">
+          <div id="name-buttons">
+            <button id="name-cancel" class="pixel-btn small red">◀ BACK</button>
+            <button id="name-ok" class="pixel-btn green">THAT'S ME ▶</button>
+          </div>
+        </div>
+
+        <!-- PROFESSOR FAREWELL -->
+        <div id="intro-screen" class="screen">
+          <img id="prof-portrait2" class="prof-sprite" src="art/npc/professor.png" alt="Professor">
+          <div id="intro-text"></div>
+          <button id="intro-begin" class="pixel-btn green">BEGIN ▶</button>
         </div>
 
         <!-- WORLD SCREEN -->
         <div id="world-screen" class="screen">
           <canvas id="game-canvas" width="640" height="448"></canvas>
           <div id="hud">
-            <span id="hud-count">🎒 <span id="caught-count">0</span> / 15</span>
-            <button id="pokedex-btn" class="pixel-btn small blue">📖 PokéDex</button>
+            <button id="hud-buddy" title="Buddy — open the Pokédex to switch"><span id="hud-buddy-icon">➕</span><span id="hud-buddy-type" class="hidden"></span></button>
+            <span id="hud-balls"><span class="pb"></span><span id="ball-count">5</span></span>
+            <span id="hud-master" class="hidden">🟣<span id="master-count">0</span></span>
+            <span id="hud-coins"><img class="ui-stat" src="art/ui/coins.png?v=32" alt="coins"><span id="coin-count">0</span></span>
+            <span id="hud-stones" class="hidden"></span>
+            <span id="hud-count"><img class="ui-stat" src="art/ui/bag.png?v=32" alt=""><span id="caught-count">0</span>/<span id="total-count">90</span></span>
+            <button id="mute-btn" class="pixel-btn small blue icon-btn" title="Mute / unmute"><img class="ui-icon" src="art/ui/sound.png?v=32" alt="sound"></button>
+            <button id="map-btn" class="pixel-btn small blue icon-btn"><img class="ui-icon" src="art/ui/map.png?v=32" alt="map"></button>
+            <button id="pokedex-btn" class="pixel-btn small blue icon-btn"><img class="ui-icon" src="art/ui/dex.png?v=32" alt="dex"></button>
           </div>
           <div id="message-box" class="hidden">
             <span id="message-text"></span>
           </div>
+          <div id="mp-badge" class="hidden"></div>
         </div>
 
         <!-- ENCOUNTER SCREEN -->
         <div id="encounter-screen" class="screen">
+          <div id="throw-ball" class="hidden"></div>
           <div id="enc-header">
             <div id="enc-name">??????????</div>
             <div id="enc-type-badge">???</div>
@@ -52,27 +103,34 @@
 
           <div id="enc-thought-bubble">
             <div id="enc-thought-inner">
-              <span id="enc-thought-emoji"></span>
-              <span id="enc-thought-text"></span>
+              <span id="enc-thought-emoji" style="font-size:32px"></span>
             </div>
             <div class="bubble-tail"></div>
           </div>
 
-          <p id="enc-prompt">What does it want?</p>
+          <div id="enc-bottom">
+            <p id="enc-prompt">What does it want?</p>
 
-          <div id="enc-buttons">
-            <button class="action-btn feed-btn" data-action="feed">
-              <span class="action-icon">🍎</span>
-              <span class="action-label">Feed</span>
-            </button>
-            <button class="action-btn pet-btn" data-action="pet">
-              <span class="action-icon">🤚</span>
-              <span class="action-label">Pet</span>
-            </button>
-            <button class="action-btn play-btn" data-action="play">
-              <span class="action-icon">⚽</span>
-              <span class="action-label">Play</span>
-            </button>
+            <div id="enc-buttons">
+              <button class="action-btn feed-btn" data-action="feed">
+                <span class="action-icon"><img class="action-img" src="art/action/eat.png?v=32" alt=""></span>
+                <span class="action-label">Feed</span>
+              </button>
+              <button class="action-btn pet-btn" data-action="pet">
+                <span class="action-icon"><img class="action-img" src="art/action/groom.png?v=32" alt=""></span>
+                <span class="action-label">Pet</span>
+              </button>
+              <button class="action-btn play-btn" data-action="play">
+                <span class="action-icon"><img class="action-img" src="art/action/play.png?v=32" alt=""></span>
+                <span class="action-label">Play</span>
+              </button>
+            </div>
+
+            <div id="enc-throw-wrap" class="hidden">
+              <p id="enc-happy-msg">❤️ It's happy!  Throw a PokéBall!</p>
+              <button id="enc-throw-btn" class="pixel-btn green"><span class="pb"></span> Throw!</button>
+              <p id="enc-no-balls-msg" class="hidden">No PokéBalls! Find some or visit the 🏪 Shop!</p>
+            </div>
           </div>
 
           <div id="timer-wrap">
@@ -97,9 +155,16 @@
           <div id="pokedex-topbar">
             <button id="pokedex-back" class="pixel-btn small red">◀ BACK</button>
             <span id="pokedex-title">POKÉDEX</span>
-            <span id="pokedex-counter"><span id="dex-count">0</span>/15</span>
+            <span id="pokedex-counter"><span id="dex-count">0</span>/<span id="dex-total">90</span></span>
           </div>
-          <div id="pokedex-grid"></div>
+          <div id="pokedex-filters" class="hidden">
+            <button id="dexf-open" class="dexf-open-btn"><span class="dexf-open-ic">🔎</span> All</button>
+          </div>
+          <div id="pokedex-home"></div>
+          <div id="pokedex-buddies" class="hidden"></div>
+          <div id="pokedex-filter-page" class="hidden"></div>
+          <div id="pokedex-grid" class="hidden"></div>
+          <div id="pokedex-quest" class="hidden"></div>
 
           <div id="pokedex-detail" class="hidden">
             <button id="detail-back" class="pixel-btn small red">◀</button>
@@ -109,7 +174,140 @@
               <span id="detail-number"></span>
               <span id="detail-type"></span>
             </div>
+            <button id="detail-buddy" class="pixel-btn green"></button>
+            <div id="detail-evolve"></div>
+            <div id="detail-category"></div>
+            <div id="detail-stats">
+              <div class="detail-stat">
+                <span class="detail-stat-label">HT</span>
+                <span id="detail-height" class="detail-stat-value"></span>
+              </div>
+              <div class="detail-stat">
+                <span class="detail-stat-label">WT</span>
+                <span id="detail-weight" class="detail-stat-value"></span>
+              </div>
+            </div>
             <div id="detail-desc"></div>
+            <div id="detail-befriend">
+              <span id="detail-befriend-icon"></span>
+              <span id="detail-befriend-text"></span>
+            </div>
+            <div id="detail-habitat"></div>
+          </div>
+        </div>
+
+        <!-- SETTINGS SCREEN -->
+        <div id="settings-screen" class="screen">
+          <div id="settings-topbar">
+            <button id="settings-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="settings-title">SETTINGS</span>
+            <span class="help-spacer"></span>
+          </div>
+          <div id="settings-body">
+            <button id="set-sound" class="settings-row">🔊 Sound: ON</button>
+            <button id="set-guide" class="settings-row">🎮 Controls &amp; Type Guide ▸</button>
+            <div class="settings-note">LUKEYMON · <span id="set-version"></span></div>
+          </div>
+        </div>
+
+        <!-- HELP / GUIDE SCREEN -->
+        <div id="help-screen" class="screen">
+          <div id="help-topbar">
+            <button id="help-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="help-title">GUIDE</span>
+            <span class="help-spacer"></span>
+          </div>
+          <div id="help-body">
+            <div class="help-section">
+              <div class="help-head">🎮 CONTROLS</div>
+              <div class="help-controls">
+                <span>✛ D-pad / stick — move · choose</span>
+                <span>Ⓐ — select / confirm</span>
+                <span>Ⓑ — back / cancel</span>
+                <span>Ⓨ — map · LB/RB — switch buddy</span>
+                <span>In the world: Ⓐ Pokédex · Ⓑ Map</span>
+                <span>☰ Start — full controls screen</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-head">⚔️ TYPE MATCHUPS — to beat it, send…</div>
+              <div id="help-types"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MAP SCREEN -->
+        <div id="map-screen" class="screen">
+          <div id="map-topbar">
+            <button id="map-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="map-title">WORLD MAP</span>
+            <button id="map-atlas-toggle" class="pixel-btn small blue" title="Toggle true-shape atlas view">⊞ Grid</button>
+            <span id="map-counter"><span id="map-open-count">1</span>/<span id="map-total">8</span></span>
+          </div>
+          <div id="map-objective"></div>
+          <div id="map-board">
+            <svg id="map-lines" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div id="map-zones"></div>
+            <svg id="map-atlas" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+          </div>
+          <div id="map-legend">
+            <span><span class="legend-swatch open"></span>Open</span>
+            <span><span class="legend-swatch locked"></span>Locked</span>
+            <span>📍 You</span>
+          </div>
+        </div>
+
+        <!-- BADGE CASE SCREEN -->
+        <div id="badges-screen" class="screen">
+          <div id="badges-topbar">
+            <button id="badges-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="badges-title">BADGE CASE</span>
+            <span id="badges-counter"><span id="badges-count">0</span>/<span id="badges-total">5</span></span>
+          </div>
+          <div id="badges-grid"></div>
+        </div>
+
+        <!-- FIELD NOTES SCREEN -->
+        <div id="notes-screen" class="screen">
+          <div id="notes-topbar">
+            <button id="notes-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="notes-title">📝 FIELD NOTES</span>
+            <span id="notes-counter"><span id="notes-count">0</span>/<span id="notes-total">0</span></span>
+          </div>
+          <div id="notes-body"></div>
+        </div>
+
+        <!-- FRIENDLY DUEL SCREEN (LAN multiplayer) -->
+        <div id="duel-screen" class="screen">
+          <div id="duel-topbar">
+            <span id="duel-title">⚔️ FRIENDLY DUEL</span>
+            <span id="duel-score"></span>
+          </div>
+          <div id="duel-stage">
+            <div id="duel-opp" class="duel-mon"></div>
+            <div id="duel-verdict" class="duel-verdict"></div>
+            <div id="duel-me" class="duel-mon"></div>
+          </div>
+          <div id="duel-prompt"></div>
+          <div id="duel-pick"></div>
+          <div id="duel-buttons"></div>
+        </div>
+
+        <!-- MEWTWO BATTLE SCREEN -->
+        <div id="battle-screen" class="screen">
+          <div id="battle-foe" class="hidden">
+            <span id="battle-foe-emoji"></span>
+            <span id="battle-foe-badge"></span>
+          </div>
+          <div id="battle-header">MEWTWO</div>
+          <div id="battle-mewtwo">🧬</div>
+          <div id="battle-round">Round 1 / 3</div>
+          <div id="battle-demand"><span id="battle-demand-pre">Mewtwo unleashes a </span><span id="battle-type">???</span><span id="battle-demand-post"> surge!</span></div>
+          <div id="battle-instruction">Send out a Lukeymon of that type!</div>
+          <div id="battle-options"></div>
+          <div id="battle-win" class="hidden">
+            <p id="battle-win-msg">✨ Mewtwo is calmed!</p>
+            <button id="battle-throw" class="pixel-btn blue">🟣 Throw Master Ball!</button>
           </div>
         </div>
 
@@ -117,24 +315,109 @@
         <div id="complete-screen" class="screen">
           <div id="complete-trophy">🏆</div>
           <div id="complete-title">YOU DID IT!</div>
-          <div id="complete-sub">All 15 Lukeymon caught!</div>
+          <div id="complete-sub">All 90 Lukeymon caught!</div>
           <div id="complete-row"></div>
           <p id="complete-praise">You are a true Pokémon master! 🌟</p>
           <button id="complete-restart" class="pixel-btn blue">PLAY AGAIN</button>
         </div>
 
+        <!-- CHAMPION SCREEN (initial victory: all 4 land badges) -->
+        <div id="champion-screen" class="screen">
+          <div id="champion-trophy">🏆</div>
+          <div id="champion-title">CHAMPION!</div>
+          <div id="champion-sub">All 4 Gym Badges earned!</div>
+          <div id="champion-row"></div>
+          <p id="champion-praise">You've conquered the four faraway lands. You beat the game! 🌟</p>
+          <div id="champion-next">
+            <span class="champion-next-head">…but the adventure isn't over:</span>
+            <span>⚡ Battle the legendary birds</span>
+            <span>🔮 Track down Mew &amp; Mewtwo</span>
+            <span>🎒 Fill out the whole Pokédex</span>
+            <span>🕳️ Explore the hidden caves</span>
+          </div>
+          <button id="champion-continue" class="pixel-btn green">KEEP PLAYING ▶</button>
+        </div>
+
+        <!-- NPC DIALOG SCREEN -->
+        <div id="npc-screen" class="screen">
+          <div id="npc-emoji">🧓</div>
+          <div id="npc-name">Character</div>
+          <div id="npc-bubble"><span id="npc-text"></span></div>
+          <div id="npc-reward" class="hidden"></div>
+          <div id="npc-buttons">
+            <button id="npc-advance" class="pixel-btn green">NEXT ▶</button>
+          </div>
+        </div>
+
+        <!-- GIFT REVEAL SCREEN -->
+        <div id="gift-screen" class="screen">
+          <div id="gift-burst"></div>
+          <div id="gift-badge">💰</div>
+          <div id="gift-title">A GIFT!</div>
+          <div id="gift-amount"></div>
+          <button id="gift-continue" class="pixel-btn green">NICE! ▶</button>
+        </div>
+
+        <!-- SHOP SCREEN -->
+        <div id="shop-screen" class="screen">
+          <div id="shop-header">🏪 SHOP</div>
+          <div id="shop-stock">
+            <div><span class="pb"></span> Balls: <span id="shop-ball-count">5</span></div>
+            <div>🟣 Master: <span id="shop-master-count">0</span></div>
+            <div>💰 Coins: <span id="shop-coin-count">0</span></div>
+          </div>
+          <div id="shop-items">
+            <div class="shop-row">
+              <span>1 PokéBall</span>
+              <span class="shop-price">2 💰</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="1" data-cost="2">BUY</button>
+            </div>
+            <div class="shop-row">
+              <span>5 PokéBalls</span>
+              <span class="shop-price">8 💰</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="5" data-cost="8">BUY</button>
+            </div>
+            <div class="shop-row">
+              <span>12 PokéBalls</span>
+              <span class="shop-price">16 💰</span>
+              <button class="pixel-btn green shop-buy-btn" data-qty="12" data-cost="16">BUY</button>
+            </div>
+            <div class="shop-row master-row">
+              <span>🟣 Master Ball</span>
+              <span class="shop-price">40 💰</span>
+              <button class="pixel-btn blue shop-buy-btn" data-master="1" data-cost="40">BUY</button>
+            </div>
+          </div>
+          <button id="shop-close" class="pixel-btn red">◀ LEAVE</button>
+        </div>
+
+        <!-- CONTROLS OVERLAY (Start opens from anywhere) -->
+        <div id="controls-overlay" class="hidden">
+          <div id="controls-card">
+            <div id="controls-head">🎮 CONTROLS</div>
+            <div class="ctl-grid">
+              <span class="ctl-key">✛<br><small>D-Pad / Stick</small></span><span class="ctl-desc"><b>Move</b> around · <b>Navigate</b> menus</span>
+              <span class="ctl-key ctl-a">Ⓐ</span><span class="ctl-desc"><b>Select / Confirm</b> · In the world: open <b>Pokédex</b></span>
+              <span class="ctl-key ctl-b">Ⓑ</span><span class="ctl-desc"><b>Back / Cancel</b> · In the world: open <b>Map</b></span>
+              <span class="ctl-key ctl-y">Ⓨ</span><span class="ctl-desc">World &amp; Map: toggle <b>Map</b> · Pokédex: <b>Quest</b> view</span>
+              <span class="ctl-key">LB · RB</span><span class="ctl-desc">World: <b>switch buddy</b> · Pokédex: change <b>filter</b></span>
+              <span class="ctl-key">LT · RT</span><span class="ctl-desc">Pokédex: change <b>type filter</b></span>
+              <span class="ctl-key">☰<br><small>Start</small></span><span class="ctl-desc">Open / close this <b>Controls</b> screen</span>
+              <span class="ctl-key">⌫<br><small>Slots</small></span><span class="ctl-desc">Save select: focus <b>⌫</b>, press <b>Ⓐ</b> twice to <b>erase</b></span>
+            </div>
+            <div id="controls-foot">Press <b>Ⓑ</b> or <b>Start</b> to close · keyboard &amp; touch work too</div>
+          </div>
+        </div>
+
       </div><!-- /screen-area -->
     </div><!-- /screen-bezel -->
 
-    <!-- Touch / D-Pad controls -->
+    <!-- Touch / D-Pad controls (absolute positioned cross layout) -->
     <div id="controls-row">
       <div id="dpad">
-        <button class="dpad-btn" id="dp-up"   data-dir="up">▲</button>
-        <div id="dpad-mid">
-          <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
-          <div id="dpad-center"></div>
-          <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
-        </div>
+        <button class="dpad-btn" id="dp-up"    data-dir="up">▲</button>
+        <button class="dpad-btn" id="dp-left"  data-dir="left">◀</button>
+        <button class="dpad-btn" id="dp-right" data-dir="right">▶</button>
         <button class="dpad-btn" id="dp-down"  data-dir="down">▼</button>
       </div>
       <div id="ab-buttons">
@@ -149,8 +432,14 @@
     </div>
 
   </div><!-- /device -->
+  <div id="version-bar">
+    <button id="hard-refresh" title="Hard refresh — force reload the latest version">⟳</button>
+    <span id="version">v3.23.0</span>
+  </div>
 
-  <script src="data.js"></script>
-  <script src="game.js"></script>
+  <script src="world.js?v=3.22.23"></script>
+  <script src="data.js?v=3.22.23"></script>
+  <script src="game.js?v=3.22.23"></script>
+  <script src="net.js?v=3.22.23"></script>
 </body>
 </html>
