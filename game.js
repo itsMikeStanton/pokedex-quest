@@ -554,13 +554,13 @@ function evolutionsFor(pokeId) { return STONE_EVOS.filter(r => r.from === pokeId
 // method 'dance'  → a multiplayer "dance party" (handled separately; no step/use cost).
 const EVOS = [
   // 3-stage lines: a quick bond for the first form, then proven in battle for the final.
-  { from: 1,  to: 2,  method: 'buddy',  cost: 15 }, { from: 2,  to: 3,  method: 'battle', cost: 2 }, // Bulbasaur line
-  { from: 4,  to: 5,  method: 'buddy',  cost: 15 }, { from: 5,  to: 6,  method: 'battle', cost: 2 }, // Charmander line
-  { from: 7,  to: 8,  method: 'buddy',  cost: 15 }, { from: 8,  to: 9,  method: 'battle', cost: 2 }, // Squirtle line
+  { from: 1,  to: 2,  method: 'buddy',  cost: 15 }, { from: 2,  to: 3,  method: 'battle', cost: 1 }, // Bulbasaur line
+  { from: 4,  to: 5,  method: 'buddy',  cost: 15 }, { from: 5,  to: 6,  method: 'battle', cost: 1 }, // Charmander line
+  { from: 7,  to: 8,  method: 'buddy',  cost: 15 }, { from: 8,  to: 9,  method: 'battle', cost: 1 }, // Squirtle line
   { from: 10, to: 11, method: 'buddy',  cost: 15 }, { from: 11, to: 12, method: 'buddy',  cost: 25 }, // Caterpie line
   { from: 13, to: 14, method: 'buddy',  cost: 15 }, { from: 14, to: 15, method: 'buddy',  cost: 25 }, // Weedle line
-  { from: 16, to: 17, method: 'buddy',  cost: 15 }, { from: 17, to: 18, method: 'battle', cost: 2 }, // Pidgey line
-  { from: 147, to: 148, method: 'battle', cost: 1 }, { from: 148, to: 149, method: 'battle', cost: 2 }, // Dratini line
+  { from: 16, to: 17, method: 'buddy',  cost: 15 }, { from: 17, to: 18, method: 'battle', cost: 1 }, // Pidgey line
+  { from: 147, to: 148, method: 'battle', cost: 1 }, { from: 148, to: 149, method: 'battle', cost: 1 }, // Dratini line
   // level steps that then need a stone (the stone branch lives in STONE_EVOS)
   { from: 29, to: 30, method: 'buddy', cost: 15 },  // Nidoran♀ → Nidorina
   { from: 32, to: 33, method: 'buddy', cost: 15 },  // Nidoran♂ → Nidorino
@@ -596,6 +596,19 @@ function evoProgress(r) { return r.method === 'buddy' ? (bondSteps[r.from] || 0)
 function evoReady(r) { return r.method !== 'dance' && evoProgress(r) >= r.cost; }
 // Some evolutions can only happen in a specific zone (e.g. the Ghost line in Haunted Hollow).
 function evoHere(r) { return r.zone == null || currentZone === r.zone; }
+// Ready to evolve right now: progress met, right zone, evolved form still missing.
+// Stones count too — holding the stone is all a stone evolution needs.
+function evoReadyNow(pokeId) {
+  if (!caughtIds.has(pokeId)) return false;
+  return evosFor(pokeId).some(r => r.method !== 'dance' && !caughtIds.has(r.to) && evoReady(r) && evoHere(r))
+      || STONE_EVOS.some(r => r.from === pokeId && !caughtIds.has(r.to) && (stones[r.stone] || 0) > 0);
+}
+// Still owes a fight before it can evolve. Drives the ⚔️ marker in the battle picker
+// and guarantees one such Lukeymon is always on the board. Not zone-gated: battle
+// credit is earned anywhere, even if the evolution itself only fires in one zone.
+function needsBattleEvo(pokeId) {
+  return evosFor(pokeId).some(r => r.method === 'battle' && caughtIds.has(r.from) && !caughtIds.has(r.to) && !evoReady(r));
+}
 
 // One-time "ready to evolve!" nudge so you don't have to dig in the Pokédex to notice.
 const evoNotified = new Set();
@@ -5440,9 +5453,20 @@ function nextBattleRound() {
 
   // Up to six options from your roster. A counter only appears if you own one.
   const correctPool = pool.filter(p => correctTypes.includes(p.type));
-  const lead = correctPool[Math.floor(Math.random() * correctPool.length)];
+  // Prefer a lead that still owes a fight, so the correct answer also banks the
+  // battle it needs to evolve.
+  const needyCorrect = correctPool.filter(p => needsBattleEvo(p.id));
+  const leadPool = needyCorrect.length ? needyCorrect : correctPool;
+  const lead = leadPool[Math.floor(Math.random() * leadPool.length)];
   const others = shuffle(pool.filter(p => p !== lead && !correctTypes.includes(p.type)));
-  const opts = shuffle([lead, ...others.slice(0, 5)]).filter(Boolean);
+  let decoys = others.slice(0, 5);
+  // Always keep at least one Lukeymon that still owes a fight on the board — even if
+  // its type is wrong for this round, since a losing pick still counts as a battle.
+  if (!(lead && needsBattleEvo(lead.id)) && !decoys.some(p => needsBattleEvo(p.id))) {
+    const needy = others.find(p => needsBattleEvo(p.id));
+    if (needy) decoys = [needy, ...decoys.slice(0, 4)];
+  }
+  const opts = shuffle([lead, ...decoys]).filter(Boolean);
 
   const grid = document.getElementById('battle-options');
   grid.innerHTML = '';
@@ -5460,6 +5484,15 @@ function nextBattleRound() {
     tp.textContent = poke.type;
     tp.style.background = typeColor(poke.type);
     card.append(ic, nm, tp);
+    // ⚔️ marks a Lukeymon that still owes a fight to evolve.
+    if (needsBattleEvo(poke.id)) {
+      const evoTag = document.createElement('span');
+      evoTag.className = 'battle-opt-evo';
+      evoTag.textContent = '⚔️';
+      evoTag.title = 'Needs a battle to evolve';
+      card.classList.add('needs-evo');
+      card.appendChild(evoTag);
+    }
     card.addEventListener('click', () => chooseBattlePoke(poke, card, correctTypes));
     grid.appendChild(card);
   });
@@ -6025,6 +6058,15 @@ function renderPokedexGrid() {
       buddyTag.textContent = '❤️';
       buddyTag.title = 'Your buddy';
       card.appendChild(buddyTag);
+    }
+
+    // Ready-to-evolve indicator — a sparkle in the top-left corner of the card.
+    if (caught && evoReadyNow(poke.id)) {
+      const evoTag = document.createElement('div');
+      evoTag.className = 'dex-card-evo';
+      evoTag.textContent = '✨';
+      evoTag.title = 'Ready to evolve!';
+      card.appendChild(evoTag);
     }
 
     // Help the player find what they're missing.

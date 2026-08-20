@@ -1249,6 +1249,21 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
 }
 
+/* Ready-to-evolve indicator — a pulsing sparkle in the top-left of the card */
+.dex-card-evo {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 10px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
+  animation: evopulse 1.2s ease-in-out infinite;
+}
+@keyframes evopulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.25); opacity: .75; }
+}
+
 .dex-card-emoji { font-size: 22px; line-height: 1; }
 .dex-card-name  { font-size: 5px; color: #80c0e0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 .dex-card.caught .dex-card-name { color: #80e880; }
@@ -1727,6 +1742,7 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   max-width: 320px;
 }
 .battle-opt {
+  position: relative;
   background: #141428;
   border: 2px solid #3a3a60;
   border-radius: 6px;
@@ -1739,6 +1755,15 @@ img.dex-silhouette { filter: brightness(0) opacity(0.55); }
   font-family: inherit;
 }
 .battle-opt:hover { border-color: #8060c0; background: #1e1e3a; }
+.battle-opt.needs-evo { border-color: #c8a038; }
+.battle-opt-evo {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
+}
 .battle-opt.correct { border-color: #38d038; background: #103018; }
 .battle-opt.wrong   { border-color: #e04040; background: #301010; }
 .battle-opt-emoji { font-size: 22px; line-height: 1; }
