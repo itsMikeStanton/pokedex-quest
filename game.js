@@ -1804,6 +1804,7 @@ function activateKami() {
   Object.keys(BARRIERS).forEach(k => unlockedBarriers.add(k));
   Object.keys(SEAM_GATES).forEach(k => clearedSeams.add(k));
   balls += 99;
+  refreshRoamers();   // everything is caught now — clear the legendaries out of the world
   saveGame();
   updateHud();
   showMessage('🌟 KAMI MODE ACTIVATED! All Lukeymon caught!');
@@ -7632,6 +7633,7 @@ function performEvolution(target) {
   if (!target || caughtIds.has(target.id)) return;
   seenIds.add(target.id);
   caughtIds.add(target.id);
+  refreshRoamers();   // this may have completed the wild dex → Mew comes out to roam
   saveGame();
   updateHud();
   playBadgeJingle();
@@ -7681,7 +7683,7 @@ function danceEvolve() {
     seenIds.add(t.id); caughtIds.add(t.id);
     done.push({ from: f ? f.name : '?', to: t.name });
   }
-  if (done.length) { saveGame(); updateHud(); if (typeof playBadgeJingle === 'function') playBadgeJingle(); }
+  if (done.length) { refreshRoamers(); saveGame(); updateHud(); if (typeof playBadgeJingle === 'function') playBadgeJingle(); }
   return done;
 }
 
