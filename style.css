@@ -676,6 +676,35 @@ body {
 }
 .settings-note { font-size: 6px; color: #7a8aa0; text-align: center; margin-top: 6px; }
 
+/* ─── Save Code screen ──────────────────────────────── */
+#savecode-screen {
+  background: linear-gradient(160deg, #11182c, #181c30);
+  flex-direction: column; align-items: stretch; padding: 8px; gap: 8px; overflow-y: auto;
+}
+#savecode-topbar { display: flex; align-items: center; justify-content: space-between; }
+#savecode-title { font-size: 9px; color: #80c0e0; text-shadow: 0 0 8px #40a8f8; }
+#savecode-body { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.savecode-note { font-size: 6px; color: #9ab0c8; line-height: 1.7; text-align: center; }
+#savecode-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.savecode-slot {
+  font-family: inherit; font-size: 6px; line-height: 1.6; color: #cfe0f4; cursor: pointer;
+  background: rgba(0,0,0,.3); border: 2px solid #2a3a5a; border-radius: 6px; padding: 6px 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; overflow: hidden;
+}
+.savecode-slot.on { border-color: #40a8f8; background: #16283c; color: #eaf2ff; }
+.savecode-slot .sc-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.savecode-slot .sc-ct { color: #7fe0a0; }
+.savecode-slot.empty .sc-ct { color: #6a8aa8; }
+#savecode-text {
+  font-family: inherit; font-size: 6px; line-height: 1.5; color: #b8e0ff;
+  background: #0a1020; border: 2px solid #2a3a5a; border-radius: 6px;
+  padding: 6px; height: 84px; resize: none; width: 100%; word-break: break-all;
+}
+#savecode-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#savecode-status { font-size: 6px; line-height: 1.7; text-align: center; min-height: 14px; color: #ffe24d; }
+#savecode-status.ok  { color: #7fe0a0; }
+#savecode-status.err { color: #ff8080; }
+
 /* ─── Pokédex "seen" silhouette ─────────────────────── */
 .dex-card.seen { opacity: .92; }
 .dex-card.seen .dex-card-name { color: #9aa0b0; font-style: italic; }

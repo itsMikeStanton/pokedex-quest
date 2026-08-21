@@ -1691,6 +1691,10 @@ function bindEvents() {
   document.getElementById('settings-back').addEventListener('click', closeSettings);
   document.getElementById('set-sound').addEventListener('click', () => { wakeAudio(); toggleMute(); updateSoundRow(); });
   document.getElementById('set-guide').addEventListener('click', () => openHelp('settings'));
+  document.getElementById('set-savecode').addEventListener('click', openSaveCode);
+  document.getElementById('savecode-back').addEventListener('click', closeSaveCode);
+  document.getElementById('savecode-copy').addEventListener('click', copySaveCode);
+  document.getElementById('savecode-load').addEventListener('click', loadSaveCode);
 
   // Badge case (opened from the Pokédex hub)
   document.getElementById('badges-back').addEventListener('click', closeBadgeCase);
@@ -6494,6 +6498,104 @@ function openSettings() {
 }
 function closeSettings() { showScreen('title'); }
 
+// ─── Save Code — back up a save, or move one between devices ──────────────────
+// localStorage is scoped per origin, so a save made on the public site can't be
+// seen by the LAN party build (or another device). A code is just the slot's raw
+// JSON, base64'd, with a version tag so we can reject anything that isn't ours.
+const SAVECODE_TAG = 'LUKEY1:';
+let saveCodeSlot = 1;
+let saveCodeArmed = 0;      // slot the next LOAD press is confirmed to overwrite
+
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64decode(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function saveCodeStatus(msg, kind) {
+  const el = document.getElementById('savecode-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = kind || '';
+}
+function renderSaveCodeSlots() {
+  const wrap = document.getElementById('savecode-slots');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (let n = 1; n <= 3; n++) {
+    const m = slotMeta(n);
+    const b = document.createElement('button');
+    b.className = 'savecode-slot' + (n === saveCodeSlot ? ' on' : '') + (m.exists ? '' : ' empty');
+    b.innerHTML = `<span class="sc-nm">${m.exists ? m.name : 'SLOT ' + n}</span>` +
+                  `<span class="sc-ct">${m.exists ? '🎒 ' + m.caught : '— empty —'}</span>`;
+    b.addEventListener('click', () => {
+      saveCodeSlot = n; saveCodeArmed = 0;
+      renderSaveCodeSlots(); saveCodeStatus('');
+      beep(523, 0.06, 0.06);
+      setupNav('savecode');
+    });
+    wrap.appendChild(b);
+  }
+}
+function openSaveCode() {
+  saveCodeSlot = currentSlot || 1;
+  saveCodeArmed = 0;
+  const t = document.getElementById('savecode-text');
+  if (t) t.value = '';
+  saveCodeStatus('');
+  renderSaveCodeSlots();
+  showScreen('savecode');
+}
+function closeSaveCode() { showScreen('settings'); }
+
+// COPY — the code for the chosen slot, into the box and onto the clipboard.
+function copySaveCode() {
+  let raw = null;
+  try { raw = localStorage.getItem(slotKey(saveCodeSlot)); } catch (_) {}
+  if (!raw) { saveCodeStatus(`Slot ${saveCodeSlot} is empty — nothing to copy.`, 'err'); return; }
+  const code = SAVECODE_TAG + b64encode(raw);
+  const t = document.getElementById('savecode-text');
+  t.value = code;
+  t.focus(); t.select();
+  let copied = false;
+  try { copied = document.execCommand('copy'); } catch (_) {}
+  if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => {}, () => {});
+  saveCodeStatus(copied ? `Copied! (${code.length} characters)` : `Select the text above and copy it. (${code.length} characters)`, 'ok');
+  beep(659, 0.08, 0.1);
+}
+
+// LOAD — validate, then overwrite on a second press so nobody wipes a save by accident.
+function loadSaveCode() {
+  const t = document.getElementById('savecode-text');
+  const code = (t.value || '').trim().replace(/\s+/g, '');
+  if (!code) { saveCodeStatus('Paste a save code into the box first.', 'err'); return; }
+  if (code.indexOf(SAVECODE_TAG) !== 0) { saveCodeStatus('That is not a Lukeymon save code.', 'err'); return; }
+
+  let raw, obj;
+  try { raw = b64decode(code.slice(SAVECODE_TAG.length)); } catch (_) { saveCodeStatus('That code looks scrambled — copy it again.', 'err'); return; }
+  try { obj = JSON.parse(raw); } catch (_) { saveCodeStatus('That code looks scrambled — copy it again.', 'err'); return; }
+  if (!obj || typeof obj !== 'object' || !Array.isArray(obj.caught)) { saveCodeStatus('That code is not a save file.', 'err'); return; }
+
+  const m = slotMeta(saveCodeSlot);
+  if (m.exists && saveCodeArmed !== saveCodeSlot) {
+    saveCodeArmed = saveCodeSlot;
+    saveCodeStatus(`This replaces ${m.name} (🎒 ${m.caught}) in slot ${saveCodeSlot}. Press LOAD again to confirm.`, 'err');
+    beep(200, 0.12, 0.15, 'square');
+    return;
+  }
+  try { localStorage.setItem(slotKey(saveCodeSlot), raw); }
+  catch (_) { saveCodeStatus('Could not save — storage is full.', 'err'); return; }
+  saveCodeStatus(`Loaded ${obj.name || 'save'} (🎒 ${obj.caught.length}) into slot ${saveCodeSlot}. Restarting…`, 'ok');
+  playBadgeJingle();
+  setTimeout(() => location.reload(), 1200);   // reboot so nothing in memory overwrites it
+}
+
 // ─── Guide / type-chart screen ───────────────────────
 let helpReturn = 'map';
 // ── Controls overlay ─────────────────────────────────
@@ -6939,7 +7041,8 @@ function setupNav(id) {
   const all = s => Array.from(document.querySelectorAll(s));
   switch (id) {
     case 'title':     setNav([$('play-btn'), $('title-settings')]); break;
-    case 'settings':  setNav([$('set-sound'), $('set-guide'), $('settings-back')], { onBack: closeSettings }); break;
+    case 'settings':  setNav([$('set-sound'), $('set-guide'), $('set-savecode'), $('settings-back')], { onBack: closeSettings }); break;
+    case 'savecode':  setNav([...all('#savecode-slots .savecode-slot'), $('savecode-copy'), $('savecode-load'), $('savecode-back')], { onBack: closeSaveCode }); break;
     case 'slot':      setNav(all('#slot-list .slot-info, #slot-list .slot-erase'), { onBack: () => showScreen('title') }); break;
     case 'name':      setNav([$('name-ok'), $('name-cancel')], { cols: 2, onBack: openSlots }); break;
     case 'intro':     setNav([$('intro-begin')], { onBack: () => $('intro-begin').click() }); break;

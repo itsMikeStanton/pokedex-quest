@@ -13,7 +13,7 @@
   <!-- Versioning: code files use ?v=<release> (bumped every release). Art uses a
        separate ?v=32 (= ART_V in game.js), bumped ONLY when art changes, so code
        releases don't force every player to re-download ~13 MB of art. -->
-  <link rel="stylesheet" href="style.css?v=3.22.24">
+  <link rel="stylesheet" href="style.css?v=3.22.25">
 </head>
 <body>
 
@@ -211,7 +211,27 @@
           <div id="settings-body">
             <button id="set-sound" class="settings-row">🔊 Sound: ON</button>
             <button id="set-guide" class="settings-row">🎮 Controls &amp; Type Guide ▸</button>
+            <button id="set-savecode" class="settings-row">💾 Save Code — back up &amp; move a save ▸</button>
             <div class="settings-note">LUKEYMON · <span id="set-version"></span></div>
+          </div>
+        </div>
+
+        <!-- SAVE CODE SCREEN — back up a save, or move it between devices/origins -->
+        <div id="savecode-screen" class="screen">
+          <div id="savecode-topbar">
+            <button id="savecode-back" class="pixel-btn small red">◀ BACK</button>
+            <span id="savecode-title">SAVE CODE</span>
+            <span class="help-spacer"></span>
+          </div>
+          <div id="savecode-body">
+            <div class="savecode-note">Pick a slot, then COPY its code to back it up.<br>Paste a code in and press LOAD to bring a save here.</div>
+            <div id="savecode-slots"></div>
+            <textarea id="savecode-text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="The save code shows up here — or paste one in"></textarea>
+            <div id="savecode-actions">
+              <button id="savecode-copy" class="pixel-btn small green">📤 COPY</button>
+              <button id="savecode-load" class="pixel-btn small blue">📥 LOAD</button>
+            </div>
+            <div id="savecode-status"></div>
           </div>
         </div>
 
@@ -442,9 +462,9 @@
     <span id="version">v3.23.0</span>
   </div>
 
-  <script src="world.js?v=3.22.24"></script>
-  <script src="data.js?v=3.22.24"></script>
-  <script src="game.js?v=3.22.24"></script>
-  <script src="net.js?v=3.22.24"></script>
+  <script src="world.js?v=3.22.25"></script>
+  <script src="data.js?v=3.22.25"></script>
+  <script src="game.js?v=3.22.25"></script>
+  <script src="net.js?v=3.22.25"></script>
 </body>
 </html>
