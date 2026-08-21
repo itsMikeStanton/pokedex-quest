@@ -327,7 +327,7 @@ const NPCS = [
   } },
 
   // ── Inside your home (zone 9) ──
-  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', wander: 3, greetHop: true, lines: () => {
+  { zone: 9, x: 2, y: 2, emoji: '👩', name: 'Mom', gift: 30, art: 'mom', wander: 3, greetHop: true, dance: true, lines: () => {
     if (wonGame) return [`${saveName}! A true master! So proud of you. 🏆`, `Come and visit any time, ${saveName}!`];
     return [`Off on your adventure, ${saveName}? Be safe out there! 💗`,
             'Tip: your buddy\'s TYPE clears blocked paths — Fire burns logs, Water washes rocks…',
@@ -589,7 +589,7 @@ const EVOS = [
   { from: 63, to: 64, method: 'battle', cost: 1 }, { from: 92, to: 93, method: 'battle', cost: 1, zone: 19 },
   // dance-party (former trade) evolutions — multiplayer, no battle, nothing lost
   { from: 64, to: 65, method: 'dance' }, { from: 67, to: 68, method: 'dance' },
-  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance', zone: 19 },
+  { from: 75, to: 76, method: 'dance' }, { from: 93, to: 94, method: 'dance' },
 ];
 function evosFor(pokeId) { return EVOS.filter(r => r.from === pokeId); }
 function evoProgress(r) { return r.method === 'buddy' ? (bondSteps[r.from] || 0) : r.method === 'battle' ? (battleUses[r.from] || 0) : 0; }
@@ -2264,6 +2264,7 @@ function move(dx, dy, ts) {
     else if (npc.gymLeader && !collected.has('badge_gym')) { metNPCs.add(npc.metKey || npc.name); startGymBattle(npc); }  // challenge → battle
     else if (npc.dojo) { metNPCs.add(npc.metKey || npc.name); startDojoBattle(); }   // repeatable practice battles
     else if (npc.shop) { metNPCs.add(npc.metKey || npc.name); openShop(); }  // the Poké Mart clerk runs the shop
+    else if (npc.dance && danceBuddyReady()) { metNPCs.add(npc.metKey || npc.name); startDanceParty(); }  // 🪩 Mom throws a Dance Party
     else talkNPC(npc);
     return;
   }
@@ -6156,7 +6157,7 @@ function showDetail(poke) {
   evosFor(poke.id).filter(r => got(r.to)).forEach(r => {
     const t = POKEMON_DATA.find(p => p.id === r.to);
     const where = r.zone != null ? ` in ${ZONE_INFO[r.zone].name}` : '';
-    if (r.method === 'dance') { mkHint(`🔗 ${t.name}: Dance Party with another trainer${where}`); return; }
+    if (r.method === 'dance') { mkHint(`🪩 ${t.name}: make it your buddy, then visit Mom at Home for a Dance Party`); return; }
     if (evoReady(r) && !evoHere(r)) mkHint(`✨ Ready — evolve it${where}`);
     else if (evoReady(r)) mkBtn(`✨ Evolve → ${t.name}`, () => evolveByProgress(poke, r));
     else if (r.method === 'buddy') mkHint(`🐾 Bond ${evoProgress(r)}/${r.cost} steps → ${t.name}${where}`);
@@ -7547,6 +7548,24 @@ function evolveByProgress(poke, rule) {
   if (!evoReady(rule) || !evoHere(rule)) return;
   performEvolution(POKEMON_DATA.find(p => p.id === rule.to));
 }
+// Is your current buddy a Lukeymon waiting on a dance evolution? Gates Mom's party
+// so her normal greeting (and her first-visit gift) still work every other time.
+function danceBuddyReady() {
+  const b = buddyPoke();
+  return !!b && EVOS.some(r => r.method === 'dance' && r.from === b.id
+                            && caughtIds.has(r.from) && !caughtIds.has(r.to));
+}
+
+// Mom clears the living-room floor for a Dance Party. This is the solo counterpart
+// to the LAN party in net.js — same danceEvolve(), no network and no second player,
+// so the dex is completable offline.
+function startDanceParty() {
+  const evolved = danceEvolve();
+  if (!evolved.length) { showMessage('🪩 What a dance!'); return; }
+  showFanfare('🪩', evolved.map(e => `${e.from} → ${e.to}!`).join('   '),
+              returnToWorld, 'DANCE PARTY!');
+}
+
 // Dance Party (multiplayer): every dance-method Pokémon you own evolves at once.
 // Called from net.js; the base is kept, the evolved form joins the dex. Returns the
 // list of {from, to} names so the dance screen can show what happened.
