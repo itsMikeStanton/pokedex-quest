@@ -1722,7 +1722,7 @@ function bindEvents() {
   document.getElementById('champion-continue').addEventListener('click', returnToWorld);
 
   // Complete restart
-  document.getElementById('complete-restart').addEventListener('click', startNewGame);
+  document.getElementById('complete-continue').addEventListener('click', continueAfterWin);
 
   // Throw ball
   document.getElementById('enc-throw-btn').addEventListener('click', () => {
@@ -6893,6 +6893,18 @@ function renderNotes() {
 // ═══════════════════════════════════════════════════
 // COMPLETE SCREEN
 // ═══════════════════════════════════════════════════
+// Finishing the game shouldn't cost you the game. This used to be PLAY AGAIN wired
+// straight to startNewGame(), which wiped the entire save — every Lukeymon, badge
+// and coin — usually to a player who just wanted to keep playing. Now it walks you
+// home to Mom with everything intact.
+function continueAfterWin() {
+  const stage = document.getElementById('parade-stage');
+  if (stage) stage.click();        // end the roll-call cleanly if it's still running
+  showScreen('world');
+  warpTo(9, 5, 6, 'down');         // home, the same spot a new game starts you
+  showMessage('🏆 Champion! Your island is yours to explore — go say hi to Mom. 💗');
+}
+
 function showComplete() {
   document.getElementById('complete-sub').textContent =
     `All ${POKEMON_DATA.length} Lukeymon caught!`;
@@ -7061,7 +7073,7 @@ function setupNav(id) {
     case 'npc':       setNav([$('npc-advance')], { onBack: advanceNPC }); break;
     case 'gift':      setNav([$('gift-continue')], { onBack: continueGift }); break;
     case 'result':    setNav([$('result-continue')], { onBack: () => $('result-continue').click() }); break;
-    case 'complete':  setNav([$('complete-restart')], { onBack: () => $('complete-restart').click() }); break;
+    case 'complete':  setNav([$('complete-continue')], { onBack: () => $('complete-continue').click() }); break;
     case 'champion':  setNav([$('champion-continue')], { onBack: () => $('champion-continue').click() }); break;
     case 'encounter': setNav(all('#enc-buttons .action-btn'), { cols: 3 }); break;
     case 'battle':    break;   // set per-round by nextBattleRound / showBattleWin / rocketIntro
